@@ -1,0 +1,122 @@
+//@version=5
+indicator("CORE Strategy - V2 Optimized", overlay=true)
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
+max_lines = input(3, "Max Lines to Display", minval=1, maxval=10)
+show_patterns = input(true, "Show Patterns")
+show_retests = input(true, "Show Retests")
+show_levels = input(true, "Show Levels")
+
+// ============================================================================
+// PATTERN DETECTION - BEARISH
+// ============================================================================
+candle1_bullish = close[1] > open[1]
+candle2_bearish = close < open
+candle2_engulfs = open >= close[1] and close < open[1]
+candle2_closes_below_c1_open = close < open[1]
+bearish_pattern = candle1_bullish and candle2_bearish and candle2_engulfs and candle2_closes_below_c1_open
+
+// ============================================================================
+// PATTERN DETECTION - BULLISH
+// ============================================================================
+candle1_bearish = close[1] < open[1]
+candle2_bullish = close > open
+candle2_engulfs_bull = open <= close[1] and close > open[1]
+candle2_closes_above_c1_open = close > open[1]
+bullish_pattern = candle1_bearish and candle2_bullish and candle2_engulfs_bull and candle2_closes_above_c1_open
+
+// ============================================================================
+// REFERENCE LEVELS
+// ============================================================================
+var float bearish_reference = na
+var bool bearish_setup_active = false
+var int bearish_bar = 0
+
+if bearish_pattern
+    bearish_reference := open[1]
+    bearish_setup_active := true
+    bearish_bar := bar_index
+
+var float bullish_reference = na
+var bool bullish_setup_active = false
+var int bullish_bar = 0
+
+if bullish_pattern
+    bullish_reference := open[1]
+    bullish_setup_active := true
+    bullish_bar := bar_index
+
+// ============================================================================
+// RETEST DETECTION
+// ============================================================================
+bearish_retest = bearish_setup_active and
+                 high >= bearish_reference and
+                 low <= bearish_reference and
+                 bar_index > bearish_bar
+
+bullish_retest = bullish_setup_active and
+                 high >= bullish_reference and
+                 low <= bullish_reference and
+                 bar_index > bullish_bar
+
+// ============================================================================
+// LINE MANAGEMENT - KEEP ONLY RECENT LINES
+// ============================================================================
+var array<line> bearish_lines = array.new<line>()
+var array<line> bullish_lines = array.new<line>()
+
+// Add new bearish line
+if show_levels and bearish_pattern
+    new_line = line.new(bar_index[1], open[1], bar_index, open[1],
+                        extend=extend.right, color=color.red, style=line.style_dashed, width=2)
+    array.push(bearish_lines, new_line)
+
+    // Remove old lines if exceeds max
+    if array.size(bearish_lines) > max_lines
+        old_line = array.shift(bearish_lines)
+        line.delete(old_line)
+
+// Add new bullish line
+if show_levels and bullish_pattern
+    new_line = line.new(bar_index[1], open[1], bar_index, open[1],
+                        extend=extend.right, color=color.green, style=line.style_dashed, width=2)
+    array.push(bullish_lines, new_line)
+
+    // Remove old lines if exceeds max
+    if array.size(bullish_lines) > max_lines
+        old_line = array.shift(bullish_lines)
+        line.delete(old_line)
+
+// ============================================================================
+// VISUALS - PATTERNS
+// ============================================================================
+if show_patterns
+    plotshape(bearish_pattern, title="Bearish Pattern",
+              style=shape.triangledown, location=location.abovebar,
+              color=color.red, size=size.small)
+
+    plotshape(bullish_pattern, title="Bullish Pattern",
+              style=shape.triangleup, location=location.belowbar,
+              color=color.green, size=size.small)
+
+// ============================================================================
+// VISUALS - RETESTS
+// ============================================================================
+if show_retests
+    plotshape(bearish_retest, title="Bearish Retest",
+              style=shape.diamond, location=location.abovebar,
+              color=color.orange, size=size.small)
+
+    plotshape(bullish_retest, title="Bullish Retest",
+              style=shape.diamond, location=location.belowbar,
+              color=color.blue, size=size.small)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+alertcondition(bearish_pattern, title="Bearish Pattern Detected", message="BEARISH ENGULFING - Watch for retest")
+alertcondition(bearish_retest, title="Bearish Retest", message="BEARISH RETEST DETECTED")
+alertcondition(bullish_pattern, title="Bullish Pattern Detected", message="BULLISH ENGULFING - Watch for retest")
+alertcondition(bullish_retest, title="Bullish Retest", message="BULLISH RETEST DETECTED")

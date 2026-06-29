@@ -1,0 +1,264 @@
+{
+  "meta": {
+    "start_time": "2026-04-12T23:00:00+00:00",
+    "end_time": "2026-04-13T00:41:06.955048+00:00",
+    "total_messages": 154,
+    "active_channels": 7,
+    "raw_signals": 62,
+    "extracted_signals": 15
+  },
+  "signals": [
+    {
+      "channel": "\ud835\udc13\ud835\udc1e\ud835\udc1c\ud835\udc21\ud835\udc27\ud835\udc22\ud835\udc1c\ud835\udc1a\ud835\udc25 \ud835\udc0f\ud835\udc22\ud835\udc29\ud835\udc2c \u2122",
+      "channel_id": 1569906975,
+      "text": "**#XAUUSD****\u00a0BUY\u00a04664-4661\n\nTP 4667\nTP 4670\nTP 4674\nTP 4679\nTP 4684\nTP 4700\n\nSL 4652**",
+      "timestamp": "2026-04-13T00:04:39+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4664.0,
+      "sl": 4652.0,
+      "tp": 4667.0
+    },
+    {
+      "channel": "\ud835\udc13\ud835\udc1e\ud835\udc1c\ud835\udc21\ud835\udc27\ud835\udc22\ud835\udc1c\ud835\udc1a\ud835\udc25 \ud835\udc0f\ud835\udc22\ud835\udc29\ud835\udc2c \u2122",
+      "channel_id": 1569906975,
+      "text": "GOLD BUY 4664",
+      "timestamp": "2026-04-13T00:03:46+00:00",
+      "matched_keywords": [
+        "BUY",
+        "GOLD"
+      ],
+      "action": "BUY",
+      "entry": 4664.0,
+      "sl": null,
+      "tp": null
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4652 ****\u2705****\nSl : 4643 ( 90 pip )\nTp : 4665\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+      "timestamp": "2026-04-12T23:56:38+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4652.0,
+      "sl": 4643.0,
+      "tp": 4665.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4652 ****\u2705****\nSl : 4643 ( 90 pip )\nTp : 4665\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+      "timestamp": "2026-04-12T23:56:38+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4652.0,
+      "sl": 4643.0,
+      "tp": 4665.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4652 ****\u2705****\nSl : 4643 ( 90 pip )\nTp : 4665\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+      "timestamp": "2026-04-12T23:56:38+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4652.0,
+      "sl": 4643.0,
+      "tp": 4665.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4649 ****\u2705****\nSl : 4640 ( 90 pip )\nTp : 4663\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+      "timestamp": "2026-04-12T23:55:57+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4649.0,
+      "sl": 4640.0,
+      "tp": 4663.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4649 ****\u2705****\nSl : 4640 ( 90 pip )\nTp : 4663\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+      "timestamp": "2026-04-12T23:55:57+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4649.0,
+      "sl": 4640.0,
+      "tp": 4663.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4649 ****\u2705****\nSl : 4640 ( 90 pip )\nTp : 4663\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+      "timestamp": "2026-04-12T23:55:57+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4649.0,
+      "sl": 4640.0,
+      "tp": 4663.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4649 ****\u2705****\nSl : 4640 ( 90 pip )\nTp : 4659\n\n5 \u0645\u0631\u0627\u062a \u0628\u0644\u0648\u062a \u0639\u0627\u0644\u064a**",
+      "timestamp": "2026-04-12T23:40:22+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4649.0,
+      "sl": 4640.0,
+      "tp": 4659.0
+    },
+    {
+      "channel": "KING EL GOLD \ud83d\udc51",
+      "channel_id": 2035975495,
+      "text": "**XAUUSD BUY NOW 4649 ****\u2705****\nSl : 4640 ( 90 pip )\nTp : 4659\n\n5 \u0645\u0631\u0627\u062a \u0628\u0644\u0648\u062a \u0639\u0627\u0644\u064a**",
+      "timestamp": "2026-04-12T23:40:22+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4649.0,
+      "sl": 4640.0,
+      "tp": 4659.0
+    },
+    {
+      "channel": "Isabelle - Queen Of Gold",
+      "channel_id": 1834033323,
+      "text": "**Xauusd BUY now 4679\n\nSL : 4661\n\nTP 1 : 4682\nTP 2 : 4685\nTP 3 : 4688\nTP 4 : 4692\nTP 5 : 4695\nTP 6 : 4700**",
+      "timestamp": "2026-04-13T00:35:13+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4679.0,
+      "sl": 4661.0,
+      "tp": 4682.0
+    },
+    {
+      "channel": "\ud835\udc06\ud835\udc0e\ud835\udc0b\ud835\udc03 \ud835\udc12\ud835\udc0d\ud835\udc08\ud835\udc0f\ud835\udc04\ud835\udc11 \ud835\udc19\ud835\udc0e\ud835\udc0d\ud835\udc04",
+      "channel_id": 1808202014,
+      "text": "**XAUUSD SELL 4659\n\nTP 4656\nTP 4653\nTP 4650\nTP 4647\nTP 4644\nTP 4641\nTP 4638\n\nSL 4672**",
+      "timestamp": "2026-04-12T23:16:27+00:00",
+      "matched_keywords": [
+        "SELL",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "SELL",
+      "entry": 4659.0,
+      "sl": 4672.0,
+      "tp": 4656.0
+    },
+    {
+      "channel": "\ud835\udc6e\ud835\udc79\ud835\udc6c\ud835\udc6c\ud835\udc75 \ud835\udc77\ud835\udc70\ud835\udc77\ud835\udc7a \ud83c\udf10",
+      "channel_id": 2145295870,
+      "text": "**\ud83d\udd3b XAUUSD (SELL)\nEntry \u2192 4659\nTargets:\n****\u2705**** 4656\n****\u2705**** 4653\n****\u2705**** 4649\n****\u2705**** 4644\n****\u2705**** 4639\n\nSL \u2192 4669**",
+      "timestamp": "2026-04-12T23:01:21+00:00",
+      "matched_keywords": [
+        "SELL",
+        "XAUUSD",
+        "ENTRY",
+        "SL",
+        "XAU"
+      ],
+      "action": "SELL",
+      "entry": 4659.0,
+      "sl": null,
+      "tp": null
+    },
+    {
+      "channel": "FREE TRAD\u0130NG S\u0130GNALS",
+      "channel_id": 1957768371,
+      "text": "XAUUSD BUY NOW 4645\nSl :4635\nTp :4650\nTp :4655",
+      "timestamp": "2026-04-12T23:09:35+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4645.0,
+      "sl": 4635.0,
+      "tp": 4650.0
+    },
+    {
+      "channel": "FREE TRAD\u0130NG S\u0130GNALS",
+      "channel_id": 1957768371,
+      "text": "XAUUSD BUY NOW 4645\nSl :4635\nTp :4650\nTp :4655",
+      "timestamp": "2026-04-12T23:09:35+00:00",
+      "matched_keywords": [
+        "BUY",
+        "XAUUSD",
+        "TP",
+        "SL",
+        "XAU"
+      ],
+      "action": "BUY",
+      "entry": 4645.0,
+      "sl": 4635.0,
+      "tp": 4650.0
+    }
+  ]
+}

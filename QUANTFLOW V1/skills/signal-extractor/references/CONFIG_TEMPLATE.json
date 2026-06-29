@@ -1,0 +1,14 @@
+{
+  "telegram_api_id": "YOUR_TELEGRAM_API_ID_HERE",
+  "telegram_api_hash": "YOUR_TELEGRAM_API_HASH_HERE",
+  "telegram_phone": "+1234567890",
+  "extraction_config": {
+    "instruments": ["GOLD", "XAUUSD", "BTC", "BTCUSD", "ETH", "EURUSD", "GBPUSD"],
+    "deduplication_window_hours": 24,
+    "max_messages_per_scan": 100
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "~/.claude/quantflow_extractor.log"
+  }
+}

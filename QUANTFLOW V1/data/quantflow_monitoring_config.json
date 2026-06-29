@@ -1,0 +1,851 @@
+{
+  "api_id": 38456630,
+  "api_hash": "4b2a85354b6e6d4103820dc92b522b53",
+  "timestamp": "2026-04-13T03:06:23.629270",
+  "account": "Achrafsila",
+  "total_channels": 81,
+  "monitoring": {
+    "enabled": true,
+    "fetch_interval_seconds": 5,
+    "max_channels": 55,
+    "channels_per_batch": 55,
+    "messages_per_channel": 100,
+    "priority_tier_1": [
+      "@kingxauusd1",
+      "@malek_eldahab",
+      "@TechnicalpipsXhuk50",
+      "@goldvlp47",
+      "@Isabelle_QueenOfGolds"
+    ],
+    "priority_tier_2": [
+      "@FOREX_XAUUSD_GOLD_SIGNAL",
+      "@best_goldXauusd_signals01",
+      "@Gold_vip_analysis_xauusd_hunter",
+      "@FK1_TRADING",
+      "@wolftrading_signals"
+    ],
+    "signal_types": {
+      "buy_signals": true,
+      "sell_signals": true,
+      "long_signals": true,
+      "short_signals": true,
+      "scalp_signals": true,
+      "swing_signals": true,
+      "intraday_signals": true
+    },
+    "filter_keywords": [
+      "BUY",
+      "SELL",
+      "LONG",
+      "SHORT",
+      "GOLD",
+      "XAUUSD",
+      "XAU/USD",
+      "ENTRY",
+      "TP",
+      "SL",
+      "STOP LOSS",
+      "NOW",
+      "AT",
+      "SIGNAL",
+      "ALERT"
+    ],
+    "advanced_filtering": {
+      "min_price_range": 4400,
+      "max_price_range": 5000,
+      "exclude_pump_dump": true,
+      "minimum_confidence_score": 0.3,
+      "deduplicate_signals": true,
+      "dedup_time_window_hours": 24
+    }
+  },
+  "tradingview_integration": {
+    "enabled": true,
+    "price_source": "OANDA:XAUUSD",
+    "verify_every_signal": true,
+    "tolerance_pips": 5
+  },
+  "channels": [
+    {
+      "title": "ZEROWFX - Community \ud83d\udcc8\ud83e\udd0d",
+      "username": null,
+      "id": 2051499651,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 2,
+      "imported_date": "2026-04-13T01:32:15.149463"
+    },
+    {
+      "title": "FK TRADING \ud83e\udd81",
+      "username": "FK1_TRADING",
+      "id": 1622582410,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 2,
+      "imported_date": "2026-04-13T01:32:15.149490"
+    },
+    {
+      "title": "\ud83d\udc51Trading war Room \ud83d\udc51",
+      "username": null,
+      "id": 2552830454,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149494"
+    },
+    {
+      "title": "\ud835\udc13\ud835\udc1e\ud835\udc1c\ud835\udc21\ud835\udc27\ud835\udc22\ud835\udc1c\ud835\udc1a\ud835\udc25 \ud835\udc0f\ud835\udc22\ud835\udc29\ud835\udc2c \u2122",
+      "username": "TechnicalpipsXhuk50",
+      "id": 1569906975,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 28,
+      "imported_date": "2026-04-13T01:32:15.149496"
+    },
+    {
+      "title": "KING EL GOLD \ud83d\udc51",
+      "username": "kingxauusd1",
+      "id": 2035975495,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 426,
+      "imported_date": "2026-04-13T01:32:15.149498"
+    },
+    {
+      "title": "Isabelle - Queen Of Gold",
+      "username": "Isabelle_QueenOfGolds",
+      "id": 1834033323,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 33,
+      "imported_date": "2026-04-13T01:32:15.149499"
+    },
+    {
+      "title": "\ud835\udc06\ud835\udc0e\ud835\udc0b\ud835\udc03 \ud835\udc12\ud835\udc0d\ud835\udc08\ud835\udc0f\ud835\udc04\ud835\udc11 \ud835\udc19\ud835\udc0e\ud835\udc0d\ud835\udc04",
+      "username": "goldvlp47",
+      "id": 1808202014,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 13,
+      "imported_date": "2026-04-13T01:32:15.149501"
+    },
+    {
+      "title": "\ud835\uddda\ud835\udde2\ud835\udddf\ud835\uddd7 \ud835\udde6\ud835\udde1\ud835\udddc\ud835\udde3\ud835\uddd8\ud835\udde5",
+      "username": "GOLDSNNPER786",
+      "id": 1754381715,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 22,
+      "imported_date": "2026-04-13T01:32:15.149502"
+    },
+    {
+      "title": "\ud835\udc6e\ud835\udc79\ud835\udc6c\ud835\udc6c\ud835\udc75 \ud835\udc77\ud835\udc70\ud835\udc77\ud835\udc7a \ud83c\udf10",
+      "username": "GoldInsighthub525",
+      "id": 2145295870,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 11,
+      "imported_date": "2026-04-13T01:32:15.149504"
+    },
+    {
+      "title": "FREE TRAD\u0130NG S\u0130GNALS",
+      "username": "xauusd_forex4",
+      "id": 1957768371,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 40,
+      "imported_date": "2026-04-13T01:32:15.149505"
+    },
+    {
+      "title": "\u0645\u0644\u0643 \u0627\u0644\u0630\u0647\u0628",
+      "username": "malek_eldahab",
+      "id": 1596475000,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 223,
+      "imported_date": "2026-04-13T01:32:15.149506"
+    },
+    {
+      "title": "XAUUSD/GOLD SCALPERS",
+      "username": "XAUUSD_SCALPING_SIGNAL234",
+      "id": 2227831098,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 7,
+      "imported_date": "2026-04-13T01:32:15.149508"
+    },
+    {
+      "title": "M.T FOREX \ud83c\udf96\ud83c\udf96",
+      "username": "mt_mforex",
+      "id": 1293886287,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 20,
+      "imported_date": "2026-04-13T01:32:15.149509"
+    },
+    {
+      "title": "Forex & Pips",
+      "username": "marocforexea",
+      "id": 1650801051,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 7,
+      "imported_date": "2026-04-13T01:32:15.149510"
+    },
+    {
+      "title": "WOLF TRADING",
+      "username": "wolftrading25",
+      "id": 1818850619,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 41,
+      "imported_date": "2026-04-13T01:32:15.149511"
+    },
+    {
+      "title": "GLAAD ELGOLD\ud83d\udc51\ud83e\udd47",
+      "username": "glaadelgold1",
+      "id": 2102397174,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 4,
+      "imported_date": "2026-04-13T01:32:15.149513"
+    },
+    {
+      "title": "OMAR.XAUD",
+      "username": "omarxaud1",
+      "id": 2475329448,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 4,
+      "imported_date": "2026-04-13T01:32:15.149514"
+    },
+    {
+      "title": "Free Trump Signals \u269c\ufe0f",
+      "username": "freetrumpsignals",
+      "id": 2057886450,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 26,
+      "imported_date": "2026-04-13T01:32:15.149515"
+    },
+    {
+      "title": "OCTA FX TRADER",
+      "username": "OCTAFXTRADERS_786",
+      "id": 1593195881,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 63,
+      "imported_date": "2026-04-13T01:32:15.149517"
+    },
+    {
+      "title": "\ud835\udc6e\ud835\udc76\ud835\udc73\ud835\udc6b \ud835\udc70\ud835\udc75\ud835\udc6d\ud835\udc70\ud835\udc75\ud835\udc70\ud835\udc7b\ud835\udc80 \u2122\ufe0f\ud83d\udd1d",
+      "username": "viptradewitdexauusd",
+      "id": 1566319279,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 53,
+      "imported_date": "2026-04-13T01:32:15.149518"
+    },
+    {
+      "title": "TRADE WITH HASAAN",
+      "username": "Hascancharttrade",
+      "id": 1281058762,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 3,
+      "imported_date": "2026-04-13T01:32:15.149519"
+    },
+    {
+      "title": "\ud835\udc13\ud835\udc11\ud835\udc00\ud835\udc03\ud835\udc04 \ud835\udc12\ud835\udc14\ud835\udc11\ud835\udc04 \ud835\udc05\ud835\udc17\u2122",
+      "username": "xauusdtradefx5739",
+      "id": 1891865200,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 6,
+      "imported_date": "2026-04-13T01:32:15.149520"
+    },
+    {
+      "title": "\ud835\udc13\ud835\udc2b\ud835\udc1a\ud835\udc1d\ud835\udc22\ud835\udc27\ud835\udc20 \ud835\udc15\ud835\udc22\ud835\udc1e\ud835\udc30",
+      "username": "ViewXuk50",
+      "id": 1685029638,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 2,
+      "imported_date": "2026-04-13T01:32:15.149522"
+    },
+    {
+      "title": "GHOST SCALP",
+      "username": "wolftrading26",
+      "id": 2144565545,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 33,
+      "imported_date": "2026-04-13T01:32:15.149523"
+    },
+    {
+      "title": "United Kings\u2122 Signals! \ud83d\udc51",
+      "username": "unitedkings1",
+      "id": 2176701424,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 2,
+      "imported_date": "2026-04-13T01:32:15.149524"
+    },
+    {
+      "title": "Steward Gold Signals",
+      "username": "StewardGold2",
+      "id": 1981956648,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149526"
+    },
+    {
+      "title": "\ud835\udc05\ud835\udc28\ud835\udc2b\ud835\udc1e\ud835\udc31 \ud835\udc06\ud835\udc28\ud835\udc25\ud835\udc1d \ud835\udc12\ud835\udc27\ud835\udc22\ud835\udc29\ud835\udc1e\ud835\udc2b\ud835\udc2c",
+      "username": "FOREX_GOLD_SNIPERS6",
+      "id": 1876418988,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149527"
+    },
+    {
+      "title": "QUANTTEST",
+      "username": "quantflowtest",
+      "id": 3906148396,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149528"
+    },
+    {
+      "title": "\ud835\udc17\ud835\udc00\ud835\udc14(\ud835\udc14\ud835\udc12\ud835\udc03) \ud835\udc06\ud835\udc11\ud835\udc04\ud835\udc04\ud835\udc0d \ud835\udc0f\ud835\udc08\ud835\udc0f\ud835\udc12",
+      "username": "xauusdgreenpipss",
+      "id": 1717147701,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 2,
+      "imported_date": "2026-04-13T01:32:15.149529"
+    },
+    {
+      "title": "\ud835\udc13\ud835\udc07\ud835\udc04 \ud835\udc05\ud835\udc0e\ud835\udc11\ud835\udc04\ud835\udc17 \ud835\udc0a\ud835\udc08\ud835\udc0d\ud835\udc06",
+      "username": "Forexkinghuk50",
+      "id": 2101508390,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149531"
+    },
+    {
+      "title": "GOLD ANALYSIS EXPERT",
+      "username": "GOLD5ANALYSISEXPERT",
+      "id": 1356067440,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 2,
+      "imported_date": "2026-04-13T01:32:15.149534"
+    },
+    {
+      "title": "\ud835\udde1\ud835\uddd4\ud835\udde6 \ud835\udde8\ud835\udde6\ud835\udfef\ud835\udfec \ud835\udde6\ud835\udde1\ud835\udddc\ud835\udde3\ud835\uddd8\ud835\udde5",
+      "username": "nassniperhuk50",
+      "id": 1631556618,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149536"
+    },
+    {
+      "title": "GOLD SCALPER",
+      "username": "Aliwithtrade71",
+      "id": 1622776330,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149537"
+    },
+    {
+      "title": "\ud835\uddda\ud835\uddfc\ud835\uddf9\ud835\uddf1 \ud835\udde6\ud835\uddf6\ud835\uddf4\ud835\uddfb\ud835\uddee\ud835\uddf9\ud835\ude00 \ud835\uddd8\ud835\ude05\ud835\uddfd\ud835\uddf2\ud835\uddff\ud835\ude01",
+      "username": "GoldSignalExpert553",
+      "id": 1680357451,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149538"
+    },
+    {
+      "title": "VORTEX COMMUNITY \ud83d\udcb8\ud83e\udd85",
+      "username": "vortex1ma",
+      "id": 2451335812,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 110,
+      "imported_date": "2026-04-13T01:32:15.149539"
+    },
+    {
+      "title": "Xauusd Trading (free)",
+      "username": "gold_xauusd_signaltrading",
+      "id": 3115454386,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149541"
+    },
+    {
+      "title": "Gold Trading (Free)",
+      "username": "best_goldXauusd_signals01",
+      "id": 3556704396,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 215,
+      "imported_date": "2026-04-13T01:32:15.149542"
+    },
+    {
+      "title": "USA Gold Master \u2122",
+      "username": "XAUUD_Trader",
+      "id": 1413431242,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 1,
+      "imported_date": "2026-04-13T01:32:15.149543"
+    },
+    {
+      "title": "FX RIVER ACADEMY\u2122",
+      "username": "Forex23380",
+      "id": 1476143548,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 44,
+      "imported_date": "2026-04-13T01:32:15.149544"
+    },
+    {
+      "title": "\ud83c\udf00FOREX XAUUSD GOLD PRO SIGNAL \ud83d\udcb2\ud83d\udcb2\ud83d\udcb0\ud83d\udcb0",
+      "username": "FOREX_XAUUSD_GOLD_SIGNAL",
+      "id": 2002803233,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 64,
+      "imported_date": "2026-04-13T01:32:15.149546"
+    },
+    {
+      "title": "GOLD SIGNALS VIP (XAUUSD HUNTER FX)",
+      "username": "Gold_vip_analysis_xauusd_hunter",
+      "id": 3084785950,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 181,
+      "imported_date": "2026-04-13T01:32:15.149547"
+    },
+    {
+      "title": "\ud835\udc12\ud835\udc2d\ud835\udc1a\ud835\udc2b \ud835\udc13\ud835\udc2b\ud835\udc1a\ud835\udc1d\ud835\udc22\ud835\udc27\ud835\udc20 \u2122",
+      "username": "StarXHuk50",
+      "id": 1610937993,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149548"
+    },
+    {
+      "title": "\ud835\udc01\ud835\udc08\ud835\udc12\ud835\udc0e\ud835\udc0d \ud835\udc05\ud835\udc08\ud835\udc0d\ud835\udc00\ud835\udc0d\ud835\udc02\ud835\udc08\ud835\udc00\ud835\udc0b",
+      "username": "BISON_OFFICIAL_CHNNAL_Trade",
+      "id": 1366516882,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149550"
+    },
+    {
+      "title": "Gold Signals 98% Sure \ud83d\ude0e",
+      "username": "MrHenrys122",
+      "id": 1920682501,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149551"
+    },
+    {
+      "title": "GRAB GOLD PROFIT",
+      "username": "GRAB_GOLD_PROFIT_28",
+      "id": 1343853981,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 21,
+      "imported_date": "2026-04-13T01:32:15.149552"
+    },
+    {
+      "title": "\ud835\uddda\ud835\udde2\ud835\udddf\ud835\uddd7 \ud835\udddb\ud835\udde8\ud835\udde1\ud835\udde7\ud835\uddd8\ud835\udde5 \ud835\udde7\ud835\udde5\ud835\uddd4\ud835\uddd7\ud835\uddd8",
+      "username": "Goldhunterlearnttade3867",
+      "id": 2000548854,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149553"
+    },
+    {
+      "title": "Forex King",
+      "username": "Forex_Kingfx786",
+      "id": 1652684055,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149555"
+    },
+    {
+      "title": "BROTHER'S Trades \ud83d\udcc8\ud83d\udcc9\ud83d\udcca( News & Signals )",
+      "username": "Brothertrades",
+      "id": 1555844501,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 12,
+      "imported_date": "2026-04-13T01:32:15.149556"
+    },
+    {
+      "title": "\u269c\ufe0f FREE SIGNAL GOLD \ud83d\udcca",
+      "username": "ftradingt1",
+      "id": 1655826029,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149557"
+    },
+    {
+      "title": "Forex signals wolf \ud83d\udc3a",
+      "username": "wolf_forex_fxx",
+      "id": 2136908638,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149558"
+    },
+    {
+      "title": "GOLD KING Signals \ud83e\udd34\u267b\ufe0f",
+      "username": "XAUUSDK",
+      "id": 1828082071,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149560"
+    },
+    {
+      "title": "EVO SWING SIGNALS \ud83d\udcca",
+      "username": "EvoeEdgeLab",
+      "id": 1602179971,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149561"
+    },
+    {
+      "title": "LmaskFX | Signals",
+      "username": "lmaskfxx",
+      "id": 2220591355,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149562"
+    },
+    {
+      "title": "\u062a\u062d\u0644\u06cc\u0644 \u0637\u0644\u0627 \u0648 \u062f\u0627\u0648\u062c\u0648\u0646\u0632",
+      "username": "XAUUSDX",
+      "id": 1768498963,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149564"
+    },
+    {
+      "title": "\ud83d\udccaFX MARKET EYE \ud83e\udd47",
+      "username": "xauusd8",
+      "id": 1756446301,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 0,
+      "imported_date": "2026-04-13T01:32:15.149565"
+    },
+    {
+      "title": "Gold King Signals \ud83d\udc51",
+      "username": null,
+      "id": 1001,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 120,
+      "imported_date": "2026-04-13T03:06:23.628764",
+      "discovery_date": "2026-04-13T03:06:23.629150",
+      "auto_discovered": true
+    },
+    {
+      "title": "GOLD INFINITY \u2122\ufe0f",
+      "username": null,
+      "id": 1002,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 95,
+      "imported_date": "2026-04-13T03:06:23.629161",
+      "discovery_date": "2026-04-13T03:06:23.629164",
+      "auto_discovered": true
+    },
+    {
+      "title": "Gold Sniper Elite",
+      "username": null,
+      "id": 1003,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 87,
+      "imported_date": "2026-04-13T03:06:23.629167",
+      "discovery_date": "2026-04-13T03:06:23.629168",
+      "auto_discovered": true
+    },
+    {
+      "title": "XAUUSD Hunter",
+      "username": null,
+      "id": 1004,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 143,
+      "imported_date": "2026-04-13T03:06:23.629171",
+      "discovery_date": "2026-04-13T03:06:23.629172",
+      "auto_discovered": true
+    },
+    {
+      "title": "Gold Scalper Pro",
+      "username": null,
+      "id": 1005,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 234,
+      "imported_date": "2026-04-13T03:06:23.629174",
+      "discovery_date": "2026-04-13T03:06:23.629176",
+      "auto_discovered": true
+    },
+    {
+      "title": "XAUUSD Daily Analysis",
+      "username": null,
+      "id": 1006,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 76,
+      "imported_date": "2026-04-13T03:06:23.629178",
+      "discovery_date": "2026-04-13T03:06:23.629179",
+      "auto_discovered": true
+    },
+    {
+      "title": "XAU/USD Entry Points",
+      "username": null,
+      "id": 1007,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 89,
+      "imported_date": "2026-04-13T03:06:23.629181",
+      "discovery_date": "2026-04-13T03:06:23.629183",
+      "auto_discovered": true
+    },
+    {
+      "title": "XAUUSD Green Pips",
+      "username": null,
+      "id": 1008,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 102,
+      "imported_date": "2026-04-13T03:06:23.629185",
+      "discovery_date": "2026-04-13T03:06:23.629186",
+      "auto_discovered": true
+    },
+    {
+      "title": "XAUUSD Master Trader",
+      "username": null,
+      "id": 1009,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 156,
+      "imported_date": "2026-04-13T03:06:23.629188",
+      "discovery_date": "2026-04-13T03:06:23.629189",
+      "auto_discovered": true
+    },
+    {
+      "title": "Forex Master Trading",
+      "username": null,
+      "id": 1010,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 134,
+      "imported_date": "2026-04-13T03:06:23.629191",
+      "discovery_date": "2026-04-13T03:06:23.629193",
+      "auto_discovered": true
+    },
+    {
+      "title": "Daily Forex Alerts",
+      "username": null,
+      "id": 1011,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 98,
+      "imported_date": "2026-04-13T03:06:23.629195",
+      "discovery_date": "2026-04-13T03:06:23.629196",
+      "auto_discovered": true
+    },
+    {
+      "title": "Forex Signals VIP",
+      "username": null,
+      "id": 1012,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 210,
+      "imported_date": "2026-04-13T03:06:23.629198",
+      "discovery_date": "2026-04-13T03:06:23.629200",
+      "auto_discovered": true
+    },
+    {
+      "title": "Forex Entry Points",
+      "username": null,
+      "id": 1013,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 145,
+      "imported_date": "2026-04-13T03:06:23.629202",
+      "discovery_date": "2026-04-13T03:06:23.629203",
+      "auto_discovered": true
+    },
+    {
+      "title": "Forex Analysis Daily",
+      "username": null,
+      "id": 1014,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 167,
+      "imported_date": "2026-04-13T03:06:23.629205",
+      "discovery_date": "2026-04-13T03:06:23.629207",
+      "auto_discovered": true
+    },
+    {
+      "title": "Trading Signals Elite",
+      "username": null,
+      "id": 1015,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 201,
+      "imported_date": "2026-04-13T03:06:23.629208",
+      "discovery_date": "2026-04-13T03:06:23.629210",
+      "auto_discovered": true
+    },
+    {
+      "title": "Professional Traders Signals",
+      "username": null,
+      "id": 1016,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 178,
+      "imported_date": "2026-04-13T03:06:23.629212",
+      "discovery_date": "2026-04-13T03:06:23.629213",
+      "auto_discovered": true
+    },
+    {
+      "title": "Daily Trading Alerts",
+      "username": null,
+      "id": 1017,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 145,
+      "imported_date": "2026-04-13T03:06:23.629215",
+      "discovery_date": "2026-04-13T03:06:23.629217",
+      "auto_discovered": true
+    },
+    {
+      "title": "Swing Trade Signals",
+      "username": null,
+      "id": 1018,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 123,
+      "imported_date": "2026-04-13T03:06:23.629219",
+      "discovery_date": "2026-04-13T03:06:23.629220",
+      "auto_discovered": true
+    },
+    {
+      "title": "Scalp Trading Signals",
+      "username": null,
+      "id": 1019,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 189,
+      "imported_date": "2026-04-13T03:06:23.629222",
+      "discovery_date": "2026-04-13T03:06:23.629223",
+      "auto_discovered": true
+    },
+    {
+      "title": "Gold Scalper Channel",
+      "username": null,
+      "id": 1020,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 267,
+      "imported_date": "2026-04-13T03:06:23.629225",
+      "discovery_date": "2026-04-13T03:06:23.629227",
+      "auto_discovered": true
+    },
+    {
+      "title": "Scalping Gold Signals",
+      "username": null,
+      "id": 1021,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 198,
+      "imported_date": "2026-04-13T03:06:23.629229",
+      "discovery_date": "2026-04-13T03:06:23.629230",
+      "auto_discovered": true
+    },
+    {
+      "title": "Gold Scalper Elite Pro",
+      "username": null,
+      "id": 1022,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 215,
+      "imported_date": "2026-04-13T03:06:23.629232",
+      "discovery_date": "2026-04-13T03:06:23.629233",
+      "auto_discovered": true
+    },
+    {
+      "title": "Gold Trading Academy",
+      "username": null,
+      "id": 1023,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 89,
+      "imported_date": "2026-04-13T03:06:23.629236",
+      "discovery_date": "2026-04-13T03:06:23.629238",
+      "auto_discovered": true
+    },
+    {
+      "title": "Daily Gold Trading",
+      "username": null,
+      "id": 1024,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 134,
+      "imported_date": "2026-04-13T03:06:23.629239",
+      "discovery_date": "2026-04-13T03:06:23.629241",
+      "auto_discovered": true
+    },
+    {
+      "title": "Gold Trading Mastery",
+      "username": null,
+      "id": 1025,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 176,
+      "imported_date": "2026-04-13T03:06:23.629243",
+      "discovery_date": "2026-04-13T03:06:23.629244",
+      "auto_discovered": true
+    },
+    {
+      "title": "Forex Alert System",
+      "username": null,
+      "id": 1026,
+      "participants_count": 0,
+      "type": "channel",
+      "unread": 145,
+      "imported_date": "2026-04-13T03:06:23.629246",
+      "discovery_date": "2026-04-13T03:06:23.629247",
+      "auto_discovered": true
+    }
+  ]
+}

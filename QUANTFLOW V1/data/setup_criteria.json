@@ -1,0 +1,226 @@
+{
+  "_comment": "QUANTFLOW V1 — Optimal Trading Setup Criteria for XAUUSD",
+  "_version": "1.0",
+  "_last_updated": "2026-04-13",
+
+  "instrument": "XAUUSD",
+  "unit": "points",
+  "timeframe_primary": "H1",
+  "timeframe_entry": "M15",
+
+  "minimum_requirements": {
+    "_comment": "ALL must be true to generate ANY setup",
+    "htf_trend_identified": true,
+    "liquidity_swept": true,
+    "price_at_poi": true,
+    "entry_confirmation": true,
+    "min_rr_tp1": 2.0,
+    "max_sl_points": 60,
+    "min_confluence_score": 65
+  },
+
+  "market_structure": {
+    "_comment": "Break of Structure & Change of Character conditions",
+    "require_bos_confirmed": true,
+    "accept_choch_as_bos": false,
+    "require_displacement_candle": true,
+    "displacement_min_body_points": 8,
+    "trend_invalidation_rules": {
+      "bullish_invalidated_below": "LOD",
+      "bearish_invalidated_above": "HOD"
+    }
+  },
+
+  "liquidity": {
+    "_comment": "Liquidity sweep conditions before entry",
+    "require_previous_high_low_swept": true,
+    "equal_highs_lows_qualify": true,
+    "swing_window_candles": 20,
+    "sweep_confirmation": {
+      "close_below_level": true,
+      "min_wick_through_points": 3
+    },
+    "preferred_sweep_direction": {
+      "for_long": "sweep_lows_first",
+      "for_short": "sweep_highs_first"
+    }
+  },
+
+  "point_of_interest": {
+    "_comment": "Order Blocks and Fair Value Gaps — POI conditions",
+    "order_block": {
+      "require_ob_at_entry": true,
+      "ob_max_age_candles": 50,
+      "ob_types_accepted": ["DEMAND", "SUPPLY"],
+      "require_fresh_ob": true,
+      "fresh_means_untouched": true
+    },
+    "fair_value_gap": {
+      "fvg_adds_confluence": true,
+      "fvg_between_entry_and_tp": true,
+      "fvg_min_size_points": 5,
+      "count_as_target": true
+    },
+    "premium_discount": {
+      "_comment": "Trade discounts for longs, premiums for shorts (Fibonacci)",
+      "long_entry_max_fib": 0.5,
+      "short_entry_min_fib": 0.5,
+      "optimal_entry_fib": 0.705
+    }
+  },
+
+  "entry_confirmation": {
+    "_comment": "Candle confirmation before entry is triggered",
+    "accepted_patterns": [
+      "bullish_engulfing",
+      "bearish_engulfing",
+      "pin_bar",
+      "displacement_candle",
+      "shift_of_structure_m5"
+    ],
+    "require_candle_close": true,
+    "max_entry_slippage_points": 3
+  },
+
+  "risk_management": {
+    "_comment": "Hard risk rules — NO exceptions",
+    "stop_loss": {
+      "placement": "beyond_structure",
+      "buffer_points": 5,
+      "sl_types": {
+        "long": "below_demand_ob",
+        "short": "above_supply_ob"
+      }
+    },
+    "take_profits": {
+      "tp1": {
+        "target": "nearest_liquidity",
+        "min_rr": 2.0,
+        "size_pct": 50
+      },
+      "tp2": {
+        "target": "major_liquidity_swing",
+        "min_rr": 3.0,
+        "size_pct": 30
+      },
+      "tp3": {
+        "target": "session_extreme",
+        "min_rr": 5.0,
+        "size_pct": 20
+      }
+    },
+    "no_trade_conditions": [
+      "news_in_next_30min",
+      "spread_above_3_points",
+      "rr_below_2_on_tp1",
+      "no_liquidity_at_target",
+      "conflicting_htf_structure",
+      "already_traded_this_level"
+    ]
+  },
+
+  "confluence_scoring": {
+    "_comment": "Score each factor — minimum 65/100 to execute",
+    "factors": {
+      "htf_trend_aligned": {
+        "weight": 20,
+        "description": "H4/H1 trend matches entry direction"
+      },
+      "liquidity_swept": {
+        "weight": 20,
+        "description": "Previous H/L swept before entry"
+      },
+      "price_at_order_block": {
+        "weight": 20,
+        "description": "Entry at fresh demand/supply OB"
+      },
+      "bos_confirmed": {
+        "weight": 15,
+        "description": "Break of Structure confirmed on entry TF"
+      },
+      "fvg_present": {
+        "weight": 10,
+        "description": "FVG between entry and TP"
+      },
+      "retail_positioning_opposite": {
+        "weight": 10,
+        "description": "Retail majority positioned against the setup"
+      },
+      "session_timing_optimal": {
+        "weight": 5,
+        "description": "London open, NY open, or NY afternoon session"
+      }
+    },
+    "thresholds": {
+      "no_trade": [0, 50],
+      "wait": [51, 64],
+      "moderate_setup": [65, 79],
+      "high_probability_setup": [80, 100]
+    }
+  },
+
+  "session_timing": {
+    "_comment": "Optimal trading windows (UTC)",
+    "preferred_windows": [
+      {"name": "London Open",    "start": "07:00", "end": "09:30", "quality": "A+"},
+      {"name": "NY Open",        "start": "13:00", "end": "15:30", "quality": "A+"},
+      {"name": "London Close",   "start": "15:30", "end": "16:30", "quality": "B"},
+      {"name": "NY Afternoon",   "start": "17:00", "end": "20:00", "quality": "B"}
+    ],
+    "avoid_windows": [
+      {"name": "Asian Range",    "start": "00:00", "end": "07:00"},
+      {"name": "Weekend",        "start": "Fri 21:00", "end": "Sun 22:00"}
+    ]
+  },
+
+  "setup_templates": {
+    "_comment": "Pre-defined setup types the engine will look for",
+
+    "LONG_SWEEP_AND_REVERSE": {
+      "description": "Price sweeps LOD/equal lows then reverses bullish from demand OB",
+      "htf_bias": "BULLISH",
+      "sequence": ["sweep_lows", "displacement_up", "entry_at_ob", "target_hod"],
+      "typical_rr": "3:1 to 5:1"
+    },
+
+    "SHORT_SWEEP_AND_REVERSE": {
+      "description": "Price sweeps HOD/equal highs then reverses bearish from supply OB",
+      "htf_bias": "BEARISH",
+      "sequence": ["sweep_highs", "displacement_down", "entry_at_ob", "target_lod"],
+      "typical_rr": "3:1 to 5:1"
+    },
+
+    "LONG_BOS_PULLBACK": {
+      "description": "BOS confirmed bullish, pullback to FVG/OB for continuation long",
+      "htf_bias": "BULLISH",
+      "sequence": ["bos_confirmed", "pullback_to_50pct", "entry_at_fvg_or_ob", "continuation"],
+      "typical_rr": "2:1 to 3:1"
+    },
+
+    "SHORT_BOS_PULLBACK": {
+      "description": "BOS confirmed bearish, pullback to FVG/OB for continuation short",
+      "htf_bias": "BEARISH",
+      "sequence": ["bos_confirmed", "pullback_to_50pct", "entry_at_fvg_or_ob", "continuation"],
+      "typical_rr": "2:1 to 3:1"
+    },
+
+    "INDUCEMENT_TRAP": {
+      "description": "Fake breakout above/below key level, trap retail, reverse",
+      "htf_bias": "ANY",
+      "sequence": ["fake_break", "close_back_inside", "displacement_opposite", "entry"],
+      "typical_rr": "2.5:1 to 4:1"
+    }
+  },
+
+  "invalidation_rules": {
+    "_comment": "When to cancel a setup that was previously valid",
+    "cancel_long_if": "price_closes_below_sl_before_entry",
+    "cancel_short_if": "price_closes_above_sl_before_entry",
+    "cancel_any_if": [
+      "major_news_event_triggered",
+      "spread_spike_above_5",
+      "30min_no_fill_after_trigger",
+      "htf_structure_breaks_against"
+    ]
+  }
+}

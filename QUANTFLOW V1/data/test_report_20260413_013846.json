@@ -1,0 +1,90 @@
+{
+  "summary": {
+    "timestamp": "2026-04-13T01:38:46.201446",
+    "test_duration_seconds": 7.200787,
+    "statistics": {
+      "messages_retrieved": 0,
+      "channels_processed": 0,
+      "signals_found": 0,
+      "signals_extracted": 0,
+      "signals_verified": 0,
+      "signals_accepted": 0
+    },
+    "tradingview": {
+      "current_price": 4673.71,
+      "symbol": "OANDA:XAUUSD",
+      "timestamp": "2026-04-13T01:38:46.196983"
+    },
+    "steps_completed": 8,
+    "status": "\u26a0\ufe0f NO SIGNALS FOUND"
+  },
+  "steps": [
+    {
+      "step": "Load Config",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:39.000960",
+      "details": {
+        "channels": 55
+      }
+    },
+    {
+      "step": "Connect Telegram",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:39.358558",
+      "details": {
+        "account": "Achrafsila"
+      }
+    },
+    {
+      "step": "Retrieve Messages",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:46.196783",
+      "details": {
+        "messages": 0,
+        "channels": 0
+      }
+    },
+    {
+      "step": "Filter Signals",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:46.196810",
+      "details": {
+        "signals": 0
+      }
+    },
+    {
+      "step": "Extract Parameters",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:46.196816",
+      "details": {
+        "extracted": 0
+      }
+    },
+    {
+      "step": "TradingView Verify",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:46.196995",
+      "details": {
+        "verified": 0
+      }
+    },
+    {
+      "step": "Liquidity Analysis",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:46.196999",
+      "details": {
+        "analyzed": 0
+      }
+    },
+    {
+      "step": "Decision Making",
+      "status": "\u2705",
+      "timestamp": "2026-04-13T01:38:46.197002",
+      "details": {
+        "decisions": 0
+      }
+    }
+  ],
+  "signals": [],
+  "decisions": []
+}

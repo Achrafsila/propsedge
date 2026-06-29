@@ -1,0 +1,52 @@
+[
+  {
+    "timestamp": "2026-04-12T21:48:09.908038",
+    "symbol": "BTCUSD",
+    "signal": {
+      "direction": "BUY",
+      "entry": 45200,
+      "sl": 44700,
+      "tp": 46500
+    },
+    "market": {
+      "price": 45234.5,
+      "high": 45600,
+      "low": 44800
+    },
+    "analysis": {
+      "bias": "BULLISH",
+      "status": "CORRECT",
+      "crowding": "EXTREME"
+    },
+    "decision": {
+      "action": "ACCEPT",
+      "confidence": "MEDIUM"
+    },
+    "telegram_message": "\u2705 ACCEPT BTCUSD\n\n\ud83d\udcb0 ACCEPT SIGNAL\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\ud83d\udcca Current Price: $45234.50\n\ud83d\udcc8 Range: $44800.00 - $45600.00\n\n\ud83c\udfaf Entry: $45200.00\n\ud83d\uded1 Stop Loss: $44700.00\n\ud83c\udf81 Take Profit: $46500.00\n\ud83d\udcca Risk/Reward: 2.60:1\n\nConfidence: MEDIUM\n\u23f0 21:48:09\n"
+  },
+  {
+    "timestamp": "2026-04-12T21:48:09.908462",
+    "symbol": "ETHUSD",
+    "signal": {
+      "direction": "BUY",
+      "entry": 2450,
+      "sl": 2420,
+      "tp": 2550
+    },
+    "market": {
+      "price": 2450.75,
+      "high": 2480,
+      "low": 2400
+    },
+    "analysis": {
+      "bias": "BULLISH",
+      "status": "CORRECT",
+      "crowding": "EXTREME"
+    },
+    "decision": {
+      "action": "ACCEPT",
+      "confidence": "MEDIUM"
+    },
+    "telegram_message": "\u2705 ACCEPT ETHUSD\n\n\ud83d\udcb0 ACCEPT SIGNAL\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n\ud83d\udcca Current Price: $2450.75\n\ud83d\udcc8 Range: $2400.00 - $2480.00\n\n\ud83c\udfaf Entry: $2450.00\n\ud83d\uded1 Stop Loss: $2420.00\n\ud83c\udf81 Take Profit: $2550.00\n\ud83d\udcca Risk/Reward: 3.33:1\n\nConfidence: MEDIUM\n\u23f0 21:48:09\n"
+  }
+]

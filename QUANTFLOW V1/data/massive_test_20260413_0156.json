@@ -1,0 +1,218 @@
+{
+  "metadata": {
+    "timestamp": "2026-04-13T00:56:24.325765+00:00",
+    "date_range": "2026-04-12 to 2026-04-13",
+    "total_messages": 800,
+    "total_signals": 210,
+    "tv_price": 4680.92
+  },
+  "summary": {
+    "accept": 8,
+    "review": 7,
+    "reject": 195,
+    "buy_accept": 8,
+    "sell_accept": 0
+  },
+  "signals": {
+    "accept": [
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4685\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+        "time": "2026-04-12 22:09:12",
+        "timestamp": "2026-04-12T22:09:12+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4685.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4685\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+        "time": "2026-04-12 22:09:08",
+        "timestamp": "2026-04-12T22:09:08+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4685.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4685\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+        "time": "2026-04-12 22:09:08",
+        "timestamp": "2026-04-12T22:09:08+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4685.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4685\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+        "time": "2026-04-12 22:05:15",
+        "timestamp": "2026-04-12T22:05:15+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4685.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4685\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+        "time": "2026-04-12 22:05:15",
+        "timestamp": "2026-04-12T22:05:15+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4685.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4685\nTp : 4720\nTp : 4750\nTp : 4800\nTp : open**",
+        "time": "2026-04-12 22:05:12",
+        "timestamp": "2026-04-12T22:05:12+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4685.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "\u0645\u0644\u0643 \u0627\u0644\u0630\u0647\u0628",
+        "text": "**XAUUSD BUY NOW \u2b06\ufe0f4672-4667\u2b06\ufe0f\nSL\ud83d\uded14662\n\nTP\ud83c\udfc64682\nTP\ud83c\udfc64700\n****#\u0627\u0644\u0645\u0644\u0643**",
+        "time": "2026-04-12 22:15:28",
+        "timestamp": "2026-04-12T22:15:28+00:00",
+        "action": "BUY",
+        "entry": 4672.0,
+        "sl": 4667.0,
+        "tp": 4662.0,
+        "diff_pips": 8.9,
+        "price_moved": 8.9,
+        "classification": "ACCEPT"
+      },
+      {
+        "channel": "WOLF TRADING",
+        "text": "XAUUSD BUY NOW 4675\nSl 4630\nTp 4775\n\u0647\u062f\u0641\u0643 1000\u0646\u0642\u0637\u0629",
+        "time": "2026-04-12 22:03:23",
+        "timestamp": "2026-04-12T22:03:23+00:00",
+        "action": "BUY",
+        "entry": 4675.0,
+        "sl": 4630.0,
+        "tp": 4775.0,
+        "diff_pips": 5.9,
+        "price_moved": 5.9,
+        "classification": "ACCEPT"
+      }
+    ],
+    "review": [
+      {
+        "channel": "Isabelle - Queen Of Gold",
+        "text": "**Xauusd BUY now 4679\n\nSL : 4661\n\nTP 1 : 4682\nTP 2 : 4685\nTP 3 : 4688\nTP 4 : 4692\nTP 5 : 4695\nTP 6 : 4700**",
+        "time": "2026-04-13 00:35:13",
+        "timestamp": "2026-04-13T00:35:13+00:00",
+        "action": "BUY",
+        "entry": 4679.0,
+        "sl": 4661.0,
+        "tp": 4682.0,
+        "diff_pips": 1.9,
+        "price_moved": 1.9,
+        "classification": "REVIEW"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4680\n\n5 \u0645\u0631\u0627\u062a \u0628\u0644\u0648\u062a \u0639\u0627\u0644\u064a**",
+        "time": "2026-04-12 22:11:34",
+        "timestamp": "2026-04-12T22:11:34+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4680.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "REVIEW"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4680\n\n5 \u0645\u0631\u0627\u062a \u0628\u0644\u0648\u062a \u0639\u0627\u0644\u064a**",
+        "time": "2026-04-12 22:11:34",
+        "timestamp": "2026-04-12T22:11:34+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4680.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "REVIEW"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4680\n\n5 \u0645\u0631\u0627\u062a \u0628\u0644\u0648\u062a \u0639\u0627\u0644\u064a**",
+        "time": "2026-04-12 22:11:34",
+        "timestamp": "2026-04-12T22:11:34+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4680.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "REVIEW"
+      },
+      {
+        "channel": "KING EL GOLD \ud83d\udc51",
+        "text": "**XAUUSD BUY NOW 4670 ****\u2705****\nSl : 4661 ( 90 pip )\nTp : 4680\n\n5 \u0645\u0631\u0627\u062a \u0628\u0644\u0648\u062a \u0639\u0627\u0644\u064a**",
+        "time": "2026-04-12 22:11:34",
+        "timestamp": "2026-04-12T22:11:34+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4680.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "REVIEW"
+      },
+      {
+        "channel": "FREE TRAD\u0130NG S\u0130GNALS",
+        "text": "**XAUUSD BUY NOW 4670 \nSl : 4661 ( 90 pip )\nTp : 4675\nTp : 4680\nTp : 4690\nTp :** 4700",
+        "time": "2026-04-12 22:06:04",
+        "timestamp": "2026-04-12T22:06:04+00:00",
+        "action": "BUY",
+        "entry": 4670.0,
+        "sl": 4661.0,
+        "tp": 4675.0,
+        "diff_pips": 10.9,
+        "price_moved": 10.9,
+        "classification": "REVIEW"
+      },
+      {
+        "channel": "\ud835\udc13\ud835\udc1e\ud835\udc1c\ud835\udc21\ud835\udc27\ud835\udc22\ud835\udc1c\ud835\udc1a\ud835\udc25 \ud835\udc0f\ud835\udc22\ud835\udc29\ud835\udc2c \u2122",
+        "text": "**#XAUUSD****\u00a0BUY\u00a04664-4661\n\nTP 4667\nTP 4670\nTP 4674\nTP 4679\nTP 4684\nTP 4700\n\nSL 4652**",
+        "time": "2026-04-13 00:04:39",
+        "timestamp": "2026-04-13T00:04:39+00:00",
+        "action": "BUY",
+        "entry": 4664.0,
+        "sl": 4652.0,
+        "tp": 4667.0,
+        "diff_pips": 16.9,
+        "price_moved": 16.9,
+        "classification": "REVIEW"
+      }
+    ],
+    "reject_count": 195
+  }
+}

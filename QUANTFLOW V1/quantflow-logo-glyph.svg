@@ -1,0 +1,87 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .glyph-main {
+        fill: none;
+        stroke: #00D9FF;
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .glyph-accent {
+        fill: none;
+        stroke: #FFD700;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .glyph-wave {
+        fill: none;
+        stroke: #7C3AED;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+      }
+      .wave-pulse {
+        animation: pulse 2s ease-in-out infinite;
+      }
+    </style>
+
+    <filter id="glyph-glow">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="#0F1419"/>
+
+  <!-- GLYPH VERSION - Simplified for small sizes (32px+) -->
+
+  <!-- Particle orbits (main element) -->
+  <g id="glyph-particle" filter="url(#glyph-glow)">
+    <!-- Top arc -->
+    <path
+      d="M 220,200 Q 256,170 292,200"
+      class="glyph-main"
+    />
+    <!-- Right arc -->
+    <path
+      d="M 320,230 Q 340,265 320,300"
+      class="glyph-main"
+    />
+    <!-- Bottom arc -->
+    <path
+      d="M 292,330 Q 256,360 220,330"
+      class="glyph-main"
+    />
+    <!-- Left arc -->
+    <path
+      d="M 192,300 Q 172,265 192,230"
+      class="glyph-main"
+    />
+  </g>
+
+  <!-- Accent lines (gold cross) -->
+  <g id="glyph-accent">
+    <line x1="210" y1="210" x2="302" y2="302" class="glyph-accent"/>
+    <line x1="302" y1="210" x2="210" y2="302" class="glyph-accent"/>
+  </g>
+
+  <!-- Energy wave (single, pulsing) -->
+  <g id="glyph-wave">
+    <path
+      d="M 256,150 Q 290,145 320,160"
+      class="glyph-wave wave-pulse"
+    />
+  </g>
+
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="3" fill="#FFD700" opacity="0.9"/>
+</svg>

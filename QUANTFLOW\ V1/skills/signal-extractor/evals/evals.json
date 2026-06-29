@@ -1,0 +1,72 @@
+{
+  "skill_name": "signal-extractor",
+  "evals": [
+    {
+      "id": 1,
+      "name": "gold-signal-extraction",
+      "prompt": "Run the signal extractor skill to extract trading signals from my Telegram channels. I've configured it with my Telegram credentials in ~/.claude/quantflow_config.json. The skill should scan all channels, extract any BUY/SELL signals for GOLD with ENTRY, SL, and TP prices, deduplicate them over the 24-hour window, and output JSON to the signal validator.",
+      "expected_output": "Extracted signals in JSONL format to ~/.claude/quantflow_extracted_signals.jsonl with proper deduplication state saved to ~/.claude/quantflow_extractor_state.json",
+      "files": [],
+      "assertions": [
+        {
+          "name": "state_file_created",
+          "description": "State file is created and contains channels, last_message_ids, and seen_signal_hashes"
+        },
+        {
+          "name": "jsonl_output_created",
+          "description": "JSONL output file is created with at least one extracted signal (or gracefully handles no signals)"
+        },
+        {
+          "name": "signal_structure_valid",
+          "description": "Each extracted signal contains: signal_id, source, extracted_signal (with action, instrument, entry, sl, tp), quality metrics"
+        },
+        {
+          "name": "deduplication_works",
+          "description": "Duplicate signals within 24h window are marked with is_duplicate=true"
+        },
+        {
+          "name": "no_crashes",
+          "description": "Skill completes without errors or crashes, handles missing config gracefully"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "resumable-execution",
+      "prompt": "Test the signal extractor's ability to resume from where it left off. First execution: run the extractor and verify it creates state file with last_message_ids. Second execution: run again immediately and verify it only processes NEW messages since the first run (not all historical messages). Check that the state file is properly updated with new message IDs.",
+      "expected_output": "State file updated with new message IDs, second execution processes only messages newer than what was processed in the first execution",
+      "files": [],
+      "assertions": [
+        {
+          "name": "state_persistence",
+          "description": "State file persists between executions with correct channel_ids and last_message_ids"
+        },
+        {
+          "name": "incremental_processing",
+          "description": "Second run only processes new messages, not re-processing old ones"
+        },
+        {
+          "name": "no_duplicate_extraction",
+          "description": "Same signal is not extracted twice if run consecutively"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "multi-instrument-signals",
+      "prompt": "Configure the extractor to monitor for multiple instruments: GOLD, BTC, EURUSD, and GBPUSD. Run the extractor and verify it correctly extracts and categorizes signals for all these instruments. Check that signals are properly labeled by instrument type and can be filtered by instrument in downstream processing.",
+      "expected_output": "Extracted signals properly labeled with correct instruments, examples: BUY GOLD, SELL BTCUSD, BUY EURUSD in the output JSONL",
+      "files": [],
+      "assertions": [
+        {
+          "name": "multi_instrument_support",
+          "description": "Signals for GOLD, BTC, EURUSD, GBPUSD are all correctly identified and labeled"
+        },
+        {
+          "name": "instrument_parsing",
+          "description": "Instrument field correctly populated for different signal formats"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+<svg viewBox="0 0 1024 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .wordmark-hex {
+        fill: none;
+        stroke: #00D9FF;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .wordmark-particle {
+        fill: none;
+        stroke: #00D9FF;
+        stroke-width: 3.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .wordmark-accent {
+        fill: none;
+        stroke: #FFD700;
+        stroke-width: 2.4;
+        stroke-linecap: round;
+      }
+      .wordmark-wave {
+        fill: none;
+        stroke: #7C3AED;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        opacity: 0.7;
+      }
+      .wordmark-text {
+        font-family: Georgia, serif;
+        font-size: 72px;
+        font-weight: bold;
+        fill: #00D9FF;
+        letter-spacing: 3px;
+      }
+      .wordmark-tagline {
+        font-family: Calibri, sans-serif;
+        font-size: 16px;
+        fill: #E8E8E8;
+        letter-spacing: 1px;
+        opacity: 0.8;
+      }
+      @keyframes orbit {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .orbiting {
+        animation: orbit 6s linear infinite;
+        transform-origin: 128px 256px;
+      }
+    </style>
+    <filter id="wordmark-glow">
+      <feGaussianBlur stdDeviation="2"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="512" fill="#0F1419"/>
+
+  <!-- LOGO SECTION (Left side) -->
+  <g id="logo-section">
+    <!-- Hexagon -->
+    <polygon
+      points="128,80 192,118 192,194 128,232 64,194 64,118"
+      class="wordmark-hex"
+      filter="url(#wordmark-glow)"
+    />
+
+    <!-- Energy waves -->
+    <g id="wordmark-waves">
+      <path d="M 145,100 Q 165,88 185,85" class="wordmark-wave"/>
+      <path d="M 170,155 Q 190,162 205,168" class="wordmark-wave"/>
+      <path d="M 155,220 Q 175,240 190,270" class="wordmark-wave"/>
+      <path d="M 101,220 Q 81,240 66,270" class="wordmark-wave"/>
+      <path d="M 86,155 Q 66,162 51,168" class="wordmark-wave"/>
+      <path d="M 111,100 Q 91,88 71,85" class="wordmark-wave"/>
+    </g>
+
+    <!-- Particle (orbiting) -->
+    <g id="wordmark-particle" class="orbiting">
+      <path d="M 118,120 Q 128,108 138,120" class="wordmark-particle"/>
+      <path d="M 152,140 Q 162,150 152,170" class="wordmark-particle"/>
+      <path d="M 138,200 Q 128,212 118,200" class="wordmark-particle"/>
+      <path d="M 104,170 Q 94,150 104,140" class="wordmark-particle"/>
+      <line x1="115" y1="115" x2="141" y2="197" class="wordmark-accent"/>
+      <line x1="141" y1="115" x2="115" y2="197" class="wordmark-accent"/>
+      <circle cx="128" cy="156" r="2" fill="#FFD700" opacity="0.9"/>
+    </g>
+  </g>
+
+  <!-- TEXT SECTION (Right side) -->
+  <g id="text-section">
+    <!-- Main text: QUANTFLOW -->
+    <text
+      x="280"
+      y="320"
+      class="wordmark-text"
+    >
+      QUANTFLOW
+    </text>
+
+    <!-- Accent line under text -->
+    <line
+      x1="280"
+      y1="340"
+      x2="880"
+      y2="340"
+      stroke="#00D9FF"
+      stroke-width="2"
+      opacity="0.4"
+    />
+
+    <!-- Tagline -->
+    <text
+      x="280"
+      y="380"
+      class="wordmark-tagline"
+    >
+      QUANTUM MARKET INTELLIGENCE
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,198 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .hex-outline {
+        fill: none;
+        stroke: #00D9FF;
+        stroke-width: 3.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .particle {
+        fill: none;
+        stroke: #00D9FF;
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .wave {
+        fill: none;
+        stroke: #7C3AED;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .particle-accent {
+        fill: none;
+        stroke: #FFD700;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      @keyframes orbit {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .orbiting {
+        animation: orbit 6s linear infinite;
+        transform-origin: 256px 256px;
+      }
+    </style>
+
+    <!-- Gradient for particle (optional premium effect) -->
+    <linearGradient id="particleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D9FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0.8" />
+    </linearGradient>
+
+    <!-- Glow filter for premium effect -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background (for preview) -->
+  <rect width="512" height="512" fill="#0F1419"/>
+
+  <!-- HEXAGON (Stabilizer) -->
+  <g id="hexagon-group">
+    <polygon
+      points="256,102 370,154 370,258 256,310 142,258 142,154"
+      class="hex-outline"
+      filter="url(#glow)"
+    />
+  </g>
+
+  <!-- ENERGY WAVES (Outer radiating lines) -->
+  <g id="waves">
+    <!-- Wave 1 - Top Right -->
+    <path
+      d="M 280,140 Q 310,120 340,115"
+      class="wave"
+    />
+    <!-- Wave 2 - Right -->
+    <path
+      d="M 310,220 Q 350,230 375,235"
+      class="wave"
+    />
+    <!-- Wave 3 - Bottom Right -->
+    <path
+      d="M 300,295 Q 330,320 345,350"
+      class="wave"
+    />
+    <!-- Wave 4 - Bottom Left -->
+    <path
+      d="M 212,295 Q 182,320 167,350"
+      class="wave"
+    />
+    <!-- Wave 5 - Left -->
+    <path
+      d="M 202,220 Q 162,230 137,235"
+      class="wave"
+    />
+    <!-- Wave 6 - Top Left -->
+    <path
+      d="M 232,140 Q 202,120 172,115"
+      class="wave"
+    />
+  </g>
+
+  <!-- QUANTUM PARTICLE (Central orbiting element) -->
+  <g id="particle-group" class="orbiting">
+    <!-- Inner orbit circle (invisible reference) -->
+    <circle cx="256" cy="256" r="50" fill="none" stroke="none" id="orbit-path"/>
+
+    <!-- Particle - Main shape (curved, organic) -->
+    <g>
+      <!-- Top arc -->
+      <path
+        d="M 240,220 Q 256,200 272,220"
+        class="particle"
+      />
+      <!-- Right arc -->
+      <path
+        d="M 295,230 Q 310,245 295,270"
+        class="particle"
+      />
+      <!-- Bottom arc -->
+      <path
+        d="M 272,285 Q 256,310 240,285"
+        class="particle"
+      />
+      <!-- Left arc -->
+      <path
+        d="M 217,270 Q 202,245 217,230"
+        class="particle"
+      />
+    </g>
+
+    <!-- Particle accent lines (gold, crossing) -->
+    <g>
+      <!-- Diagonal line 1 -->
+      <line
+        x1="235" y1="235"
+        x2="277" y2="277"
+        class="particle-accent"
+      />
+      <!-- Diagonal line 2 -->
+      <line
+        x1="277" y1="235"
+        x2="235" y2="277"
+        class="particle-accent"
+      />
+    </g>
+
+    <!-- Center dot (small emphasis) -->
+    <circle cx="256" cy="256" r="3" fill="#FFD700" opacity="0.8"/>
+  </g>
+
+  <!-- SECONDARY ACCENT ORBIT (Teal, subtle) -->
+  <g id="accent-orbit">
+    <!-- Subtle orbit ring (very subtle, almost invisible) -->
+    <circle
+      cx="256"
+      cy="256"
+      r="75"
+      fill="none"
+      stroke="#06B6D4"
+      stroke-width="1"
+      stroke-dasharray="5,8"
+      opacity="0.3"
+    />
+  </g>
+
+  <!-- Top branding text (QUANTFLOW) -->
+  <text
+    x="256"
+    y="420"
+    font-family="Georgia, serif"
+    font-size="36"
+    font-weight="bold"
+    fill="#00D9FF"
+    text-anchor="middle"
+    letter-spacing="2"
+  >
+    QUANTFLOW
+  </text>
+
+  <!-- Tagline (optional) -->
+  <text
+    x="256"
+    y="465"
+    font-family="Calibri, sans-serif"
+    font-size="12"
+    fill="#E8E8E8"
+    text-anchor="middle"
+    opacity="0.7"
+  >
+    QUANTUM MARKET INTELLIGENCE
+  </text>
+</svg>

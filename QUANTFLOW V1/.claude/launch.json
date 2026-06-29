@@ -1,0 +1,68 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Signal Extractor",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["skills/signal-extractor/scripts/signal_extractor.py"],
+      "port": 0,
+      "description": "Continuous Telegram signal extraction — scans 55+ channels, deduplicates over 24h, outputs JSONL signals"
+    },
+    {
+      "name": "Full Telegram Listener",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["start_full_listener.py"],
+      "port": 0,
+      "description": "Real-time async Telegram listener for all monitored channels (Telethon)"
+    },
+    {
+      "name": "Full Workflow Engine",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["run_full_workflow.py"],
+      "port": 0,
+      "description": "End-to-end market analysis workflow: signal extraction → liquidity analysis → Google Sheets output"
+    },
+    {
+      "name": "TradingView MCP (Python Analysis)",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "tradingview_mcp.server"],
+      "port": 0,
+      "description": "TradingView MCP analysis server — market data and indicator analysis via Claude"
+    },
+    {
+      "name": "TradingView MCP (Node Interactive)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["src/server.js"],
+      "port": 9222,
+      "description": "TradingView MCP interactive server — requires TradingView Desktop running with --remote-debugging-port=9222"
+    },
+    {
+      "name": "Trading Idea Engine",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["scripts/run_trading_idea_engine.py"],
+      "port": 0,
+      "description": "Generates institutional-grade trading ideas from liquidity analysis results"
+    },
+    {
+      "name": "Liquidity Analysis",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["scripts/run_liquidity_analysis.py"],
+      "port": 0,
+      "description": "Institutional liquidity analysis — order blocks, imbalances, smart money concepts"
+    },
+    {
+      "name": "Auto-Discover Channels",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["auto_discover_channels.py"],
+      "port": 0,
+      "description": "Scans Telegram for new trading signal channels and adds them to the monitored list"
+    },
+    {
+      "name": "windsurf-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/achraf/CascadeProjects/windsurf-project-2"],
+      "port": 3000,
+      "description": "Windsurf Next.js project dev server"
+    }
+  ]
+}

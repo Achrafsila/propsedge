@@ -1,0 +1,37 @@
+//@version=5
+indicator("CORE Strategy - Key Levels 4H", overlay=true)
+
+// ============================================================================
+// PATTERN DETECTION
+// ============================================================================
+candle1_bullish = close[1] > open[1]
+candle2_bearish = close < open
+candle2_engulfs = open >= close[1] and close < open[1]
+bearish_pattern = candle1_bullish and candle2_bearish and candle2_engulfs
+
+candle1_bearish = close[1] < open[1]
+candle2_bullish = close > open
+candle2_engulfs_bull = open <= close[1] and close > open[1]
+bullish_pattern = candle1_bearish and candle2_bullish and candle2_engulfs_bull
+
+// ============================================================================
+// STORE KEY LEVELS (Reference Open de Candle 1)
+// ============================================================================
+var array<float> levels = array.new<float>()
+
+if bearish_pattern or bullish_pattern
+    level = open[1]
+    array.push(levels, level)
+
+// Keep only last 5 levels
+if array.size(levels) > 5
+    array.shift(levels)
+
+// ============================================================================
+// PLOT KEY LEVELS
+// ============================================================================
+for i = 0 to array.size(levels) - 1
+    level = array.get(levels, i)
+    color_level = bearish_pattern ? color.red : color.green
+    line.new(bar_index, level, bar_index + 50, level,
+             extend=extend.right, color=color_level, style=line.style_dashed, width=2)

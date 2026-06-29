@@ -1,0 +1,39 @@
+{
+  "skill_name": "signal-extractor",
+  "evals": [
+    {
+      "id": 1,
+      "name": "gold-signal-extraction",
+      "prompt": "Run the signal extractor skill to extract trading signals from Telegram channels. The skill should scan channels, extract BUY/SELL signals for GOLD with ENTRY, SL, and TP, deduplicate them, and output JSON.",
+      "expected_output": "Extracted signals in JSONL format with proper deduplication",
+      "files": [],
+      "assertions": [
+        {
+          "name": "state_file_created",
+          "description": "State file created with channels and message tracking"
+        },
+        {
+          "name": "jsonl_output_valid",
+          "description": "JSONL output contains valid JSON objects with required signal fields"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "resumable-execution",
+      "prompt": "Test that the skill resumes from where it left off. Run the extractor twice and verify it only processes new messages the second time.",
+      "expected_output": "Second execution processes only new messages, no re-processing of old ones",
+      "files": [],
+      "assertions": [
+        {
+          "name": "state_persistence",
+          "description": "State file persists between executions"
+        },
+        {
+          "name": "incremental_processing",
+          "description": "Only new messages processed on second run"
+        }
+      ]
+    }
+  ]
+}

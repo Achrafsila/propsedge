@@ -1,0 +1,593 @@
+{
+  "timestamp": "2026-04-13T01:30:21.833613",
+  "account": "Achrafsila",
+  "phone": "+212688434773",
+  "total": 64,
+  "summary": {
+    "channels": 55,
+    "groups": 2,
+    "direct_messages": 7
+  },
+  "channels": [
+    {
+      "name": "ZEROWFX - Community \ud83d\udcc8\ud83e\udd0d",
+      "id": 2051499651,
+      "type": "Channel",
+      "username": "N/A",
+      "participants": null,
+      "unread_count": 2,
+      "is_pinned": true
+    },
+    {
+      "name": "FK TRADING \ud83e\udd81",
+      "id": 1622582410,
+      "type": "Channel",
+      "username": "FK1_TRADING",
+      "participants": null,
+      "unread_count": 2,
+      "is_pinned": true
+    },
+    {
+      "name": "\ud83d\udc51Trading war Room \ud83d\udc51",
+      "id": 2552830454,
+      "type": "Channel",
+      "username": "N/A",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": true
+    },
+    {
+      "name": "\ud835\udc13\ud835\udc1e\ud835\udc1c\ud835\udc21\ud835\udc27\ud835\udc22\ud835\udc1c\ud835\udc1a\ud835\udc25 \ud835\udc0f\ud835\udc22\ud835\udc29\ud835\udc2c \u2122",
+      "id": 1569906975,
+      "type": "Channel",
+      "username": "TechnicalpipsXhuk50",
+      "participants": null,
+      "unread_count": 28,
+      "is_pinned": false
+    },
+    {
+      "name": "KING EL GOLD \ud83d\udc51",
+      "id": 2035975495,
+      "type": "Channel",
+      "username": "kingxauusd1",
+      "participants": null,
+      "unread_count": 426,
+      "is_pinned": false
+    },
+    {
+      "name": "Isabelle - Queen Of Gold",
+      "id": 1834033323,
+      "type": "Channel",
+      "username": "Isabelle_QueenOfGolds",
+      "participants": null,
+      "unread_count": 33,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc06\ud835\udc0e\ud835\udc0b\ud835\udc03 \ud835\udc12\ud835\udc0d\ud835\udc08\ud835\udc0f\ud835\udc04\ud835\udc11 \ud835\udc19\ud835\udc0e\ud835\udc0d\ud835\udc04",
+      "id": 1808202014,
+      "type": "Channel",
+      "username": "goldvlp47",
+      "participants": null,
+      "unread_count": 13,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\uddda\ud835\udde2\ud835\udddf\ud835\uddd7 \ud835\udde6\ud835\udde1\ud835\udddc\ud835\udde3\ud835\uddd8\ud835\udde5",
+      "id": 1754381715,
+      "type": "Channel",
+      "username": "GOLDSNNPER786",
+      "participants": null,
+      "unread_count": 22,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc6e\ud835\udc79\ud835\udc6c\ud835\udc6c\ud835\udc75 \ud835\udc77\ud835\udc70\ud835\udc77\ud835\udc7a \ud83c\udf10",
+      "id": 2145295870,
+      "type": "Channel",
+      "username": "GoldInsighthub525",
+      "participants": null,
+      "unread_count": 11,
+      "is_pinned": false
+    },
+    {
+      "name": "FREE TRAD\u0130NG S\u0130GNALS",
+      "id": 1957768371,
+      "type": "Channel",
+      "username": "xauusd_forex4",
+      "participants": null,
+      "unread_count": 40,
+      "is_pinned": false
+    },
+    {
+      "name": "\u0645\u0644\u0643 \u0627\u0644\u0630\u0647\u0628",
+      "id": 1596475000,
+      "type": "Channel",
+      "username": "malek_eldahab",
+      "participants": null,
+      "unread_count": 223,
+      "is_pinned": false
+    },
+    {
+      "name": "XAUUSD/GOLD SCALPERS",
+      "id": 2227831098,
+      "type": "Channel",
+      "username": "XAUUSD_SCALPING_SIGNAL234",
+      "participants": null,
+      "unread_count": 7,
+      "is_pinned": false
+    },
+    {
+      "name": "M.T FOREX \ud83c\udf96\ud83c\udf96",
+      "id": 1293886287,
+      "type": "Channel",
+      "username": "mt_mforex",
+      "participants": null,
+      "unread_count": 20,
+      "is_pinned": false
+    },
+    {
+      "name": "Forex & Pips",
+      "id": 1650801051,
+      "type": "Channel",
+      "username": "marocforexea",
+      "participants": null,
+      "unread_count": 7,
+      "is_pinned": false
+    },
+    {
+      "name": "WOLF TRADING",
+      "id": 1818850619,
+      "type": "Channel",
+      "username": "wolftrading25",
+      "participants": null,
+      "unread_count": 41,
+      "is_pinned": false
+    },
+    {
+      "name": "GLAAD ELGOLD\ud83d\udc51\ud83e\udd47",
+      "id": 2102397174,
+      "type": "Channel",
+      "username": "glaadelgold1",
+      "participants": null,
+      "unread_count": 4,
+      "is_pinned": false
+    },
+    {
+      "name": "OMAR.XAUD",
+      "id": 2475329448,
+      "type": "Channel",
+      "username": "omarxaud1",
+      "participants": null,
+      "unread_count": 4,
+      "is_pinned": false
+    },
+    {
+      "name": "Free Trump Signals \u269c\ufe0f",
+      "id": 2057886450,
+      "type": "Channel",
+      "username": "freetrumpsignals",
+      "participants": null,
+      "unread_count": 26,
+      "is_pinned": false
+    },
+    {
+      "name": "OCTA FX TRADER",
+      "id": 1593195881,
+      "type": "Channel",
+      "username": "OCTAFXTRADERS_786",
+      "participants": null,
+      "unread_count": 63,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc6e\ud835\udc76\ud835\udc73\ud835\udc6b \ud835\udc70\ud835\udc75\ud835\udc6d\ud835\udc70\ud835\udc75\ud835\udc70\ud835\udc7b\ud835\udc80 \u2122\ufe0f\ud83d\udd1d",
+      "id": 1566319279,
+      "type": "Channel",
+      "username": "viptradewitdexauusd",
+      "participants": null,
+      "unread_count": 53,
+      "is_pinned": false
+    },
+    {
+      "name": "TRADE WITH HASAAN",
+      "id": 1281058762,
+      "type": "Channel",
+      "username": "Hascancharttrade",
+      "participants": null,
+      "unread_count": 3,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc13\ud835\udc11\ud835\udc00\ud835\udc03\ud835\udc04 \ud835\udc12\ud835\udc14\ud835\udc11\ud835\udc04 \ud835\udc05\ud835\udc17\u2122",
+      "id": 1891865200,
+      "type": "Channel",
+      "username": "xauusdtradefx5739",
+      "participants": null,
+      "unread_count": 6,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc13\ud835\udc2b\ud835\udc1a\ud835\udc1d\ud835\udc22\ud835\udc27\ud835\udc20 \ud835\udc15\ud835\udc22\ud835\udc1e\ud835\udc30",
+      "id": 1685029638,
+      "type": "Channel",
+      "username": "ViewXuk50",
+      "participants": null,
+      "unread_count": 2,
+      "is_pinned": false
+    },
+    {
+      "name": "GHOST SCALP",
+      "id": 2144565545,
+      "type": "Channel",
+      "username": "wolftrading26",
+      "participants": null,
+      "unread_count": 33,
+      "is_pinned": false
+    },
+    {
+      "name": "United Kings\u2122 Signals! \ud83d\udc51",
+      "id": 2176701424,
+      "type": "Channel",
+      "username": "unitedkings1",
+      "participants": null,
+      "unread_count": 2,
+      "is_pinned": false
+    },
+    {
+      "name": "Steward Gold Signals",
+      "id": 1981956648,
+      "type": "Channel",
+      "username": "StewardGold2",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc05\ud835\udc28\ud835\udc2b\ud835\udc1e\ud835\udc31 \ud835\udc06\ud835\udc28\ud835\udc25\ud835\udc1d \ud835\udc12\ud835\udc27\ud835\udc22\ud835\udc29\ud835\udc1e\ud835\udc2b\ud835\udc2c",
+      "id": 1876418988,
+      "type": "Channel",
+      "username": "FOREX_GOLD_SNIPERS6",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "QUANTTEST",
+      "id": 3906148396,
+      "type": "Channel",
+      "username": "quantflowtest",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc17\ud835\udc00\ud835\udc14(\ud835\udc14\ud835\udc12\ud835\udc03) \ud835\udc06\ud835\udc11\ud835\udc04\ud835\udc04\ud835\udc0d \ud835\udc0f\ud835\udc08\ud835\udc0f\ud835\udc12",
+      "id": 1717147701,
+      "type": "Channel",
+      "username": "xauusdgreenpipss",
+      "participants": null,
+      "unread_count": 2,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc13\ud835\udc07\ud835\udc04 \ud835\udc05\ud835\udc0e\ud835\udc11\ud835\udc04\ud835\udc17 \ud835\udc0a\ud835\udc08\ud835\udc0d\ud835\udc06",
+      "id": 2101508390,
+      "type": "Channel",
+      "username": "Forexkinghuk50",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "GOLD ANALYSIS EXPERT",
+      "id": 1356067440,
+      "type": "Channel",
+      "username": "GOLD5ANALYSISEXPERT",
+      "participants": null,
+      "unread_count": 2,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udde1\ud835\uddd4\ud835\udde6 \ud835\udde8\ud835\udde6\ud835\udfef\ud835\udfec \ud835\udde6\ud835\udde1\ud835\udddc\ud835\udde3\ud835\uddd8\ud835\udde5",
+      "id": 1631556618,
+      "type": "Channel",
+      "username": "nassniperhuk50",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "GOLD SCALPER",
+      "id": 1622776330,
+      "type": "Channel",
+      "username": "Aliwithtrade71",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\uddda\ud835\uddfc\ud835\uddf9\ud835\uddf1 \ud835\udde6\ud835\uddf6\ud835\uddf4\ud835\uddfb\ud835\uddee\ud835\uddf9\ud835\ude00 \ud835\uddd8\ud835\ude05\ud835\uddfd\ud835\uddf2\ud835\uddff\ud835\ude01",
+      "id": 1680357451,
+      "type": "Channel",
+      "username": "GoldSignalExpert553",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "VORTEX COMMUNITY \ud83d\udcb8\ud83e\udd85",
+      "id": 2451335812,
+      "type": "Channel",
+      "username": "vortex1ma",
+      "participants": null,
+      "unread_count": 110,
+      "is_pinned": false
+    },
+    {
+      "name": "Xauusd Trading (free)",
+      "id": 3115454386,
+      "type": "Channel",
+      "username": "gold_xauusd_signaltrading",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "Gold Trading (Free)",
+      "id": 3556704396,
+      "type": "Channel",
+      "username": "best_goldXauusd_signals01",
+      "participants": null,
+      "unread_count": 215,
+      "is_pinned": false
+    },
+    {
+      "name": "USA Gold Master \u2122",
+      "id": 1413431242,
+      "type": "Channel",
+      "username": "XAUUD_Trader",
+      "participants": null,
+      "unread_count": 1,
+      "is_pinned": false
+    },
+    {
+      "name": "FX RIVER ACADEMY\u2122",
+      "id": 1476143548,
+      "type": "Channel",
+      "username": "Forex23380",
+      "participants": null,
+      "unread_count": 44,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud83c\udf00FOREX XAUUSD GOLD PRO SIGNAL \ud83d\udcb2\ud83d\udcb2\ud83d\udcb0\ud83d\udcb0",
+      "id": 2002803233,
+      "type": "Channel",
+      "username": "FOREX_XAUUSD_GOLD_SIGNAL",
+      "participants": null,
+      "unread_count": 64,
+      "is_pinned": false
+    },
+    {
+      "name": "GOLD SIGNALS VIP (XAUUSD HUNTER FX)",
+      "id": 3084785950,
+      "type": "Channel",
+      "username": "Gold_vip_analysis_xauusd_hunter",
+      "participants": null,
+      "unread_count": 181,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc12\ud835\udc2d\ud835\udc1a\ud835\udc2b \ud835\udc13\ud835\udc2b\ud835\udc1a\ud835\udc1d\ud835\udc22\ud835\udc27\ud835\udc20 \u2122",
+      "id": 1610937993,
+      "type": "Channel",
+      "username": "StarXHuk50",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\udc01\ud835\udc08\ud835\udc12\ud835\udc0e\ud835\udc0d \ud835\udc05\ud835\udc08\ud835\udc0d\ud835\udc00\ud835\udc0d\ud835\udc02\ud835\udc08\ud835\udc00\ud835\udc0b",
+      "id": 1366516882,
+      "type": "Channel",
+      "username": "BISON_OFFICIAL_CHNNAL_Trade",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "Gold Signals 98% Sure \ud83d\ude0e",
+      "id": 1920682501,
+      "type": "Channel",
+      "username": "MrHenrys122",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "GRAB GOLD PROFIT",
+      "id": 1343853981,
+      "type": "Channel",
+      "username": "GRAB_GOLD_PROFIT_28",
+      "participants": null,
+      "unread_count": 21,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud835\uddda\ud835\udde2\ud835\udddf\ud835\uddd7 \ud835\udddb\ud835\udde8\ud835\udde1\ud835\udde7\ud835\uddd8\ud835\udde5 \ud835\udde7\ud835\udde5\ud835\uddd4\ud835\uddd7\ud835\uddd8",
+      "id": 2000548854,
+      "type": "Channel",
+      "username": "Goldhunterlearnttade3867",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "Forex King",
+      "id": 1652684055,
+      "type": "Channel",
+      "username": "Forex_Kingfx786",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "BROTHER'S Trades \ud83d\udcc8\ud83d\udcc9\ud83d\udcca( News & Signals )",
+      "id": 1555844501,
+      "type": "Channel",
+      "username": "Brothertrades",
+      "participants": null,
+      "unread_count": 12,
+      "is_pinned": false
+    },
+    {
+      "name": "\u269c\ufe0f FREE SIGNAL GOLD \ud83d\udcca",
+      "id": 1655826029,
+      "type": "Channel",
+      "username": "ftradingt1",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "Forex signals wolf \ud83d\udc3a",
+      "id": 2136908638,
+      "type": "Channel",
+      "username": "wolf_forex_fxx",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "GOLD KING Signals \ud83e\udd34\u267b\ufe0f",
+      "id": 1828082071,
+      "type": "Channel",
+      "username": "XAUUSDK",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "EVO SWING SIGNALS \ud83d\udcca",
+      "id": 1602179971,
+      "type": "Channel",
+      "username": "EvoeEdgeLab",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "LmaskFX | Signals",
+      "id": 2220591355,
+      "type": "Channel",
+      "username": "lmaskfxx",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "\u062a\u062d\u0644\u06cc\u0644 \u0637\u0644\u0627 \u0648 \u062f\u0627\u0648\u062c\u0648\u0646\u0632",
+      "id": 1768498963,
+      "type": "Channel",
+      "username": "XAUUSDX",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "\ud83d\udccaFX MARKET EYE \ud83e\udd47",
+      "id": 1756446301,
+      "type": "Channel",
+      "username": "xauusd8",
+      "participants": null,
+      "unread_count": 0,
+      "is_pinned": false
+    }
+  ],
+  "groups": [
+    {
+      "name": "War Trading chat",
+      "id": 4895224665,
+      "type": "Group",
+      "username": null,
+      "participants": 29,
+      "unread_count": 0,
+      "is_pinned": true
+    },
+    {
+      "name": "PRIVATE ROOM",
+      "id": 3790093460,
+      "type": "Supergroup",
+      "username": null,
+      "participants": null,
+      "unread_count": 6,
+      "is_pinned": false
+    }
+  ],
+  "users": [
+    {
+      "name": "Telegram",
+      "id": 777000,
+      "type": "User",
+      "username": "N/A",
+      "participants": 0,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "QUANTTEST",
+      "id": 8574070715,
+      "type": "User",
+      "username": "quanttestsigbot",
+      "participants": 0,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "GetMyIdBot_bot",
+      "id": 5345955164,
+      "type": "User",
+      "username": "GetMyIdBotWork_bot",
+      "participants": 0,
+      "unread_count": 4,
+      "is_pinned": false
+    },
+    {
+      "name": "OANDA Demo Account",
+      "id": 1780447833,
+      "type": "User",
+      "username": "Oandademoaccountbot",
+      "participants": 0,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "Telegram Bot Raw",
+      "id": 211246197,
+      "type": "User",
+      "username": "RawDataBot",
+      "participants": 0,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "BotFather",
+      "id": 93372553,
+      "type": "User",
+      "username": "BotFather",
+      "participants": 0,
+      "unread_count": 0,
+      "is_pinned": false
+    },
+    {
+      "name": "Mehdi Aboussalah",
+      "id": 1281499229,
+      "type": "User",
+      "username": "Mabousss",
+      "participants": 0,
+      "unread_count": 0,
+      "is_pinned": false
+    }
+  ]
+}

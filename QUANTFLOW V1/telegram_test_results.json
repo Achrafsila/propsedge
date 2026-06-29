@@ -1,0 +1,30 @@
+[
+  {
+    "timestamp": "2026-04-12T21:57:37.262441",
+    "test_type": "LIVE_TELEGRAM",
+    "status": "PARTIAL",
+    "btc_price": 45234.5,
+    "signal": {
+      "direction": "BUY",
+      "entry": 45134.5,
+      "sl": 44634.5,
+      "tp": 46134.5,
+      "rr": 2.0
+    },
+    "analysis": {
+      "retail_bias": "BULLISH",
+      "crowding": "EXTREME",
+      "status": "CORRECT",
+      "liquidation_risk": "LOW"
+    },
+    "decision": {
+      "action": "ACCEPT",
+      "confidence": "MEDIUM",
+      "rationale": "Retail BULLISH - CORRECT"
+    },
+    "telegram": {
+      "sent": false,
+      "message": "\u2705 <b>ACCEPT BTC-USD</b>\n\n<b>\ud83d\udcca Market Snapshot</b>\nPrice: <code>$45,234.50</code>\nChange: <code>+2.34%</code>\nRange: <code>$44,900.00 - $45,800.00</code>\n\n<b>\ud83c\udfaf Trade Setup</b>\nDirection: <code>BUY</code>\nEntry: <code>$45,134.50</code>\nStop Loss: <code>$44,634.50</code>\nTake Profit: <code>$46,134.50</code>\n\n<b>\ud83d\udcb0 Risk/Reward</b>\nRatio: <code>2.00:1</code>\n\n<b>\ud83d\udccc Analysis</b>\nRetail BULLISH - CORRECT\nConfidence: <code>MEDIUM</code>\n\n\u23f0 2026-04-12 21:57:37 UTC\n\ud83e\udd16 QUANTFLOW V1 - Institutional Liquidity Analysis\n"
+    }
+  }
+]

@@ -1,0 +1,33 @@
+# Secrets / credentials
+*.session
+*.session-journal
+.env
+.env.*
+!.env.example
+credentials.json
+!credentials.json.example
+
+# Dependencies
+node_modules/
+.next/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+__MACOSX/
+
+# Archives
+*.zip
+
+# Editor
+.vscode/

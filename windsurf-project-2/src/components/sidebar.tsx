@@ -1,0 +1,106 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { 
+  LayoutDashboard, 
+  Trophy, 
+  Wallet, 
+  BookOpen, 
+  DollarSign, 
+  Settings,
+  Shield
+} from "lucide-react";
+import { motion } from "framer-motion";
+import { useAccounts } from "@/context/AccountsContext";
+import { useAdmin } from "@/context/AdminContext";
+import { colors, transitions, shadows, borderRadius } from "@/design-system";
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const { challenges, fundedAccounts } = useAccounts();
+  const { isAdmin } = useAdmin();
+
+  const sidebarItems = [
+    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Challenges", href: "/challenges", icon: Trophy },
+    { name: "Funded Accounts", href: "/funded", icon: Wallet },
+    { name: "Trade Journal", href: "/journal", icon: BookOpen },
+    { name: "Payouts", href: "/payouts", icon: DollarSign },
+    ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
+    { name: "Settings", href: "/settings", icon: Settings },
+  ];
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const totalCapital = challenges.reduce((sum, c) => sum + c.accountSize, 0) + 
+                       fundedAccounts.reduce((sum, a) => sum + a.accountSize, 0);
+
+  return (
+    <aside className="w-64 bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-screen flex flex-col">
+      <div className="p-6 border-b border-[rgba(148,163,184,0.1)]">
+        <h1 className="text-xl font-bold text-[#F8FAFC]">PropEdge</h1>
+        <p className="text-xs text-[#94A3B8] mt-1">Trading Dashboard</p>
+      </div>
+      
+      <nav className="flex-1 p-4 space-y-1">
+        {sidebarItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href;
+          
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`
+                flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 relative overflow-hidden
+                ${isActive 
+                  ? "text-[#F8FAFC]" 
+                  : "text-[#94A3B8] hover:text-[#F8FAFC]"
+                }
+              `}
+              style={{
+                background: isActive ? 'rgba(41,141,255, 0.1)' : 'transparent',
+                borderRadius: borderRadius.lg,
+              }}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="activeIndicator"
+                  className="absolute inset-0 bg-gradient-to-r from-[rgba(41,141,255,0.2)] to-[rgba(59,130,246,0.2)]"
+                  style={{ borderRadius: borderRadius.lg }}
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <Icon 
+                className={`w-5 h-5 relative z-10 ${isActive ? "text-[#298DFF]" : ""}`} 
+              />
+              <span className="relative z-10">{item.name}</span>
+            </Link>
+          );
+        })}
+      </nav>
+      
+      <div className="p-4 border-t border-[rgba(148,163,184,0.1)]">
+        <div 
+          className="rounded-xl p-4 border"
+          style={{
+            background: 'rgba(16, 24, 40, 0.6)',
+            borderColor: 'rgba(148, 163, 184, 0.08)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
+          <p className="text-xs text-[#94A3B8] mb-2">Total Capital</p>
+          <p className="text-lg font-bold text-[#F8FAFC]">{formatCurrency(totalCapital)}</p>
+        </div>
+      </div>
+    </aside>
+  );
+}
