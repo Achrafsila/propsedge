@@ -4,15 +4,17 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Plus, TrendingUp, TrendingDown, Filter, Trash2 } from "lucide-react";
+import { BookOpen, Plus, TrendingUp, TrendingDown, Filter, Trash2, Upload } from "lucide-react";
 import { useAccounts } from "@/context/AccountsContext";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
+import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
 
 export default function Journal() {
   const { trades, tradesLoading, deleteTrade, challenges, fundedAccounts } = useAccounts();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -98,7 +100,16 @@ export default function Journal() {
             <Filter className="w-4 h-4 mr-2" />
             Filter
           </Button>
-          <Button 
+          <Button
+            variant="outline"
+            className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl transition-all duration-300"
+            onClick={() => setIsImportDialogOpen(true)}
+            type="button"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import Trades
+          </Button>
+          <Button
             className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl pointer-events-auto"
             onClick={() => setIsAddDialogOpen(true)}
             type="button"
@@ -416,6 +427,7 @@ export default function Journal() {
       </motion.div>
 
       <AddTradeDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
+      <ImportTradesDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
     </div>
   );
 }
