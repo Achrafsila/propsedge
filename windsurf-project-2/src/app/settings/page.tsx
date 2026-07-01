@@ -7,9 +7,31 @@ import { Settings as SettingsIcon, User, Bell, Shield, Palette, Database } from 
 import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientText } from "@/design-system";
 import { useAdmin } from "@/context/AdminContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Settings() {
   const { isAdmin, toggleAdmin } = useAdmin();
+  const { user } = useAuth();
+
+  const displayName =
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    user?.email?.split("@")[0] ??
+    "User";
+
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "—";
+
+  const accountId = user?.id
+    ? `ACC-${user.id.slice(0, 8).toUpperCase()}`
+    : "—";
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const cardVariants = {
     hover: {
       y: -4,
@@ -117,7 +139,7 @@ export default function Settings() {
                   <div className="p-3 rounded-xl text-[#F8FAFC]"
                     style={{ background: 'rgba(11, 18, 32, 0.5)', border: '1px solid rgba(148, 163, 184, 0.08)' }}
                   >
-                    John Trader
+                    {displayName}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -136,7 +158,7 @@ export default function Settings() {
                   <div className="p-3 rounded-xl text-[#F8FAFC]"
                     style={{ background: 'rgba(11, 18, 32, 0.5)', border: '1px solid rgba(148, 163, 184, 0.08)' }}
                   >
-                    john.trader@example.com
+                    {user?.email ?? "—"}
                   </div>
                 </div>
               </div>
@@ -156,7 +178,7 @@ export default function Settings() {
                 <div className="p-3 rounded-xl text-[#F8FAFC]"
                   style={{ background: 'rgba(11, 18, 32, 0.5)', border: '1px solid rgba(148, 163, 184, 0.08)' }}
                 >
-                  UTC+01:00 (Central European Time)
+                  {timezone}
                 </div>
               </div>
             </div>
@@ -675,7 +697,7 @@ export default function Settings() {
                   <div className="p-3 rounded-xl text-[#F8FAFC]"
                     style={{ background: 'rgba(11, 18, 32, 0.5)', border: '1px solid rgba(148, 163, 184, 0.08)' }}
                   >
-                    December 15, 2025
+                    {memberSince}
                   </div>
                 </div>
               </div>
@@ -684,7 +706,7 @@ export default function Settings() {
                 <div className="p-3 rounded-xl text-[#F8FAFC] font-mono"
                   style={{ background: 'rgba(11, 18, 32, 0.5)', border: '1px solid rgba(148, 163, 184, 0.08)' }}
                 >
-                  ACC-2025-001234
+                  {accountId}
                 </div>
               </div>
             </div>

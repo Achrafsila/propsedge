@@ -144,9 +144,16 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
   const addChallenge = (challenge: Omit<Challenge, "id">) => {
     if (!user) return;
+    const tempId = `temp-${Date.now()}`;
+    setChallenges((prev) => [{ id: tempId, ...challenge }, ...prev]);
     insertChallenge(user.id, challenge)
-      .then((saved) => setChallenges((prev) => [saved, ...prev]))
-      .catch((err) => console.error("Failed to add challenge:", err));
+      .then((saved) => {
+        setChallenges((prev) => prev.map((c) => (c.id === tempId ? saved : c)));
+      })
+      .catch((err) => {
+        console.error("Failed to add challenge:", err);
+        setChallenges((prev) => prev.filter((c) => c.id !== tempId));
+      });
   };
 
   const updateChallenge = (id: string, updates: Partial<Challenge>) => {
@@ -171,9 +178,16 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
   const addFundedAccount = (account: Omit<FundedAccount, "id">) => {
     if (!user) return;
+    const tempId = `temp-${Date.now()}`;
+    setFundedAccounts((prev) => [{ id: tempId, ...account }, ...prev]);
     insertFundedAccount(user.id, account)
-      .then((saved) => setFundedAccounts((prev) => [saved, ...prev]))
-      .catch((err) => console.error("Failed to add funded account:", err));
+      .then((saved) => {
+        setFundedAccounts((prev) => prev.map((a) => (a.id === tempId ? saved : a)));
+      })
+      .catch((err) => {
+        console.error("Failed to add funded account:", err);
+        setFundedAccounts((prev) => prev.filter((a) => a.id !== tempId));
+      });
   };
 
   const updateFundedAccount = (id: string, updates: Partial<FundedAccount>) => {
