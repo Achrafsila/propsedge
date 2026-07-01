@@ -57,7 +57,7 @@ interface AccountsContextType {
   addPayout: (payout: Omit<Payout, "id">) => void;
   updatePayout: (id: string, payout: Partial<Payout>) => void;
   deletePayout: (id: string) => void;
-  addTrade: (trade: Omit<Trade, "id">) => void;
+  addTrade: (trade: Omit<Trade, "id">) => Promise<Trade | null>;
   deleteTrade: (id: string) => void;
   getAccountPnL: (accountId: string, accountType: "challenge" | "funded") => number;
   convertChallengeToFunded: (challengeId: string, fundedAccount: Omit<FundedAccount, "id">) => void;
@@ -314,15 +314,28 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addTrade = (trade: Omit<Trade, "id">) => {
-    if (!user) return;
-    insertTrade(user.id, trade)
+  // Returns the saved trade (or null on failure) so bulk callers — like
+  // trade import — can await each insert and know whether it succeeded.
+  // Uses a functional setTrades update so multiple addTrade calls fired
+  // back-to-back (e.g. importing many rows) each build on the latest
+  // accumulated list instead of a stale `trades` closure, which previously
+  // caused all but the last-resolved insert to be dropped from local state.
+  const addTrade = (trade: Omit<Trade, "id">): Promise<Trade | null> => {
+    if (!user) return Promise.resolve(null);
+    return insertTrade(user.id, trade)
       .then((saved) => {
-        const newTrades = [...trades, saved];
-        setTrades(newTrades);
+        let newTrades: Trade[] = [];
+        setTrades((prev) => {
+          newTrades = [...prev, saved];
+          return newTrades;
+        });
         recalcAccount(saved.accountId, saved.accountType, newTrades);
+        return saved;
       })
-      .catch((err) => console.error("Failed to add trade:", err));
+      .catch((err) => {
+        console.error("Failed to add trade:", err);
+        return null;
+      });
   };
 
   const deleteTrade = (id: string) => {

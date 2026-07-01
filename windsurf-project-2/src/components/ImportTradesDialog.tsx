@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
 import { toast } from "sonner";
 import { UploadCloud, FileSpreadsheet, X } from "lucide-react";
-import { parseTradeFile, ParsedTrade } from "@/lib/importTrades";
+import { parseTradeFile, ParsedTrade, SkippedRow } from "@/lib/importTrades";
 
 interface ImportTradesDialogProps {
   open: boolean;
@@ -33,7 +33,7 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [parsedTrades, setParsedTrades] = useState<ParsedTrade[] | null>(null);
-  const [skippedRows, setSkippedRows] = useState(0);
+  const [skippedRows, setSkippedRows] = useState<SkippedRow[]>([]);
 
   const availableAccounts = accountType === "challenge"
     ? challenges.filter((c) => c.status === "active")
@@ -47,7 +47,7 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
     setIsParsing(false);
     setIsImporting(false);
     setParsedTrades(null);
-    setSkippedRows(0);
+    setSkippedRows([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -69,17 +69,17 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
 
     setFileName(file.name);
     setParsedTrades(null);
-    setSkippedRows(0);
+    setSkippedRows([]);
     setIsParsing(true);
     try {
       const { trades, skippedRows: skipped } = await parseTradeFile(file);
-      if (trades.length === 0) {
-        toast.error("No valid trades found in this file.");
-        setFileName(null);
-        return;
-      }
       setParsedTrades(trades);
       setSkippedRows(skipped);
+      if (trades.length === 0) {
+        toast.error("No valid trades found in this file.", {
+          description: `${skipped.length} row(s) skipped — see details below`,
+        });
+      }
     } catch (err) {
       console.error("Failed to parse trade file:", err);
       toast.error(`Failed to parse file: ${err instanceof Error ? err.message : String(err)}`);
@@ -101,19 +101,42 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
     if (file) processFile(file);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!parsedTrades || parsedTrades.length === 0 || !accountId) return;
     setIsImporting(true);
     try {
-      for (const trade of parsedTrades) {
-        addTrade({
-          accountId,
-          accountType,
-          ...trade,
+      // Promise.allSettled so a single failed insert never stops the rest
+      // of the batch from being imported.
+      const results = await Promise.allSettled(
+        parsedTrades.map((trade) =>
+          addTrade({
+            accountId,
+            accountType,
+            ...trade,
+          })
+        )
+      );
+
+      const imported = results.filter(
+        (r) => r.status === "fulfilled" && r.value !== null
+      ).length;
+      const failed = results.length - imported;
+      const skipped = skippedRows.length;
+
+      if (failed > 0) {
+        console.warn(`[ImportTrades] ${failed} trade(s) failed to import`);
+      }
+
+      if (imported > 0) {
+        toast.success(`${imported} trades imported successfully`, {
+          description: `${skipped} skipped, ${failed} failed`,
+        });
+        handleClose(false);
+      } else {
+        toast.error("No trades were imported", {
+          description: `${skipped} skipped, ${failed} failed`,
         });
       }
-      toast.success(`${parsedTrades.length} trades imported successfully`);
-      handleClose(false);
     } catch (err) {
       console.error("Failed to import trades:", err);
       toast.error(`Failed to import trades: ${err instanceof Error ? err.message : String(err)}`);
@@ -128,7 +151,7 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
         const dates = parsedTrades.map((t) => t.entryDate).filter(Boolean).sort();
         return `${dates[0]} → ${dates[dates.length - 1]}`;
       })()
-    : null;
+    : "—";
   const selectedAccountName = availableAccounts.find((a) => a.id === accountId)?.accountName;
 
   const formatCurrency = (value: number) =>
@@ -213,7 +236,7 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
                     e.stopPropagation();
                     setFileName(null);
                     setParsedTrades(null);
-                    setSkippedRows(0);
+                    setSkippedRows([]);
                     if (fileInputRef.current) fileInputRef.current.value = "";
                   }}
                   className="absolute top-2 right-2 text-[#8B97A8] hover:text-[#F8FAFC]"
@@ -230,7 +253,7 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
             )}
           </div>
 
-          {parsedTrades && parsedTrades.length > 0 && (
+          {parsedTrades !== null && (
             <div
               className="rounded-xl p-4 space-y-2 text-sm"
               style={{ background: "rgba(11, 18, 32, 0.5)", border: "1px solid rgba(148, 163, 184, 0.08)" }}
@@ -253,10 +276,19 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
                 <span className="text-[#8B97A8]">Destination account</span>
                 <span className="text-[#F8FAFC] font-medium">{selectedAccountName ?? "Not selected"}</span>
               </div>
-              {skippedRows > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-[#8B97A8]">Skipped rows</span>
-                  <span className="text-[#F59E0B] font-medium">{skippedRows}</span>
+              {skippedRows.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-[#8B97A8]">Skipped rows</span>
+                    <span className="text-[#F59E0B] font-medium">{skippedRows.length}</span>
+                  </div>
+                  <ul className="text-xs text-[#8B97A8] space-y-0.5 pl-3 list-disc">
+                    {skippedRows.map((s) => (
+                      <li key={s.rowNumber}>
+                        Row {s.rowNumber}: {s.reason}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
