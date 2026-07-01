@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { AccountsProvider } from "@/context/AccountsContext";
 import { AdminProvider } from "@/context/AdminContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +51,7 @@ export default function RootLayout({
             </AdminProvider>
           </AccountsProvider>
         </AuthProvider>
+        <Toaster theme="dark" position="bottom-right" richColors />
       </body>
     </html>
   );

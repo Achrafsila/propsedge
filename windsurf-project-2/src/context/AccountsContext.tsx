@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { toast } from "sonner";
 import {
   Challenge,
   FundedAccount,
@@ -91,7 +92,10 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     setChallengesLoading(true);
     fetchChallenges(user.id)
       .then(setChallenges)
-      .catch((err) => console.error("Failed to load challenges:", err))
+      .catch((err) => {
+        console.error("Failed to load challenges:", err);
+        toast.error(`Load challenges: ${err?.message ?? String(err)}`);
+      })
       .finally(() => setChallengesLoading(false));
   }, [user?.id, authLoading]);
 
@@ -106,7 +110,10 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     setFundedAccountsLoading(true);
     fetchFundedAccounts(user.id)
       .then(setFundedAccounts)
-      .catch((err) => console.error("Failed to load funded accounts:", err))
+      .catch((err) => {
+        console.error("Failed to load funded accounts:", err);
+        toast.error(`Load funded accounts: ${err?.message ?? String(err)}`);
+      })
       .finally(() => setFundedAccountsLoading(false));
   }, [user?.id, authLoading]);
 
@@ -121,7 +128,10 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     setTradesLoading(true);
     fetchTrades(user.id)
       .then(setTrades)
-      .catch((err) => console.error("Failed to load trades:", err))
+      .catch((err) => {
+        console.error("Failed to load trades:", err);
+        toast.error(`Load trades: ${err?.message ?? String(err)}`);
+      })
       .finally(() => setTradesLoading(false));
   }, [user?.id, authLoading]);
 
@@ -136,7 +146,10 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     setPayoutsLoading(true);
     fetchPayouts(user.id)
       .then(setPayouts)
-      .catch((err) => console.error("Failed to load payouts:", err))
+      .catch((err) => {
+        console.error("Failed to load payouts:", err);
+        toast.error(`Load payouts: ${err?.message ?? String(err)}`);
+      })
       .finally(() => setPayoutsLoading(false));
   }, [user?.id, authLoading]);
 
@@ -149,10 +162,12 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     insertChallenge(user.id, challenge)
       .then((saved) => {
         setChallenges((prev) => prev.map((c) => (c.id === tempId ? saved : c)));
+        toast.success("Challenge saved");
       })
       .catch((err) => {
         console.error("Failed to add challenge:", err);
         setChallenges((prev) => prev.filter((c) => c.id !== tempId));
+        toast.error(`Failed to save challenge: ${err?.message ?? String(err)}`);
       });
   };
 
@@ -183,10 +198,12 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     insertFundedAccount(user.id, account)
       .then((saved) => {
         setFundedAccounts((prev) => prev.map((a) => (a.id === tempId ? saved : a)));
+        toast.success("Funded account saved");
       })
       .catch((err) => {
         console.error("Failed to add funded account:", err);
         setFundedAccounts((prev) => prev.filter((a) => a.id !== tempId));
+        toast.error(`Failed to save funded account: ${err?.message ?? String(err)}`);
       });
   };
 
