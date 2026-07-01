@@ -29,6 +29,7 @@ import {
   Cell,
 } from "recharts";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
+import { computeDrawdown } from "@/lib/drawdown";
 
 // Redesigned challenges view: filters, view toggle, progress chart, table
 type StatusFilter = "all" | ChallengeStatus;
@@ -43,7 +44,7 @@ const STATUS_COLOR_MAP: Record<ChallengeStatus, string> = {
 
 export default function Challenges() {
   const router = useRouter();
-  const { challenges, challengesLoading, getFundingRateStats, updateChallenge, convertChallengeToFunded, deleteChallenge, getAccountPnL } = useAccounts();
+  const { challenges, challengesLoading, trades, getFundingRateStats, updateChallenge, convertChallengeToFunded, deleteChallenge } = useAccounts();
   const stats = getFundingRateStats();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -174,16 +175,20 @@ export default function Challenges() {
     });
   };
 
-  const getChallengeProgress = (challenge: Challenge) => {
-    const tradePnL = getAccountPnL(challenge.id, "challenge");
-    const totalProfit = challenge.currentProfit + tradePnL;
-    const progress = (totalProfit / getStepTarget(challenge)) * 100;
-    return Math.min(progress, 100);
-  };
+  // currentProfit is derived directly from the trade list (not the
+  // account row's own currentProfit field) so the card can never get stuck
+  // showing stale data after a trade/import lands.
+  const getChallengeCurrentProfit = (challenge: Challenge) =>
+    trades
+      .filter((t) => t.accountId === challenge.id && t.accountType === "challenge")
+      .reduce((sum, t) => sum + t.pnl, 0);
 
-  const getChallengeCurrentProfit = (challenge: Challenge) => {
-    const tradePnL = getAccountPnL(challenge.id, "challenge");
-    return challenge.currentProfit + tradePnL;
+  const getChallengeProgress = (challenge: Challenge) => {
+    const currentProfit = getChallengeCurrentProfit(challenge);
+    const target = getStepTarget(challenge);
+    if (!target) return 0;
+    const progress = (currentProfit / target) * 100;
+    return Math.max(0, Math.min(progress, 100));
   };
 
   const cardVariants = {
@@ -694,7 +699,11 @@ export default function Challenges() {
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       >
         <AnimatePresence mode="popLayout">
-        {filteredChallenges.map((challenge) => (
+        {filteredChallenges.map((challenge) => {
+          const currentProfit = getChallengeCurrentProfit(challenge);
+          const progress = getChallengeProgress(challenge);
+          const drawdown = computeDrawdown(challenge.maxDrawdown, challenge.accountSize, currentProfit);
+          return (
           <motion.div
             key={challenge.id}
             layout
@@ -759,12 +768,12 @@ export default function Challenges() {
                     {is2Step(challenge) ? `Step ${getCurrentStep(challenge)} Progress` : "Progress"}
                     <span className="text-[#64748B]"> · {formatCurrency(getStepTarget(challenge))}</span>
                   </p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(getChallengeProgress(challenge))}</p>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(progress)}</p>
                 </div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(148, 163, 184, 0.1)' }}>
                   <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: `${getChallengeProgress(challenge)}%` }}
+                    animate={{ width: `${progress}%` }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
                     className="h-full rounded-full"
                     style={{
@@ -781,7 +790,7 @@ export default function Challenges() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Current Profit</p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(getChallengeCurrentProfit(challenge))}</p>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(currentProfit)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Target</p>
@@ -789,7 +798,7 @@ export default function Challenges() {
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Drawdown</p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(challenge.remainingDrawdown)} ({formatCurrency((challenge.remainingDrawdown / 100) * challenge.accountSize)})</p>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(drawdown.remainingDrawdownPercent)} ({formatCurrency(drawdown.remainingDrawdownDollars)})</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Cost</p>
@@ -853,7 +862,8 @@ export default function Challenges() {
               </div>
             </motion.div>
           </motion.div>
-        ))}
+          );
+        })}
         </AnimatePresence>
       </motion.div>
       )}

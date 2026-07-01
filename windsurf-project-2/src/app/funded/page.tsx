@@ -29,6 +29,7 @@ import {
   Cell,
 } from "recharts";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
+import { computeDrawdown } from "@/lib/drawdown";
 
 type FundedStatusFilter = "all" | FundedAccountStatus;
 type ViewMode = "cards" | "table";
@@ -538,7 +539,12 @@ export default function Funded() {
         {filteredAccounts.map((account) => {
           const sourceChallenge = challenges.find(c => c.id === account.sourceChallengeId);
           const accountPnL = getFundedAccountPnL(account);
-          const drawdownProgress = (account.remainingDrawdown / account.maxDrawdown) * 100;
+          // Drawdown only ever grows from realized losses (never from the
+          // account's own possibly-stale persisted remainingDrawdown field).
+          const drawdown = computeDrawdown(account.maxDrawdown, account.accountSize, accountPnL);
+          const drawdownProgress = drawdown.maxDrawdownDollars > 0
+            ? (drawdown.remainingDrawdownDollars / drawdown.maxDrawdownDollars) * 100
+            : 100;
 
           return (
             <motion.div
@@ -597,7 +603,7 @@ export default function Funded() {
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-[#94A3B8]">Drawdown Remaining</p>
-                    <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(account.remainingDrawdown)} ({formatCurrency((account.remainingDrawdown / 100) * account.accountSize)})</p>
+                    <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(drawdown.remainingDrawdownPercent)} ({formatCurrency(drawdown.remainingDrawdownDollars)})</p>
                   </div>
                   <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(148, 163, 184, 0.1)' }}>
                     <motion.div
@@ -632,7 +638,7 @@ export default function Funded() {
                   </div>
                   <div>
                     <p className="text-xs text-[#94A3B8] mb-1">Max Drawdown</p>
-                    <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(account.maxDrawdown)}</p>
+                    <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(drawdown.maxDrawdownPercent)}</p>
                   </div>
                 </div>
 
