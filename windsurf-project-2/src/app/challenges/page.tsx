@@ -135,7 +135,7 @@ export default function Challenges() {
       accountSize: challenge.accountSize,
       fundingDate: new Date().toISOString().split('T')[0],
       initialBalance: challenge.accountSize,
-      currentBalance: challenge.accountSize * (1 + challenge.currentProfit / 100),
+      currentBalance: challenge.accountSize + challenge.currentProfit,
       currentProfit: challenge.currentProfit,
       maxDrawdown: challenge.maxDrawdown,
       remainingDrawdown: challenge.remainingDrawdown,
