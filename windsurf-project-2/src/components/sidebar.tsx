@@ -14,7 +14,8 @@ import {
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
-import { colors, transitions, shadows, borderRadius } from "@/design-system";
+import { borderRadius } from "@/design-system";
+import { Logo } from "@/components/common/Logo";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -22,7 +23,7 @@ export function Sidebar() {
   const { isAdmin } = useAdmin();
 
   const sidebarItems = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Challenges", href: "/challenges", icon: Trophy },
     { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
@@ -45,9 +46,10 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-screen flex flex-col">
-      <div className="p-6 border-b border-[rgba(148,163,184,0.1)]">
-        <h1 className="text-xl font-bold text-[#F8FAFC]">PropEdge</h1>
-        <p className="text-xs text-[#94A3B8] mt-1">Trading Dashboard</p>
+      <div className="group px-5 py-4 border-b border-[rgba(148,163,184,0.1)] transition-all duration-200">
+        <Link href="/welcome" className="block transition-all duration-200 group-hover:drop-shadow-[0_0_14px_rgba(41,141,255,0.55)]">
+          <Logo size="medium" variant="full" src="/logo-sidebar.png" />
+        </Link>
       </div>
       
       <nav className="flex-1 p-4 space-y-1">

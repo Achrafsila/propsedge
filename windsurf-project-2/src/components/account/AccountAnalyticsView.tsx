@@ -1,36 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  ArrowLeft, 
-  Edit, 
-  Plus, 
-  DollarSign, 
-  TrendingUp, 
+import {
+  ArrowLeft,
+  Plus,
+  DollarSign,
+  TrendingUp,
   TrendingDown,
   Calendar,
   BarChart3,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Target,
+  Activity,
+  Award,
+  AlertTriangle,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
 } from "recharts";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
+import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface AccountAnalyticsViewProps {
   account: any;
   trades: any[];
@@ -40,189 +44,736 @@ interface AccountAnalyticsViewProps {
   onAccountChange: (accountId: string) => void;
 }
 
-export function AccountAnalyticsView({ 
-  account, 
-  trades, 
-  payouts, 
-  accountType, 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt$ = (value: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+
+const fmtPct = (value: number) => `${value.toFixed(1)}%`;
+
+const STATUS_BADGE: Record<string, string> = {
+  active:   "bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.4)]",
+  passed:   "bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.4)]",
+  failed:   "bg-[rgba(239,68,68,0.15)] text-[#EF4444] border border-[rgba(239,68,68,0.4)]",
+  breached: "bg-[rgba(239,68,68,0.15)] text-[#EF4444] border border-[rgba(239,68,68,0.4)]",
+  refunded: "bg-[rgba(245,158,11,0.15)] text-[#F59E0B] border border-[rgba(245,158,11,0.4)]",
+  closed:   "bg-[rgba(148,163,184,0.15)] text-[#94A3B8] border border-[rgba(148,163,184,0.4)]",
+};
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      className="px-3 py-2 rounded-xl text-xs"
+      style={{
+        background: "rgba(11,18,32,0.95)",
+        border: "1px solid rgba(148,163,184,0.15)",
+        backdropFilter: "blur(12px)",
+      }}
+    >
+      <p className="text-[#94A3B8] mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} style={{ color: p.color }} className="font-semibold">
+          {fmt$(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export function AccountAnalyticsView({
+  account,
+  trades,
+  payouts,
+  accountType,
   allAccounts,
-  onAccountChange 
+  onAccountChange,
 }: AccountAnalyticsViewProps) {
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  // ── Derived account fields ─────────────────────────────────────────────────
+  const startBalance =
+    accountType === "funded" ? account.initialBalance : account.accountSize;
+  const startDate =
+    accountType === "funded" ? account.fundingDate : account.purchaseDate;
 
-  const formatPercentage = (value: number) => {
-    return `${value.toFixed(1)}%`;
-  };
+  // maxDrawdown stored as percentage (e.g. 10 = 10%)
+  const maxDDDollars = (account.maxDrawdown / 100) * account.accountSize;
+  const drawdownFloor = startBalance - maxDDDollars; // balance at which account breaches
+  const targetBalance =
+    accountType === "challenge" && account.profitTarget > 0
+      ? account.accountSize + account.profitTarget
+      : null;
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-[#00C875]';
-      case 'passed': return 'bg-[#00C875]';
-      case 'failed': return 'bg-[#FF4D4F]';
-      case 'breached': return 'bg-[#FF4D4F]';
-      case 'refunded': return 'bg-[#D8A94A]';
-      case 'closed': return 'bg-[#566070]';
-      default: return 'bg-[#566070]';
+  // ── Daily P&L aggregation ──────────────────────────────────────────────────
+  const dailyPnL = useMemo(
+    () =>
+      trades.reduce((acc: Record<string, { pnl: number; trades: number }>, trade) => {
+        const d = trade.entryDate;
+        if (!acc[d]) acc[d] = { pnl: 0, trades: 0 };
+        acc[d].pnl += trade.pnl;
+        acc[d].trades += 1;
+        return acc;
+      }, {}),
+    [trades]
+  );
+
+  // ── Equity curve (starts at opening balance) ───────────────────────────────
+  const equityCurveData = useMemo(() => {
+    const sorted = Object.entries(dailyPnL).sort(
+      ([a], [b]) => new Date(a).getTime() - new Date(b).getTime()
+    );
+    const points: { date: string; balance: number }[] = [
+      { date: startDate ?? "Start", balance: startBalance },
+    ];
+    let running = startBalance;
+    for (const [date, data] of sorted) {
+      running += data.pnl;
+      points.push({ date, balance: running });
     }
-  };
+    return points;
+  }, [dailyPnL, startBalance, startDate]);
 
-  // Calculate daily P&L from trades
-  const dailyPnL = trades.reduce((acc: any, trade: any) => {
-    const date = trade.entryDate;
-    if (!acc[date]) {
-      acc[date] = { pnl: 0, trades: 0 };
-    }
-    acc[date].pnl += trade.pnl;
-    acc[date].trades += 1;
-    return acc;
-  }, {});
-
-  // Generate equity curve data
-  const equityCurveData = Object.entries(dailyPnL)
-    .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
-    .reduce((acc: any, [date, data]: any, index: number) => {
-      const previousBalance = index === 0 ? account.accountSize : acc[index - 1].balance;
-      const balance = previousBalance + data.pnl;
-      acc.push({ date, balance, pnl: data.pnl });
-      return acc;
-    }, []);
-
-  // Calculate statistics
-  const winningTrades = trades.filter(t => t.pnl > 0);
-  const losingTrades = trades.filter(t => t.pnl < 0);
+  // ── Trade-level statistics ─────────────────────────────────────────────────
+  const totalPnL = trades.reduce((s, t) => s + t.pnl, 0);
+  const winningTrades = trades.filter((t) => t.pnl > 0);
+  const losingTrades  = trades.filter((t) => t.pnl < 0);
   const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
-  const avgWin = winningTrades.length > 0 ? winningTrades.reduce((sum, t) => sum + t.pnl, 0) / winningTrades.length : 0;
-  const avgLoss = losingTrades.length > 0 ? losingTrades.reduce((sum, t) => sum + t.pnl, 0) / losingTrades.length : 0;
+  const avgWin  = winningTrades.length > 0 ? winningTrades.reduce((s, t) => s + t.pnl, 0) / winningTrades.length : 0;
+  const avgLoss = losingTrades.length  > 0 ? losingTrades.reduce((s, t) => s + t.pnl, 0) / losingTrades.length : 0;
   const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
-  const totalPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
 
-  // Calculate target progress using actual P&L from trades
-  const targetProgress = accountType === 'challenge' && account.profitTarget > 0
-    ? (totalPnL / account.profitTarget) * 100
-    : 0;
+  // ── Day-level statistics ───────────────────────────────────────────────────
+  const dailyEntries = Object.entries(dailyPnL) as [string, { pnl: number; trades: number }][];
+  const winningDays  = dailyEntries.filter(([, d]) => d.pnl > 0);
+  const losingDays   = dailyEntries.filter(([, d]) => d.pnl < 0);
+  const bestDay  = dailyEntries.length > 0 ? dailyEntries.reduce((a, b) => (b[1].pnl > a[1].pnl ? b : a)) : null;
+  const worstDay = dailyEntries.length > 0 ? dailyEntries.reduce((a, b) => (b[1].pnl < a[1].pnl ? b : a)) : null;
+  const avgDailyPnL = dailyEntries.length > 0 ? totalPnL / dailyEntries.length : 0;
 
-  // Calculate drawdown limit
-  const drawdownLimit = accountType === 'challenge'
-    ? account.accountSize - account.maxDrawdown
-    : account.accountSize - account.maxDrawdown;
+  // ── Target progress ────────────────────────────────────────────────────────
+  const targetProgress =
+    accountType === "challenge" && account.profitTarget > 0
+      ? Math.min(100, (totalPnL / account.profitTarget) * 100)
+      : 0;
 
-  // Calendar navigation
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(newDate.getMonth() - 1);
-      } else {
-        newDate.setMonth(newDate.getMonth() + 1);
-      }
-      return newDate;
+  // ── Calendar ───────────────────────────────────────────────────────────────
+  const navigateMonth = (dir: "prev" | "next") =>
+    setCurrentMonth((prev) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + (dir === "prev" ? -1 : 1));
+      return d;
     });
-  };
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startDayOfWeek = firstDay.getDay();
-    
-    const days = [];
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startDayOfWeek; i++) {
-      days.push(null);
-    }
-    // Add days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
+  const monthDays = useMemo(() => {
+    const year  = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const days: (Date | null)[] = [];
+    for (let i = 0; i < new Date(year, month, 1).getDay(); i++) days.push(null);
+    for (let i = 1; i <= new Date(year, month + 1, 0).getDate(); i++)
       days.push(new Date(year, month, i));
-    }
     return days;
+  }, [currentMonth]);
+
+  const getDayData = (date: Date) => {
+    const key = date.toISOString().split("T")[0];
+    return dailyPnL[key] ?? null;
   };
 
-  const getDayPnL = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return dailyPnL[dateStr] || null;
-  };
+  const isToday = (date: Date) =>
+    date.toDateString() === new Date().toDateString();
 
-  const isToday = (date: Date) => {
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
-  };
+  // ── Animation ─────────────────────────────────────────────────────────────
+  const cardVariants = { hover: { y: -3, transition: { duration: 0.25 } } };
 
-  const monthDays = getDaysInMonth(currentMonth);
+  // ─── Stat card helper ───────────────────────────────────────────────────────
+  const StatCard = ({
+    icon: Icon,
+    label,
+    value,
+    color,
+    sub,
+  }: {
+    icon: any;
+    label: string;
+    value: string;
+    color: string;
+    sub?: string;
+  }) => (
+    <motion.div variants={cardVariants} whileHover="hover">
+      <div
+        className="rounded-xl p-4 transition-all duration-300"
+        style={{
+          background: glassmorphism.card.background,
+          backdropFilter: glassmorphism.card.backdropBlur,
+          border: "1px solid rgba(148,163,184,0.08)",
+          borderRadius: borderRadius.xl,
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: `${color}1A` }}
+          >
+            <Icon className="w-5 h-5" style={{ color }} />
+          </div>
+          <div className="min-w-0">
+            <p
+              className="text-[#94A3B8] uppercase mb-1 truncate"
+              style={{
+                fontSize: typography.fontSize.xs,
+                fontWeight: typography.fontWeight.medium,
+                letterSpacing: typography.letterSpacing.label,
+              }}
+            >
+              {label}
+            </p>
+            <p
+              className="font-bold"
+              style={{ color, fontSize: typography.fontSize.lg }}
+            >
+              {value}
+            </p>
+            {sub && <p className="text-[#64748B] text-xs mt-0.5">{sub}</p>}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
 
+  // ─── Empty state ────────────────────────────────────────────────────────────
+  if (trades.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Header
+          account={account}
+          accountType={accountType}
+          allAccounts={allAccounts}
+          onAccountChange={onAccountChange}
+          router={router}
+          setIsAddTradeDialogOpen={setIsAddTradeDialogOpen}
+          setIsAddPayoutDialogOpen={setIsAddPayoutDialogOpen}
+        />
+        <div
+          className="rounded-2xl p-16 flex flex-col items-center justify-center text-center"
+          style={{
+            background: glassmorphism.card.background,
+            backdropFilter: glassmorphism.card.backdropBlur,
+            border: "1px solid rgba(148,163,184,0.08)",
+          }}
+        >
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+            style={{ background: "rgba(41,141,255,0.1)" }}
+          >
+            <BarChart3 className="w-8 h-8 text-[#298DFF]" />
+          </div>
+          <p
+            className="text-[#F8FAFC] font-bold mb-2"
+            style={{ fontSize: typography.fontSize.xl }}
+          >
+            No trades recorded yet
+          </p>
+          <p className="text-[#94A3B8] mb-8" style={{ fontSize: typography.fontSize.sm }}>
+            Add your first trade to see your equity curve, calendar, and performance stats.
+          </p>
+          <Button
+            className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl pointer-events-auto"
+            onClick={() => setIsAddTradeDialogOpen(true)}
+            type="button"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add First Trade
+          </Button>
+        </div>
+        <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} />
+        {accountType === "funded" && (
+          <AddPayoutDialog open={isAddPayoutDialogOpen} onOpenChange={setIsAddPayoutDialogOpen} defaultFundedAccountId={account.id} />
+        )}
+      </div>
+    );
+  }
+
+  // ─── Main view ──────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header */}
+      <Header
+        account={account}
+        accountType={accountType}
+        allAccounts={allAccounts}
+        onAccountChange={onAccountChange}
+        router={router}
+        setIsAddTradeDialogOpen={setIsAddTradeDialogOpen}
+        setIsAddPayoutDialogOpen={setIsAddPayoutDialogOpen}
+      />
+
+      {/* ── Account Data Strip ────────────────────────────────────────────── */}
+      <div
+        className="rounded-xl p-5 transition-all duration-300"
+        style={{
+          background: glassmorphism.card.background,
+          backdropFilter: glassmorphism.card.backdropBlur,
+          border: "1px solid rgba(148,163,184,0.08)",
+          borderRadius: borderRadius.xl,
+        }}
+      >
+        <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+          <DataField label="Prop Firm" value={account.propFirmName} />
+          <DataField
+            label="Type"
+            value={accountType === "challenge" ? (account.challengeType ?? "Challenge") : "Funded"}
+          />
+          <DataField
+            label="Start Date"
+            value={accountType === "challenge" ? account.purchaseDate : account.fundingDate}
+          />
+          <DataField label="Account Size" value={fmt$(account.accountSize)} />
+          <DataField label="Opening Balance" value={fmt$(startBalance)} />
+          <DataField
+            label="Current Balance"
+            value={
+              accountType === "funded"
+                ? fmt$(account.currentBalance)
+                : fmt$(account.accountSize + (account.currentProfit ?? 0))
+            }
+            colored={(account.currentProfit ?? 0) >= 0 ? "#10B981" : "#EF4444"}
+          />
+          <DataField
+            label="Net P&L"
+            value={fmt$(totalPnL)}
+            colored={totalPnL >= 0 ? "#10B981" : "#EF4444"}
+          />
+          {accountType === "challenge" && account.profitTarget > 0 && (
+            <DataField
+              label="Target"
+              value={`${fmt$(account.profitTarget)} (${fmtPct(targetProgress)})`}
+              colored="#D4AF37"
+            />
+          )}
+          <DataField
+            label="Drawdown Remaining"
+            value={`${fmtPct(account.remainingDrawdown ?? account.maxDrawdown)} · ${fmt$(maxDDDollars * ((account.remainingDrawdown ?? account.maxDrawdown) / account.maxDrawdown || 1))}`}
+            colored={
+              (account.remainingDrawdown ?? account.maxDrawdown) < account.maxDrawdown * 0.3
+                ? "#EF4444"
+                : "#94A3B8"
+            }
+          />
+        </div>
+      </div>
+
+      {/* ── Equity Curve ──────────────────────────────────────────────────── */}
+      <div
+        className="rounded-xl p-6 transition-all duration-300"
+        style={{
+          background: glassmorphism.card.background,
+          backdropFilter: glassmorphism.card.backdropBlur,
+          border: "1px solid rgba(148,163,184,0.08)",
+          borderRadius: borderRadius.xl,
+        }}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(41,141,255,0.1)" }}
+            >
+              <Activity className="w-5 h-5 text-[#298DFF]" />
+            </div>
+            <div>
+              <h3
+                className="text-[#F8FAFC] font-bold"
+                style={{ fontSize: typography.fontSize.section }}
+              >
+                Equity Curve
+              </h3>
+              <p className="text-[#94A3B8] text-xs mt-0.5">Cumulative balance over time</p>
+            </div>
+          </div>
+          <div className="flex gap-6 text-sm">
+            <div className="text-right">
+              <p className="text-[#64748B] text-xs mb-0.5">Net P&L</p>
+              <p className={`font-bold ${totalPnL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                {fmt$(totalPnL)}
+              </p>
+            </div>
+            {accountType === "challenge" && account.profitTarget > 0 && (
+              <div className="text-right">
+                <p className="text-[#64748B] text-xs mb-0.5">Target Progress</p>
+                <p className="font-bold text-[#D4AF37]">{fmtPct(targetProgress)}</p>
+              </div>
+            )}
+            <div className="text-right">
+              <p className="text-[#64748B] text-xs mb-0.5">Drawdown Used</p>
+              <p className="font-bold text-[#EF4444]">
+                {fmtPct(account.maxDrawdown - (account.remainingDrawdown ?? account.maxDrawdown))}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 mb-4 text-xs text-[#94A3B8]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-0.5 bg-[#298DFF] rounded-full" /> Equity
+          </span>
+          {targetBalance && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5 rounded-full border-t border-dashed border-[#D4AF37]" /> Target
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-0.5 rounded-full border-t border-dashed border-[#EF4444]" /> Drawdown Floor
+          </span>
+        </div>
+
+        <div className="h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={equityCurveData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
+              <XAxis
+                dataKey="date"
+                stroke="#475569"
+                fontSize={11}
+                tickLine={false}
+                axisLine={{ stroke: "rgba(148,163,184,0.15)" }}
+                tickFormatter={(v) => {
+                  if (v === "Start" || v === startDate) return "Start";
+                  try {
+                    return new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  } catch { return v; }
+                }}
+              />
+              <YAxis
+                stroke="#475569"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => fmt$(v)}
+                width={72}
+              />
+              <Tooltip content={<ChartTooltip />} />
+              {/* Start line */}
+              <ReferenceLine
+                y={startBalance}
+                stroke="rgba(148,163,184,0.3)"
+                strokeDasharray="4 4"
+                label={{ value: "Open", fill: "#64748B", fontSize: 10, position: "insideTopLeft" }}
+              />
+              {/* Target line (challenge only) */}
+              {targetBalance && (
+                <ReferenceLine
+                  y={targetBalance}
+                  stroke="#D4AF37"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  label={{ value: "Target", fill: "#D4AF37", fontSize: 10, position: "insideTopLeft" }}
+                />
+              )}
+              {/* Drawdown floor */}
+              <ReferenceLine
+                y={drawdownFloor}
+                stroke="#EF4444"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+                label={{ value: "DD Floor", fill: "#EF4444", fontSize: 10, position: "insideBottomLeft" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="balance"
+                stroke="#298DFF"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#298DFF", stroke: "#0B1220", strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Trading Calendar ──────────────────────────────────────────────── */}
+      <div
+        className="rounded-xl p-6 transition-all duration-300"
+        style={{
+          background: glassmorphism.card.background,
+          backdropFilter: glassmorphism.card.backdropBlur,
+          border: "1px solid rgba(148,163,184,0.08)",
+          borderRadius: borderRadius.xl,
+        }}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(212,175,55,0.1)" }}
+            >
+              <Calendar className="w-5 h-5 text-[#D4AF37]" />
+            </div>
+            <div>
+              <h3
+                className="text-[#F8FAFC] font-bold"
+                style={{ fontSize: typography.fontSize.section }}
+              >
+                Trading Calendar
+              </h3>
+              <p className="text-[#94A3B8] text-xs mt-0.5">Daily P&L by session</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => navigateMonth("prev")}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[rgba(148,163,184,0.1)] transition-all pointer-events-auto"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span
+              className="text-[#F8FAFC] font-medium min-w-[160px] text-center"
+              style={{ fontSize: typography.fontSize.sm }}
+            >
+              {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </span>
+            <button
+              type="button"
+              onClick={() => navigateMonth("next")}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[rgba(148,163,184,0.1)] transition-all pointer-events-auto"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Day headers */}
+        <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+            <div
+              key={d}
+              className="text-center py-2 text-[#64748B] uppercase"
+              style={{ fontSize: "10px", letterSpacing: "0.06em", fontWeight: 600 }}
+            >
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Day cells */}
+        <div className="grid grid-cols-7 gap-1.5">
+          {monthDays.map((date, idx) => {
+            if (!date) return <div key={idx} className="aspect-square" />;
+            const data = getDayData(date);
+            const today = isToday(date);
+            return (
+              <div
+                key={idx}
+                className="aspect-square rounded-lg p-1.5 flex flex-col transition-all duration-200 hover:scale-[1.04]"
+                style={{
+                  background: data
+                    ? data.pnl >= 0
+                      ? "rgba(16,185,129,0.12)"
+                      : "rgba(239,68,68,0.12)"
+                    : "rgba(11,18,32,0.5)",
+                  border: `1px solid ${
+                    today
+                      ? "#D4AF37"
+                      : data
+                      ? data.pnl >= 0
+                        ? "rgba(16,185,129,0.3)"
+                        : "rgba(239,68,68,0.3)"
+                      : "rgba(148,163,184,0.08)"
+                  }`,
+                  boxShadow: today ? "0 0 0 1px rgba(212,175,55,0.3)" : undefined,
+                }}
+              >
+                <span
+                  className="font-medium"
+                  style={{
+                    fontSize: "10px",
+                    color: today ? "#D4AF37" : "#94A3B8",
+                  }}
+                >
+                  {date.getDate()}
+                </span>
+                {data && (
+                  <>
+                    <span
+                      className="font-semibold leading-tight mt-auto"
+                      style={{
+                        fontSize: "9px",
+                        color: data.pnl >= 0 ? "#10B981" : "#EF4444",
+                      }}
+                    >
+                      {data.pnl >= 0 ? "+" : ""}
+                      {fmt$(data.pnl)}
+                    </span>
+                    <span style={{ fontSize: "8px", color: "#64748B" }}>
+                      {data.trades}t
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Calendar legend */}
+        <div className="flex gap-4 mt-4 text-xs text-[#64748B]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-[rgba(16,185,129,0.3)]" /> Profitable day
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded bg-[rgba(239,68,68,0.3)]" /> Losing day
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded border border-[#D4AF37]" /> Today
+          </span>
+        </div>
+      </div>
+
+      {/* ── Statistics Grid ───────────────────────────────────────────────── */}
+      <div>
+        <h3
+          className="text-[#F8FAFC] font-bold mb-4"
+          style={{ fontSize: typography.fontSize.section }}
+        >
+          Performance Statistics
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard icon={BarChart3} label="Total Trades" value={trades.length.toString()} color="#298DFF" sub={`${winningTrades.length}W · ${losingTrades.length}L`} />
+          <StatCard icon={TrendingUp} label="Win Rate" value={fmtPct(winRate)} color="#10B981" sub={`${winningTrades.length} winning trades`} />
+          <StatCard icon={Calendar} label="Winning Days" value={winningDays.length.toString()} color="#10B981" sub={`of ${dailyEntries.length} trading days`} />
+          <StatCard icon={Calendar} label="Losing Days" value={losingDays.length.toString()} color="#EF4444" sub={`of ${dailyEntries.length} trading days`} />
+          <StatCard
+            icon={Award}
+            label="Best Day"
+            value={bestDay ? fmt$(bestDay[1].pnl) : "$0"}
+            color="#10B981"
+            sub={bestDay ? bestDay[0] : "—"}
+          />
+          <StatCard
+            icon={AlertTriangle}
+            label="Worst Day"
+            value={worstDay ? fmt$(worstDay[1].pnl) : "$0"}
+            color="#EF4444"
+            sub={worstDay ? worstDay[0] : "—"}
+          />
+          <StatCard icon={DollarSign} label="Avg Daily P&L" value={fmt$(avgDailyPnL)} color={avgDailyPnL >= 0 ? "#10B981" : "#EF4444"} sub="Per trading day" />
+          <StatCard icon={Target} label="Profit Factor" value={profitFactor.toFixed(2)} color="#D4AF37" sub={`${fmt$(avgWin)} avg win`} />
+          <StatCard icon={TrendingUp} label="Best Trade" value={winningTrades.length > 0 ? fmt$(Math.max(...winningTrades.map((t) => t.pnl))) : "$0"} color="#10B981" />
+          <StatCard icon={TrendingDown} label="Worst Trade" value={losingTrades.length > 0 ? fmt$(Math.min(...losingTrades.map((t) => t.pnl))) : "$0"} color="#EF4444" />
+          <StatCard icon={TrendingUp} label="Avg Win" value={fmt$(avgWin)} color="#10B981" sub={`${winningTrades.length} trades`} />
+          <StatCard icon={TrendingDown} label="Avg Loss" value={fmt$(avgLoss)} color="#EF4444" sub={`${losingTrades.length} trades`} />
+        </div>
+      </div>
+
+      {/* ── Dialogs ───────────────────────────────────────────────────────── */}
+      <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} />
+      {accountType === "funded" && (
+        <AddPayoutDialog open={isAddPayoutDialogOpen} onOpenChange={setIsAddPayoutDialogOpen} defaultFundedAccountId={account.id} />
+      )}
+    </div>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function Header({
+  account,
+  accountType,
+  allAccounts,
+  onAccountChange,
+  router,
+  setIsAddTradeDialogOpen,
+  setIsAddPayoutDialogOpen,
+}: {
+  account: any;
+  accountType: "challenge" | "funded";
+  allAccounts: any[];
+  onAccountChange: (id: string) => void;
+  router: any;
+  setIsAddTradeDialogOpen: (v: boolean) => void;
+  setIsAddPayoutDialogOpen: (v: boolean) => void;
+}) {
+  return (
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
+          <button
+            type="button"
             onClick={() => router.back()}
-            className="text-[#8B97A8] hover:text-[#F8FAFC] hover:bg-[#111C33]"
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[rgba(148,163,184,0.1)] transition-all pointer-events-auto"
           >
             <ArrowLeft className="w-5 h-5" />
-          </Button>
+          </button>
           <div>
-            <h1 className="text-3xl font-bold text-[#F8FAFC]">Analytics</h1>
-            <p className="text-[#8B97A8] mt-1">
-              {accountType === 'challenge' ? 'Challenge Account' : 'Funded Account'} Details
+            <h1
+              className="font-extrabold"
+              style={{
+                fontSize: typography.fontSize.display,
+                fontWeight: typography.fontWeight.extraBold,
+                letterSpacing: typography.letterSpacing.display,
+                lineHeight: typography.lineHeight.display,
+                background: gradientText.premium,
+                backgroundClip: "text",
+                WebkitBackgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              Analytics
+            </h1>
+            <p className="text-[#94A3B8] mt-0.5" style={{ fontSize: typography.fontSize.sm }}>
+              {account.accountName} ·{" "}
+              {accountType === "challenge" ? "Challenge Account" : "Funded Account"}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={account.id}
-            onChange={(e) => onAccountChange(e.target.value)}
-            className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-4 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+          {allAccounts.length > 1 && (
+            <select
+              value={account.id}
+              onChange={(e) => onAccountChange(e.target.value)}
+              className="bg-[rgba(11,18,32,0.8)] border border-[rgba(148,163,184,0.15)] text-[#F8FAFC] rounded-xl px-3 py-2 text-sm focus:border-[#298DFF] focus:outline-none focus:ring-2 focus:ring-[rgba(41,141,255,0.2)] transition-all"
+            >
+              {allAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.accountName}
+                </option>
+              ))}
+            </select>
+          )}
+          <Badge
+            variant="default"
+            className={`rounded-full font-semibold ${STATUS_BADGE[account.status] ?? STATUS_BADGE.closed}`}
           >
-            {allAccounts.map((acc) => (
-              <option key={acc.id} value={acc.id}>
-                {acc.accountName} - {formatCurrency(acc.accountSize)}
-              </option>
-            ))}
-          </select>
-          <Badge variant="default" className={getStatusColor(account.status)}>
             {account.status}
           </Badge>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <Button
           variant="outline"
-          className="border-[#1A2942] text-[#F8FAFC] hover:bg-[#111C33] hover:border-[#2F80ED] rounded-xl"
-        >
-          <Edit className="w-4 h-4 mr-2" />
-          Edit Account
-        </Button>
-        <Button
-          variant="outline"
-          className="border-[#1A2942] text-[#F8FAFC] hover:bg-[#111C33] hover:border-[#2F80ED] rounded-xl pointer-events-auto"
+          size="sm"
+          className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl pointer-events-auto transition-all duration-300"
           onClick={() => setIsAddTradeDialogOpen(true)}
           type="button"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Trade
         </Button>
-        {accountType === 'funded' && (
+        {accountType === "funded" && (
           <Button
             variant="outline"
-            className="border-[#1A2942] text-[#F8FAFC] hover:bg-[#111C33] hover:border-[#D8A94A] rounded-xl pointer-events-auto"
+            size="sm"
+            className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(212,175,55,0.1)] hover:border-[#D4AF37] rounded-xl pointer-events-auto transition-all duration-300"
             onClick={() => setIsAddPayoutDialogOpen(true)}
             type="button"
           >
@@ -231,354 +782,30 @@ export function AccountAnalyticsView({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Account Data Strip */}
-      <Card className="bg-[#080D1B] border-[#1A2942]">
-        <CardContent className="p-6">
-          <div className="flex flex-wrap gap-6 text-sm">
-            <div>
-              <p className="text-[#8B97A8] mb-1">Start Date</p>
-              <p className="text-[#F8FAFC] font-medium">
-                {accountType === 'challenge' ? account.purchaseDate : account.fundingDate}
-              </p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Account Type</p>
-              <p className="text-[#F8FAFC] font-medium capitalize">{accountType}</p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Prop Firm</p>
-              <p className="text-[#F8FAFC] font-medium">{account.propFirmName}</p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Plan Type</p>
-              <p className="text-[#F8FAFC] font-medium">
-                {accountType === 'challenge' ? account.challengeType : 'Funded'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Account Size</p>
-              <p className="text-[#F8FAFC] font-medium">{formatCurrency(account.accountSize)}</p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Starting Balance</p>
-              <p className="text-[#F8FAFC] font-medium">{formatCurrency(account.accountSize)}</p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Current Balance</p>
-              <p className="text-[#F8FAFC] font-medium">
-                {formatCurrency(accountType === 'challenge' 
-                  ? account.accountSize * (1 + account.currentProfit / 100)
-                  : account.currentBalance
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-[#8B97A8] mb-1">Platform</p>
-              <p className="text-[#F8FAFC] font-medium">TradingView</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trading Growth Curve */}
-      <Card className="bg-[#080D1B] border-[#1A2942]">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-[#F8FAFC]">Trading Growth Curve</CardTitle>
-            <div className="flex gap-4 text-sm">
-              <div>
-                <p className="text-[#8B97A8]">Net P&L</p>
-                <p className={`font-medium ${totalPnL >= 0 ? 'text-[#00C875]' : 'text-[#FF4D4F]'}`}>
-                  {formatCurrency(totalPnL)}
-                </p>
-              </div>
-              {accountType === 'challenge' && (
-                <>
-                  <div>
-                    <p className="text-[#8B97A8]">Target Progress</p>
-                    <p className="font-medium text-[#F8FAFC]">
-                      {formatPercentage(targetProgress)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[#8B97A8]">Drawdown Remaining</p>
-                    <p className="font-medium text-[#FF4D4F]">
-                      {formatPercentage(account.remainingDrawdown)}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[400px]">
-            {equityCurveData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={equityCurveData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1A2942" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#8B97A8"
-                    fontSize={12}
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  />
-                  <YAxis 
-                    stroke="#8B97A8"
-                    fontSize={12}
-                    tickFormatter={(value) => formatCurrency(value)}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#0D1424', 
-                      border: '1px solid #1A2942',
-                      borderRadius: '8px',
-                      color: '#F8FAFC'
-                    }}
-                    formatter={(value: any) => formatCurrency(Number(value))}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="balance" 
-                    stroke="#2F80ED" 
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  {accountType === 'challenge' && (
-                    <>
-                      <ReferenceLine 
-                        y={account.accountSize} 
-                        stroke="#8B97A8" 
-                        strokeDasharray="3 3"
-                        label="Start"
-                      />
-                      <ReferenceLine 
-                        y={account.accountSize + account.profitTarget} 
-                        stroke="#D8A94A" 
-                        strokeDasharray="3 3"
-                        label="Target"
-                      />
-                      <ReferenceLine 
-                        y={drawdownLimit} 
-                        stroke="#FF4D4F" 
-                        strokeDasharray="3 3"
-                        label="Max Drawdown"
-                      />
-                    </>
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-[#8B97A8]">
-                No trading data available
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trading Calendar */}
-      <Card className="bg-[#080D1B] border-[#1A2942]">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-[#F8FAFC]">Trading Calendar</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigateMonth('prev')}
-                className="text-[#8B97A8] hover:text-[#F8FAFC] hover:bg-[#111C33]"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <span className="text-[#F8FAFC] font-medium min-w-[150px] text-center">
-                {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigateMonth('next')}
-                className="text-[#8B97A8] hover:text-[#F8FAFC] hover:bg-[#111C33]"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-2">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <div key={day} className="text-center text-sm font-medium text-[#8B97A8] py-2">
-                {day}
-              </div>
-            ))}
-            {monthDays.map((date, index) => {
-              if (!date) {
-                return <div key={index} className="aspect-square" />;
-              }
-              const dayPnL = getDayPnL(date);
-              return (
-                <div
-                  key={index}
-                  className={`aspect-square rounded-lg p-2 border transition-all ${
-                    isToday(date) 
-                      ? 'border-[#D8A94A] bg-[#0D1424]' 
-                      : dayPnL 
-                        ? dayPnL.pnl >= 0 
-                          ? 'border-[#00C875]/30 bg-[#00C875]/10' 
-                          : 'border-[#FF4D4F]/30 bg-[#FF4D4F]/10'
-                        : 'border-[#1A2942] bg-[#0D1424]'
-                  }`}
-                >
-                  <div className="text-xs text-[#8B97A8] mb-1">{date.getDate()}</div>
-                  {dayPnL && (
-                    <>
-                      <div className={`text-xs font-medium ${dayPnL.pnl >= 0 ? 'text-[#00C875]' : 'text-[#FF4D4F]'}`}>
-                        {formatCurrency(dayPnL.pnl)}
-                      </div>
-                      <div className="text-xs text-[#8B97A8]">{dayPnL.trades} trades</div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#00C875]/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-[#00C875]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Best Trade</p>
-                <p className="text-sm font-medium text-[#00C875]">
-                  {winningTrades.length > 0 ? formatCurrency(Math.max(...winningTrades.map(t => t.pnl))) : '$0'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#FF4D4F]/10 flex items-center justify-center">
-                <TrendingDown className="w-5 h-5 text-[#FF4D4F]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Worst Trade</p>
-                <p className="text-sm font-medium text-[#FF4D4F]">
-                  {losingTrades.length > 0 ? formatCurrency(Math.min(...losingTrades.map(t => t.pnl))) : '$0'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#2F80ED]/10 flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-[#2F80ED]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Win Rate</p>
-                <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(winRate)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#D8A94A]/10 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-[#D8A94A]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Profit Factor</p>
-                <p className="text-sm font-medium text-[#F8FAFC]">{profitFactor.toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#2F80ED]/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-[#2F80ED]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Total Trades</p>
-                <p className="text-sm font-medium text-[#F8FAFC]">{trades.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#00C875]/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-[#00C875]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Average Win</p>
-                <p className="text-sm font-medium text-[#00C875]">{formatCurrency(avgWin)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#FF4D4F]/10 flex items-center justify-center">
-                <TrendingDown className="w-5 h-5 text-[#FF4D4F]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Average Loss</p>
-                <p className="text-sm font-medium text-[#FF4D4F]">{formatCurrency(avgLoss)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#080D1B] border-[#1A2942]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#2F80ED]/10 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-[#2F80ED]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#8B97A8]">Avg Daily P&L</p>
-                <p className={`text-sm font-medium ${totalPnL >= 0 ? 'text-[#00C875]' : 'text-[#FF4D4F]'}`}>
-                  {trades.length > 0 ? formatCurrency(totalPnL / Object.keys(dailyPnL).length) : '$0'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Dialogs */}
-      <AddTradeDialog 
-        open={isAddTradeDialogOpen} 
-        onOpenChange={setIsAddTradeDialogOpen} 
-      />
-      {accountType === 'funded' && (
-        <AddPayoutDialog 
-          open={isAddPayoutDialogOpen} 
-          onOpenChange={setIsAddPayoutDialogOpen} 
-        />
-      )}
+function DataField({
+  label,
+  value,
+  colored,
+}: {
+  label: string;
+  value: string;
+  colored?: string;
+}) {
+  return (
+    <div>
+      <p className="text-[#64748B] text-xs uppercase mb-1" style={{ letterSpacing: "0.06em" }}>
+        {label}
+      </p>
+      <p
+        className="text-sm font-semibold"
+        style={{ color: colored ?? "#F8FAFC" }}
+      >
+        {value}
+      </p>
     </div>
   );
 }

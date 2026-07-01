@@ -39,7 +39,7 @@ const PAYOUT_STATUS_COLOR: Record<PayoutStatus, string> = {
 };
 
 export default function Payouts() {
-  const { payouts, fundedAccounts, updatePayout, deletePayout } = useAccounts();
+  const { payouts, payoutsLoading, fundedAccounts, updatePayout, deletePayout } = useAccounts();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const formatCurrency = (value: number) => {
@@ -155,6 +155,14 @@ export default function Payouts() {
       transition: { duration: 0.4 }
     }
   };
+
+  if (payoutsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-6 h-6 border-2 border-[#F59E0B] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -424,7 +432,7 @@ export default function Payouts() {
                 <Tooltip
                   cursor={{ fill: 'rgba(245, 158, 11, 0.08)' }}
                   contentStyle={{ background: 'rgba(11, 18, 32, 0.95)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '12px', color: '#F8FAFC' }}
-                  formatter={(value: number) => [formatCurrency(value), 'Amount']}
+                  formatter={((value: number) => [formatCurrency(value), 'Amount']) as never}
                 />
                 <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={64}>
                   {chartData.map((entry, index) => (

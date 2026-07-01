@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#080D1B"/>
+  <defs>
+    <linearGradient id="b" x1="0" y1="0" x2=".25" y2="1">
+      <stop offset="0%" stop-color="#60C8FF"/>
+      <stop offset="100%" stop-color="#1260D4"/>
+    </linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF"/>
+      <stop offset="100%" stop-color="#7A96B4"/>
+    </linearGradient>
+  </defs>
+  <!-- P stem -->
+  <rect x="6" y="9" width="8" height="46" rx="2.5" fill="url(#b)"/>
+  <!-- P bowl -->
+  <path d="M14 9 H26 Q35 9 35 18 Q35 27 26 27 H14 Z" fill="url(#b)"/>
+  <!-- E top bar -->
+  <rect x="38" y="9" width="19" height="9" rx="2.5" fill="url(#s)"/>
+  <!-- E middle bar -->
+  <rect x="38" y="27.5" width="14" height="9" rx="2.5" fill="url(#s)"/>
+  <!-- E bottom bar -->
+  <rect x="38" y="46" width="19" height="9" rx="2.5" fill="url(#s)"/>
+</svg>

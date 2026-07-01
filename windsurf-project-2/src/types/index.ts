@@ -68,6 +68,7 @@ export interface FundedAccount {
   accountName: string;
   sourceChallengeId?: string;
   accountSize: number;
+  planType?: string;
   fundingDate: string;
   initialBalance: number;
   currentBalance: number;
@@ -86,6 +87,7 @@ export interface Payout {
   receivedPayoutAmount: number;
   propFirmSplitPercentage: number;
   status: PayoutStatus;
+  notes?: string;
 }
 
 export interface Trade {

@@ -41,7 +41,7 @@ const FUNDED_STATUS_COLOR: Record<FundedAccountStatus, string> = {
 
 export default function Funded() {
   const router = useRouter();
-  const { fundedAccounts, challenges, updateFundedAccount, deleteFundedAccount, getAccountPnL } = useAccounts();
+  const { fundedAccounts, fundedAccountsLoading, challenges, updateFundedAccount, deleteFundedAccount, getAccountPnL } = useAccounts();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const formatCurrency = (value: number) => {
@@ -429,7 +429,7 @@ export default function Funded() {
                 <Tooltip
                   cursor={{ fill: 'rgba(16, 185, 129, 0.08)' }}
                   contentStyle={{ background: 'rgba(11, 18, 32, 0.95)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '12px', color: '#F8FAFC' }}
-                  formatter={(value: number) => [formatCurrency(value), 'P&L']}
+                  formatter={((value: number) => [formatCurrency(value), 'P&L']) as never}
                 />
                 <Bar dataKey="pnl" radius={[6, 6, 0, 0]} maxBarSize={64}>
                   {chartData.map((entry, index) => (
@@ -505,24 +505,30 @@ export default function Funded() {
         </div>
       </motion.div>
 
-      {/* Empty State */}
+      {/* Loading / Empty State */}
       {filteredAccounts.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
-          style={{ background: glassmorphism.card.background, backdropFilter: glassmorphism.card.backdropBlur, border: '1px solid rgba(148, 163, 184, 0.08)', borderRadius: borderRadius.xl }}
-        >
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
-            <Wallet className="w-7 h-7 text-[#10B981]" />
+        fundedAccountsLoading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-6 h-6 border-2 border-[#10B981] border-t-transparent rounded-full animate-spin" />
           </div>
-          <p className="text-[#F8FAFC] text-lg font-semibold">
-            {statusFilter === 'all' ? 'No funded accounts yet' : `No ${statusFilter} accounts`}
-          </p>
-          <p className="text-[#94A3B8] mt-1" style={{ fontSize: typography.fontSize.sm }}>
-            {statusFilter === 'all' ? 'Add a funded account to get started' : 'Try a different filter'}
-          </p>
-        </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
+            style={{ background: glassmorphism.card.background, backdropFilter: glassmorphism.card.backdropBlur, border: '1px solid rgba(148, 163, 184, 0.08)', borderRadius: borderRadius.xl }}
+          >
+            <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
+              <Wallet className="w-7 h-7 text-[#10B981]" />
+            </div>
+            <p className="text-[#F8FAFC] text-lg font-semibold">
+              {statusFilter === 'all' ? 'No funded accounts yet' : `No ${statusFilter} accounts`}
+            </p>
+            <p className="text-[#94A3B8] mt-1" style={{ fontSize: typography.fontSize.sm }}>
+              {statusFilter === 'all' ? 'Add a funded account to get started' : 'Try a different filter'}
+            </p>
+          </motion.div>
+        )
       )}
 
       {/* Funded Account Cards */}

@@ -1,4 +1,28 @@
 @import "tailwindcss";
+
+/* Modern Romance — numbers & numeric symbols only */
+@font-face {
+  font-family: 'PropEdge';
+  src: url('/fonts/Modern Romance.otf') format('opentype');
+  font-display: swap;
+  unicode-range:
+    U+0030-0039,   /* 0–9 */
+    U+0024,        /* $ */
+    U+0025,        /* % */
+    U+002B,        /* + */
+    U+002C,        /* , */
+    U+002D,        /* - */
+    U+002E,        /* . */
+    U+20AC,        /* € */
+    U+00A3;        /* £ */
+}
+
+/* Tenada — all other text (letters, symbols, punctuation…) */
+@font-face {
+  font-family: 'PropEdge';
+  src: url('/fonts/Tenada.ttf') format('truetype');
+  font-display: swap;
+}
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -123,8 +147,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'PropEdge', sans-serif;
   }
   html {
-    @apply font-sans;
+    font-family: 'PropEdge', sans-serif;
   }
 }

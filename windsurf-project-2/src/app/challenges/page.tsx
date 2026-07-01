@@ -43,7 +43,7 @@ const STATUS_COLOR_MAP: Record<ChallengeStatus, string> = {
 
 export default function Challenges() {
   const router = useRouter();
-  const { challenges, getFundingRateStats, updateChallenge, convertChallengeToFunded, deleteChallenge, getAccountPnL } = useAccounts();
+  const { challenges, challengesLoading, getFundingRateStats, updateChallenge, convertChallengeToFunded, deleteChallenge, getAccountPnL } = useAccounts();
   const stats = getFundingRateStats();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -189,7 +189,7 @@ export default function Challenges() {
   const cardVariants = {
     hover: {
       y: -4,
-      transition: { duration: 0.3, ease: "easeOut" }
+      transition: { duration: 0.3, ease: "easeOut" as const }
     }
   };
 
@@ -208,7 +208,7 @@ export default function Challenges() {
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.4, ease: "easeOut" }
+      transition: { duration: 0.4, ease: "easeOut" as const }
     }
   };
 
@@ -568,7 +568,7 @@ export default function Challenges() {
                     borderRadius: '12px',
                     color: '#F8FAFC',
                   }}
-                  formatter={(value: number) => [`${value}%`, 'Progress']}
+                  formatter={((value: number) => [`${value}%`, 'Progress']) as never}
                 />
                 <Bar dataKey="progress" radius={[6, 6, 0, 0]} maxBarSize={64}>
                   {chartData.map((entry, index) => (
@@ -656,29 +656,35 @@ export default function Challenges() {
         </div>
       </motion.div>
 
-      {/* Empty State */}
+      {/* Loading / Empty State */}
       {filteredChallenges.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
-          style={{
-            background: glassmorphism.card.background,
-            backdropFilter: glassmorphism.card.backdropBlur,
-            border: '1px solid rgba(148, 163, 184, 0.08)',
-            borderRadius: borderRadius.xl,
-          }}
-        >
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ background: 'rgba(41,141,255, 0.1)' }}>
-            <Trophy className="w-7 h-7 text-[#298DFF]" />
+        challengesLoading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-6 h-6 border-2 border-[#298DFF] border-t-transparent rounded-full animate-spin" />
           </div>
-          <p className="text-[#F8FAFC] text-lg font-semibold">
-            {statusFilter === 'all' ? 'No challenges yet' : `No ${statusFilter} challenges`}
-          </p>
-          <p className="text-[#94A3B8] mt-1" style={{ fontSize: typography.fontSize.sm }}>
-            {statusFilter === 'all' ? 'Create your first challenge to get started' : 'Try a different filter'}
-          </p>
-        </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
+            style={{
+              background: glassmorphism.card.background,
+              backdropFilter: glassmorphism.card.backdropBlur,
+              border: '1px solid rgba(148, 163, 184, 0.08)',
+              borderRadius: borderRadius.xl,
+            }}
+          >
+            <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ background: 'rgba(41,141,255, 0.1)' }}>
+              <Trophy className="w-7 h-7 text-[#298DFF]" />
+            </div>
+            <p className="text-[#F8FAFC] text-lg font-semibold">
+              {statusFilter === 'all' ? 'No challenges yet' : `No ${statusFilter} challenges`}
+            </p>
+            <p className="text-[#94A3B8] mt-1" style={{ fontSize: typography.fontSize.sm }}>
+              {statusFilter === 'all' ? 'Create your first challenge to get started' : 'Try a different filter'}
+            </p>
+          </motion.div>
+        )
       )}
 
       {/* Challenge Cards */}

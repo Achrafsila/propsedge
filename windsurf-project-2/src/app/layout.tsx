@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
-import { TopNav } from "@/components/top-nav";
+import { AppShell } from "@/components/AppShell";
 import { AccountsProvider } from "@/context/AccountsContext";
 import { AdminProvider } from "@/context/AdminContext";
+import { AuthProvider } from "@/context/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,9 +17,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const modernRomance = localFont({
+  src: "./fonts/modern-romance.otf",
+  variable: "--font-modern-romance",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "PropsFirm Manager",
-  description: "Modern Prop Firm Management Dashboard",
+  title: "PropEdge | Professional Prop Trading Workspace",
+  description:
+    "Track every challenge, funded account and payout in one intelligent workspace designed for serious prop traders.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -29,30 +40,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${modernRomance.variable} h-full antialiased dark`}
     >
       <body className="min-h-full bg-black text-white">
-        <AccountsProvider>
-          <AdminProvider>
-            <div className="flex min-h-screen">
-              <Sidebar />
-              <div className="flex-1 flex flex-col">
-                <TopNav />
-                <main className="relative flex-1 p-6 overflow-auto">
-                  {/* Sui-style electric-blue top glow */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none fixed inset-x-0 top-0 h-[420px] z-0"
-                    style={{ background: 'radial-gradient(80% 60% at 50% -10%, rgba(41,141,255,0.18) 0%, rgba(41,141,255,0) 60%)' }}
-                  />
-                  <div className="relative z-10">
-                    {children}
-                  </div>
-                </main>
-              </div>
-            </div>
-          </AdminProvider>
-        </AccountsProvider>
+        <AuthProvider>
+          <AccountsProvider>
+            <AdminProvider>
+              <AppShell>{children}</AppShell>
+            </AdminProvider>
+          </AccountsProvider>
+        </AuthProvider>
       </body>
     </html>
   );

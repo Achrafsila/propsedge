@@ -11,7 +11,7 @@ import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
 
 export default function Journal() {
-  const { trades, deleteTrade, challenges, fundedAccounts } = useAccounts();
+  const { trades, tradesLoading, deleteTrade, challenges, fundedAccounts } = useAccounts();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const formatCurrency = (value: number) => {
@@ -329,7 +329,11 @@ export default function Journal() {
           }}
         >
           <h3 className="text-lg font-semibold text-[#F8FAFC] mb-4">Recent Trades</h3>
-          {trades.length === 0 ? (
+          {tradesLoading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-6 h-6 border-2 border-[#298DFF] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : trades.length === 0 ? (
             <div className="text-center py-8 text-[#94A3B8]">
               <p>No trades recorded yet. Click "Add Trade" to start tracking.</p>
             </div>

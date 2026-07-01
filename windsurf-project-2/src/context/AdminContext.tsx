@@ -37,7 +37,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       setChallengeTypes(JSON.parse(storedTypes));
     } else {
       // Initialize with presets
-      setChallengeTypes(propFirmPresets);
+      setChallengeTypes(propFirmPresets as unknown as ChallengeType[]);
       localStorage.setItem(CHALLENGE_TYPES_STORAGE_KEY, JSON.stringify(propFirmPresets));
     }
   }, []);
