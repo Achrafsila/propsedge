@@ -55,6 +55,26 @@ const fmt$ = (value: number) =>
 
 const fmtPct = (value: number) => `${value.toFixed(1)}%`;
 
+// Parses a "YYYY-MM-DD" date-only string as a LOCAL date instead of letting
+// `new Date(str)` treat it as UTC midnight. Mixing the two causes the
+// calendar/chart to land on the wrong day for any timezone that isn't UTC.
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y || 1970, (m || 1) - 1, d || 1);
+}
+
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+// maxDrawdown may be stored as a percentage (e.g. 10 = 10%) or, on some
+// accounts, as a raw dollar amount. No prop firm draws down more than 100% of
+// an account, so any value above 100 can only be a dollar figure.
+function resolveDrawdownDollars(maxDrawdown: number, accountSize: number): number {
+  const raw = Number(maxDrawdown) || 0;
+  return raw <= 100 ? (accountSize * raw) / 100 : raw;
+}
+
 const STATUS_BADGE: Record<string, string> = {
   active:   "bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.4)]",
   passed:   "bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.4)]",
@@ -89,7 +109,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function AccountAnalyticsView({
   account,
-  trades,
+  trades: rawTrades,
   payouts,
   accountType,
   allAccounts,
@@ -100,14 +120,58 @@ export function AccountAnalyticsView({
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
 
+  // ── Defensive trade filtering ───────────────────────────────────────────────
+  // Callers already filter by accountId/accountType, but this view re-verifies
+  // it and drops anything malformed (missing date/pnl) instead of letting one
+  // bad row silently break the calendar/equity curve/stats below.
+  const trades = useMemo(() => {
+    const clean: typeof rawTrades = [];
+    for (const t of rawTrades) {
+      if (t.accountId !== account.id || t.accountType !== accountType) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(
+            "[AccountAnalyticsView] Trade belongs to a different account — skipped",
+            t
+          );
+        }
+        continue;
+      }
+      if (!t.entryDate || typeof t.pnl !== "number" || !isFinite(t.pnl)) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(
+            "[AccountAnalyticsView] Trade missing accountId/accountType/date/pnl — skipped",
+            t
+          );
+        }
+        continue;
+      }
+      clean.push(t);
+    }
+    return clean;
+  }, [rawTrades, account.id, accountType]);
+
   // ── Derived account fields ─────────────────────────────────────────────────
   const startBalance =
     accountType === "funded" ? account.initialBalance : account.accountSize;
   const startDate =
     accountType === "funded" ? account.fundingDate : account.purchaseDate;
 
-  // maxDrawdown stored as percentage (e.g. 10 = 10%)
-  const maxDDDollars = (account.maxDrawdown / 100) * account.accountSize;
+  // ── Trade-level statistics ─────────────────────────────────────────────────
+  const totalPnL = trades.reduce((s, t) => s + t.pnl, 0);
+  const winningTrades = trades.filter((t) => t.pnl > 0);
+  const losingTrades  = trades.filter((t) => t.pnl < 0);
+  const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
+  const avgWin  = winningTrades.length > 0 ? winningTrades.reduce((s, t) => s + t.pnl, 0) / winningTrades.length : 0;
+  const avgLoss = losingTrades.length  > 0 ? losingTrades.reduce((s, t) => s + t.pnl, 0) / losingTrades.length : 0;
+  const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
+
+  // ── Drawdown (dollar figure first, percentages derived from it) ────────────
+  const maxDDDollars = resolveDrawdownDollars(account.maxDrawdown, account.accountSize);
+  const maxDDPercent = account.accountSize > 0 ? (maxDDDollars / account.accountSize) * 100 : 0;
+  const lossAmount = Math.max(0, -totalPnL);
+  const remainingDDDollars = Math.max(0, maxDDDollars - lossAmount);
+  const remainingDDPercent = account.accountSize > 0 ? (remainingDDDollars / account.accountSize) * 100 : 0;
+  const usedDDPercent = Math.max(0, maxDDPercent - remainingDDPercent);
   const drawdownFloor = startBalance - maxDDDollars; // balance at which account breaches
   const targetBalance =
     accountType === "challenge" && account.profitTarget > 0
@@ -130,7 +194,7 @@ export function AccountAnalyticsView({
   // ── Equity curve (starts at opening balance) ───────────────────────────────
   const equityCurveData = useMemo(() => {
     const sorted = Object.entries(dailyPnL).sort(
-      ([a], [b]) => new Date(a).getTime() - new Date(b).getTime()
+      ([a], [b]) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime()
     );
     const points: { date: string; balance: number }[] = [
       { date: startDate ?? "Start", balance: startBalance },
@@ -143,14 +207,15 @@ export function AccountAnalyticsView({
     return points;
   }, [dailyPnL, startBalance, startDate]);
 
-  // ── Trade-level statistics ─────────────────────────────────────────────────
-  const totalPnL = trades.reduce((s, t) => s + t.pnl, 0);
-  const winningTrades = trades.filter((t) => t.pnl > 0);
-  const losingTrades  = trades.filter((t) => t.pnl < 0);
-  const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
-  const avgWin  = winningTrades.length > 0 ? winningTrades.reduce((s, t) => s + t.pnl, 0) / winningTrades.length : 0;
-  const avgLoss = losingTrades.length  > 0 ? losingTrades.reduce((s, t) => s + t.pnl, 0) / losingTrades.length : 0;
-  const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
+  // ── Y-axis domain: tight around actual equity range, not forced to 0 ──────
+  const yDomain = useMemo((): [number, number] => {
+    const values = equityCurveData.map((p) => p.balance);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = Math.max(max - min, 1);
+    const padding = Math.max(range * 0.15, Math.abs(startBalance) * 0.01, 10);
+    return [min - padding, max + padding];
+  }, [equityCurveData, startBalance]);
 
   // ── Day-level statistics ───────────────────────────────────────────────────
   const dailyEntries = Object.entries(dailyPnL) as [string, { pnl: number; trades: number }][];
@@ -185,7 +250,9 @@ export function AccountAnalyticsView({
   }, [currentMonth]);
 
   const getDayData = (date: Date) => {
-    const key = date.toISOString().split("T")[0];
+    // Use local date components (not toISOString, which converts to UTC and
+    // can shift the key to the wrong calendar day depending on timezone).
+    const key = toDateKey(date);
     return dailyPnL[key] ?? null;
   };
 
@@ -361,12 +428,8 @@ export function AccountAnalyticsView({
           )}
           <DataField
             label="Drawdown Remaining"
-            value={`${fmtPct(account.remainingDrawdown ?? account.maxDrawdown)} · ${fmt$(maxDDDollars * ((account.remainingDrawdown ?? account.maxDrawdown) / account.maxDrawdown || 1))}`}
-            colored={
-              (account.remainingDrawdown ?? account.maxDrawdown) < account.maxDrawdown * 0.3
-                ? "#EF4444"
-                : "#94A3B8"
-            }
+            value={`${fmtPct(remainingDDPercent)} · ${fmt$(remainingDDDollars)}`}
+            colored={remainingDDPercent < maxDDPercent * 0.3 ? "#EF4444" : "#94A3B8"}
           />
         </div>
       </div>
@@ -414,9 +477,7 @@ export function AccountAnalyticsView({
             )}
             <div className="text-right">
               <p className="text-[#64748B] text-xs mb-0.5">Drawdown Used</p>
-              <p className="font-bold text-[#EF4444]">
-                {fmtPct(account.maxDrawdown - (account.remainingDrawdown ?? account.maxDrawdown))}
-              </p>
+              <p className="font-bold text-[#EF4444]">{fmtPct(usedDDPercent)}</p>
             </div>
           </div>
         </div>
@@ -449,7 +510,7 @@ export function AccountAnalyticsView({
                 tickFormatter={(v) => {
                   if (v === "Start" || v === startDate) return "Start";
                   try {
-                    return new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    return parseLocalDate(v).toLocaleDateString("en-US", { month: "short", day: "numeric" });
                   } catch { return v; }
                 }}
               />
@@ -460,6 +521,8 @@ export function AccountAnalyticsView({
                 axisLine={false}
                 tickFormatter={(v) => fmt$(v)}
                 width={72}
+                domain={yDomain}
+                allowDataOverflow
               />
               <Tooltip content={<ChartTooltip />} />
               {/* Start line */}
