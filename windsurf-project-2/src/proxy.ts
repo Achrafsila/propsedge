@@ -10,7 +10,7 @@ const PUBLIC_ROUTES = new Set([
   "/auth/callback",
 ]);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_ROUTES.has(pathname) || pathname === "/";
 
