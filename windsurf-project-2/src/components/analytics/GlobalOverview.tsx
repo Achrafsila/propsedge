@@ -3,9 +3,22 @@
 import { motion } from "framer-motion";
 import { Activity, Clock, Layers, Repeat } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { GlobalTradeStats } from "@/lib/analytics/globalAnalytics";
+import { DNAInsight, SessionKey, TradingConsistencyBreakdown } from "@/lib/analytics/traderDNA";
 
 const cardVariants = { hover: { y: -4, transition: { duration: 0.3 } } };
+
+// Below this many trades/days, an insight's confidence is under ~0.2 (see
+// computeConfidence in traderDNA.ts) — too thin a sample to show a specific
+// value without it reading as more reliable than it is.
+const MIN_SAMPLE_SIZE_FOR_DISPLAY = 5;
+
+function hasEnoughData(sampleSize: number): boolean {
+  return sampleSize >= MIN_SAMPLE_SIZE_FOR_DISPLAY;
+}
+
+function confidenceLabel(confidence: number): string {
+  return `${Math.round(confidence * 100)}% confidence`;
+}
 
 function KpiCard({
   icon: Icon,
@@ -70,36 +83,71 @@ function KpiCard({
   );
 }
 
-export function GlobalOverview({ stats: _stats }: { stats: GlobalTradeStats }) {
+export function GlobalOverview({
+  tradingFrequency,
+  tradingConsistency,
+  preferredSession,
+  preferredInstrument,
+}: {
+  tradingFrequency: DNAInsight<number>;
+  tradingConsistency: DNAInsight<TradingConsistencyBreakdown>;
+  preferredSession: DNAInsight<SessionKey | null>;
+  preferredInstrument: DNAInsight<string | null>;
+}) {
+  const frequencyReady = hasEnoughData(tradingFrequency.sampleSize);
+  const consistencyReady = hasEnoughData(tradingConsistency.sampleSize);
+  const sessionReady = hasEnoughData(preferredSession.sampleSize) && !!preferredSession.value;
+  const instrumentReady = hasEnoughData(preferredInstrument.sampleSize) && !!preferredInstrument.value;
+
+  const consistencyPct = consistencyReady
+    ? Math.round((tradingConsistency.value.profitableDays / tradingConsistency.sampleSize) * 100)
+    : 0;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
       <KpiCard
         icon={Activity}
         label="Trading Frequency"
-        value="—"
+        value={frequencyReady ? `${tradingFrequency.value.toFixed(1)}/day` : "Not enough data"}
         color="#298DFF"
-        sub="Coming soon"
+        sub={
+          frequencyReady
+            ? `${tradingFrequency.sampleSize} active days · ${confidenceLabel(tradingFrequency.confidence)}`
+            : "Need more closed trades"
+        }
       />
       <KpiCard
         icon={Repeat}
         label="Consistency"
-        value="—"
+        value={consistencyReady ? `${consistencyPct}%` : "Not enough data"}
         color="#8B5CF6"
-        sub="Coming soon"
+        sub={
+          consistencyReady
+            ? `${tradingConsistency.value.profitableDays} of ${tradingConsistency.sampleSize} days · ${confidenceLabel(tradingConsistency.confidence)}`
+            : "Need more closed trades"
+        }
       />
       <KpiCard
         icon={Clock}
         label="Preferred Session"
-        value="—"
+        value={sessionReady ? (preferredSession.value as string) : "Not enough data"}
         color="#10B981"
-        sub="Coming soon"
+        sub={
+          sessionReady
+            ? `${preferredSession.sampleSize} trades · ${confidenceLabel(preferredSession.confidence)}`
+            : "Need more closed trades"
+        }
       />
       <KpiCard
         icon={Layers}
         label="Primary Instrument"
-        value="—"
+        value={instrumentReady ? (preferredInstrument.value as string) : "Not enough data"}
         color="#D4AF37"
-        sub="Coming soon"
+        sub={
+          instrumentReady
+            ? `${preferredInstrument.sampleSize} trades · ${confidenceLabel(preferredInstrument.confidence)}`
+            : "Need more closed trades"
+        }
       />
     </div>
   );

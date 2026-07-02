@@ -19,6 +19,12 @@ import {
   performanceBySession,
   tradeDistribution,
 } from "@/lib/analytics/globalAnalytics";
+import {
+  getTradingFrequency,
+  getTradingConsistency,
+  getPreferredSession,
+  getPreferredInstrument,
+} from "@/lib/analytics/traderDNA";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { GlobalEquityCurve } from "@/components/analytics/GlobalEquityCurve";
@@ -53,6 +59,15 @@ export default function GlobalAnalyticsPage() {
   );
 
   const stats = useMemo(() => globalTradeStats(filteredTrades), [filteredTrades]);
+
+  // ── Trader DNA: behavioural stats only, derived from the same filtered
+  // trade set as the rest of this page. See src/lib/analytics/traderDNA.ts
+  // for the "no pnl-ranking, no business metrics" boundary.
+  const tradingFrequency = useMemo(() => getTradingFrequency(filteredTrades), [filteredTrades]);
+  const tradingConsistency = useMemo(() => getTradingConsistency(filteredTrades), [filteredTrades]);
+  const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
+  const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
+
   const equityPoints = useMemo(() => globalEquityCurve(filteredTrades), [filteredTrades]);
   const dailyPnL = useMemo(() => calendarData(filteredTrades), [filteredTrades]);
   const byAccount = useMemo(() => performanceByAccount(filteredTrades, accountIndex), [filteredTrades, accountIndex]);
@@ -162,7 +177,12 @@ export default function GlobalAnalyticsPage() {
       )}
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible">
-        <GlobalOverview stats={stats} />
+        <GlobalOverview
+          tradingFrequency={tradingFrequency}
+          tradingConsistency={tradingConsistency}
+          preferredSession={preferredSession}
+          preferredInstrument={preferredInstrument}
+        />
       </motion.div>
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
