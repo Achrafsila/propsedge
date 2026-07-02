@@ -52,6 +52,12 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     ? challenges.filter((c) => c.status === "active")
     : fundedAccounts.filter((a) => a.status === "active");
 
+  // accountId alone isn't enough — it can be a stale id (e.g. an account
+  // deleted after being selected) that no longer matches anything in
+  // availableAccounts. Importing against that would create exactly the
+  // "linked to missing account" trades Global Analytics has to warn about.
+  const isDestinationValid = availableAccounts.some((a) => a.id === accountId);
+
   const resetState = () => {
     setAccountType("challenge");
     setAccountId("");
@@ -115,7 +121,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   };
 
   const handleImport = async () => {
-    if (!parsedTrades || parsedTrades.length === 0 || !accountId) return;
+    if (!parsedTrades || parsedTrades.length === 0 || !isDestinationValid) return;
     setIsImporting(true);
     try {
       // Promise.allSettled so a single failed insert never stops the rest
@@ -319,7 +325,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
           </Button>
           <Button
             type="button"
-            disabled={!parsedTrades || parsedTrades.length === 0 || !accountId || isImporting}
+            disabled={!parsedTrades || parsedTrades.length === 0 || !isDestinationValid || isImporting}
             onClick={handleImport}
             className="bg-gradient-to-r from-[#2F80ED] to-[#1E6BC7] hover:shadow-lg hover:shadow-[#2F80ED]/20 hover:scale-105 transition-all duration-200 text-white rounded-xl disabled:opacity-50 disabled:hover:scale-100"
           >

@@ -82,15 +82,36 @@ export function buildAccountIndex(
 }
 
 export function lookupAccount(index: AccountIndex, trade: Trade): AccountIndexEntry | undefined {
+  if (!trade.accountId || !trade.accountType) return undefined;
   return index.get(accountKey(trade.accountType, trade.accountId));
+}
+
+// A trade whose accountId/accountType no longer resolves to a live challenge
+// or funded account — typically because that account was deleted after the
+// trade was recorded. These still happened and still count toward overall
+// P&L, but they must never be grouped into a fake "Unknown Account" bucket.
+export function isTraceableTrade(trade: Trade, index: AccountIndex): boolean {
+  return !!lookupAccount(index, trade);
+}
+
+export function getOrphanedTrades(trades: Trade[], index: AccountIndex): Trade[] {
+  return trades.filter((t) => !isTraceableTrade(t, index));
 }
 
 export function getSessionKey(trade: Trade): SessionKey {
   return (trade.session as SessionKey) ?? "No Session";
 }
 
+function hasValidPnL(trade: Trade): boolean {
+  return typeof trade.pnl === "number" && isFinite(trade.pnl);
+}
+
 // ── Filtering ─────────────────────────────────────────────────────────────
-// Every trade is evaluated independently — no root/child collapsing.
+// Every trade is evaluated independently — no root/child collapsing. Trades
+// with no date or a non-finite P&L are dropped outright (malformed rows);
+// trades whose account was later deleted (see isTraceableTrade) are kept
+// here — they still count toward overall stats/equity/calendar — and are
+// only excluded from the per-account/per-firm breakdowns further below.
 
 export function filterGlobalTrades(
   trades: Trade[],
@@ -98,6 +119,7 @@ export function filterGlobalTrades(
   index: AccountIndex
 ): Trade[] {
   return trades.filter((t) => {
+    if (!t.entryDate || !hasValidPnL(t)) return false;
     if (filters.scope !== "all" && t.accountType !== filters.scope) return false;
     if (filters.accountId && t.accountId !== filters.accountId) return false;
     if (filters.dateFrom && t.entryDate < filters.dateFrom) return false;
@@ -295,20 +317,27 @@ function groupBy<K>(trades: Trade[], keyFn: (t: Trade) => K): Map<K, Trade[]> {
 }
 
 export function performanceByAccount(trades: Trade[], index: AccountIndex): BreakdownEntry[] {
+  // Trades whose account no longer exists are excluded here (see the
+  // "missing accounts" warning card instead of a fake "Unknown Account" bar).
   // Grouped internally by the composite (type, id) key so a challenge and a
   // funded account can never collide, but the entry's own `key` is the raw
   // accountId — that's what GlobalFilters.accountId expects, so clicking a
   // bar can set the filter directly without re-deriving accountType.
-  const groups = groupBy(trades, (t) => accountKey(t.accountType, t.accountId));
+  const traceable = trades.filter((t) => isTraceableTrade(t, index));
+  const groups = groupBy(traceable, (t) => accountKey(t.accountType, t.accountId));
   const entries = Array.from(groups.entries()).map(([mapKey, groupTrades]) => {
     const entry = index.get(mapKey);
-    return summarizeGroup(entry?.accountId ?? mapKey, entry?.accountName ?? "Unknown Account", groupTrades);
+    return summarizeGroup(entry?.accountId ?? mapKey, entry?.accountName ?? mapKey, groupTrades);
   });
   return entries.sort((a, b) => b.pnl - a.pnl);
 }
 
 export function performanceByPropFirm(trades: Trade[], index: AccountIndex): BreakdownEntry[] {
-  const groups = groupBy(trades, (t) => lookupAccount(index, t)?.propFirmName ?? "Unknown Firm");
+  // Same reasoning as performanceByAccount — a trade with no resolvable
+  // account has no prop firm either, so it's excluded rather than bucketed
+  // under a fake "Unknown Firm" category.
+  const traceable = trades.filter((t) => isTraceableTrade(t, index));
+  const groups = groupBy(traceable, (t) => lookupAccount(index, t)!.propFirmName);
   const entries = Array.from(groups.entries()).map(([key, groupTrades]) =>
     summarizeGroup(key, key, groupTrades)
   );

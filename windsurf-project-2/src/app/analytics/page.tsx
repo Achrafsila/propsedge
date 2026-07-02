@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { typography, gradientText } from "@/design-system";
@@ -9,6 +9,7 @@ import {
   GlobalFilters,
   buildAccountIndex,
   filterGlobalTrades,
+  getOrphanedTrades,
   globalTradeStats,
   globalEquityCurve,
   calendarData,
@@ -24,6 +25,7 @@ import { GlobalEquityCurve } from "@/components/analytics/GlobalEquityCurve";
 import { GlobalCalendar } from "@/components/analytics/GlobalCalendar";
 import { PerformanceBreakdown } from "@/components/analytics/PerformanceBreakdown";
 import { TradeDistribution } from "@/components/analytics/TradeDistribution";
+import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -58,6 +60,23 @@ export default function GlobalAnalyticsPage() {
   const byInstrument = useMemo(() => performanceByInstrument(filteredTrades), [filteredTrades]);
   const bySession = useMemo(() => performanceBySession(filteredTrades), [filteredTrades]);
   const distribution = useMemo(() => tradeDistribution(filteredTrades), [filteredTrades]);
+
+  // Trades whose accountId/accountType no longer resolve to a live account
+  // (typically because that account was deleted). Still counted in the
+  // stats/equity/calendar above; only excluded from the account/firm charts.
+  const orphanedTrades = useMemo(
+    () => getOrphanedTrades(filteredTrades, accountIndex),
+    [filteredTrades, accountIndex]
+  );
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production" && orphanedTrades.length > 0) {
+      console.warn(
+        "[GlobalAnalytics] Trades linked to missing accounts:",
+        orphanedTrades.map((t) => t.id)
+      );
+    }
+  }, [orphanedTrades]);
 
   // ── Filter option lists ─────────────────────────────────────────────────
   // Prop firm / account cascade off scope so the pickers never show an
@@ -135,6 +154,12 @@ export default function GlobalAnalyticsPage() {
           The performance of the trader — every trade, across every account.
         </p>
       </motion.div>
+
+      {orphanedTrades.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <MissingAccountWarning count={orphanedTrades.length} />
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible">
         <GlobalOverview stats={stats} />
