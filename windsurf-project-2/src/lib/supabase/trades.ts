@@ -110,3 +110,35 @@ export async function deleteTradeDb(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+// Deletes every trade linked to a given account. Used to clear an account's
+// trades before the account itself is deleted (see AccountsContext), so no
+// trade is ever left pointing at an account that no longer exists.
+export async function deleteTradesByAccountDb(
+  accountId: string,
+  accountType: "challenge" | "funded"
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("trades")
+    .delete()
+    .eq("account_id", accountId)
+    .eq("account_type", accountType);
+
+  if (error) throw error;
+}
+
+// Bulk-deletes trades by id. Used for the orphan-trade cleanup on app
+// initialization (trades whose account was deleted before this cascade
+// existed) — an arbitrary set of ids, potentially spanning several
+// now-missing accounts.
+export async function deleteTradesByIdsDb(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("trades")
+    .delete()
+    .in("id", ids);
+
+  if (error) throw error;
+}

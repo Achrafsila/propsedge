@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Challenge,
@@ -16,6 +16,7 @@ import {
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
+import { buildAccountIndex, getOrphanedTrades } from "@/lib/analytics/globalAnalytics";
 import {
   fetchChallenges,
   insertChallenge,
@@ -32,6 +33,8 @@ import {
   fetchTrades,
   insertTrade,
   deleteTradeDb,
+  deleteTradesByAccountDb,
+  deleteTradesByIdsDb,
 } from "@/lib/supabase/trades";
 import {
   fetchPayouts,
@@ -154,6 +157,39 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       .finally(() => setPayoutsLoading(false));
   }, [user?.id, authLoading]);
 
+  // ── Orphan trade auto-cleanup ──────────────────────────────────────────────
+  // Runs once per login, after challenges/funded accounts/trades have all
+  // loaded. If any trade's accountId/accountType no longer resolves to a
+  // live account (e.g. left over from an account deleted before the
+  // delete-trades-first cascade below existed), delete it automatically —
+  // no manual Supabase SQL required.
+  const orphanCleanupRanForUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (challengesLoading || fundedAccountsLoading || tradesLoading) return;
+    if (orphanCleanupRanForUserRef.current === user.id) return;
+    orphanCleanupRanForUserRef.current = user.id;
+
+    const accountIndex = buildAccountIndex(challenges, fundedAccounts);
+    const orphans = getOrphanedTrades(trades, accountIndex);
+    if (orphans.length === 0) return;
+
+    const orphanIds = orphans.map((t) => t.id);
+    deleteTradesByIdsDb(orphanIds)
+      .then(() => {
+        setTrades((prev) => prev.filter((t) => !orphanIds.includes(t.id)));
+        console.warn(
+          `[AccountsContext] Auto-cleaned ${orphanIds.length} orphaned trade(s) linked to deleted accounts.`
+        );
+      })
+      .catch((err) => {
+        console.error("Failed to auto-clean orphaned trades:", err);
+        // Allow a retry on the next load instead of silently giving up.
+        orphanCleanupRanForUserRef.current = null;
+      });
+  }, [user, authLoading, challengesLoading, fundedAccountsLoading, tradesLoading, challenges, fundedAccounts, trades]);
+
   // ── Challenge CRUD (Supabase-backed) ──────────────────────────────────────
 
   const addChallenge = (challenge: Omit<Challenge, "id">) => {
@@ -183,11 +219,26 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteChallenge = (id: string) => {
-    // Optimistic local removal
+    const linkedTradeIds = trades
+      .filter((t) => t.accountId === id && t.accountType === "challenge")
+      .map((t) => t.id);
+
+    // Optimistic local removal — trades first, then the account. Every
+    // context consumer (Trader DNA, Dashboard) reads `trades`/`challenges`
+    // straight from this context, so clearing both here refreshes them
+    // immediately with no separate refetch needed.
+    if (linkedTradeIds.length > 0) {
+      setTrades((prev) => prev.filter((t) => !linkedTradeIds.includes(t.id)));
+    }
     setChallenges((prev) => prev.filter((c) => c.id !== id));
-    deleteChallengeDb(id).catch((err) =>
-      console.error("Failed to delete challenge:", err)
-    );
+
+    // Delete trades from the DB before the account — account_id has no FK
+    // (it can point at either challenge_accounts or funded_accounts), so
+    // this ordering, plus the DB trigger in migration 007, is what
+    // guarantees no orphan trade is ever left behind.
+    (linkedTradeIds.length > 0 ? deleteTradesByAccountDb(id, "challenge") : Promise.resolve())
+      .then(() => deleteChallengeDb(id))
+      .catch((err) => console.error("Failed to delete challenge:", err));
   };
 
   // ── Funded Account CRUD (Supabase-backed) ────────────────────────────────
@@ -218,10 +269,20 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteFundedAccount = (id: string) => {
+    const linkedTradeIds = trades
+      .filter((t) => t.accountId === id && t.accountType === "funded")
+      .map((t) => t.id);
+
+    // Optimistic local removal — trades first, then the account (see
+    // deleteChallenge above for why).
+    if (linkedTradeIds.length > 0) {
+      setTrades((prev) => prev.filter((t) => !linkedTradeIds.includes(t.id)));
+    }
     setFundedAccounts((prev) => prev.filter((a) => a.id !== id));
-    deleteFundedAccountDb(id).catch((err) =>
-      console.error("Failed to delete funded account:", err)
-    );
+
+    (linkedTradeIds.length > 0 ? deleteTradesByAccountDb(id, "funded") : Promise.resolve())
+      .then(() => deleteFundedAccountDb(id))
+      .catch((err) => console.error("Failed to delete funded account:", err));
   };
 
   const addPayout = (payout: Omit<Payout, "id">) => {
