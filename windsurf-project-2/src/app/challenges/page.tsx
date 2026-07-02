@@ -40,11 +40,20 @@ const STATUS_COLOR_MAP: Record<ChallengeStatus, string> = {
   passed: "#10B981",
   failed: "#EF4444",
   refunded: "#F59E0B",
+  step1_completed: "#A855F7",
+};
+
+const STATUS_LABEL_MAP: Record<ChallengeStatus, string> = {
+  active: "active",
+  passed: "passed",
+  failed: "failed",
+  refunded: "refunded",
+  step1_completed: "Step 1 Done",
 };
 
 export default function Challenges() {
   const router = useRouter();
-  const { challenges, challengesLoading, trades, getFundingRateStats, updateChallenge, convertChallengeToFunded, deleteChallenge } = useAccounts();
+  const { challenges, challengesLoading, trades, getFundingRateStats, addChallenge, updateChallenge, convertChallengeToFunded, deleteChallenge } = useAccounts();
   const stats = getFundingRateStats();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -57,6 +66,7 @@ export default function Challenges() {
       passed: 0,
       failed: 0,
       refunded: 0,
+      step1_completed: 0,
     };
     challenges.forEach((c) => {
       counts[c.status] += 1;
@@ -78,6 +88,7 @@ export default function Challenges() {
     { value: "passed", label: "Passed", color: STATUS_COLOR_MAP.passed },
     { value: "failed", label: "Failed", color: STATUS_COLOR_MAP.failed },
     { value: "refunded", label: "Refunded", color: STATUS_COLOR_MAP.refunded },
+    { value: "step1_completed", label: "Step 1 Done", color: STATUS_COLOR_MAP.step1_completed },
   ];
 
   const formatCurrency = (value: number) => {
@@ -99,9 +110,12 @@ export default function Challenges() {
       case 'passed': return 'bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.4)] font-semibold rounded-full';
       case 'failed': return 'bg-[rgba(239,68,68,0.15)] text-[#EF4444] border border-[rgba(239,68,68,0.4)] font-semibold rounded-full';
       case 'refunded': return 'bg-[rgba(245,158,11,0.15)] text-[#F59E0B] border border-[rgba(245,158,11,0.4)] font-semibold rounded-full';
+      case 'step1_completed': return 'bg-[rgba(168,85,247,0.15)] text-[#A855F7] border border-[rgba(168,85,247,0.4)] font-semibold rounded-full';
       default: return 'bg-[rgba(148,163,184,0.15)] text-[#94A3B8] border border-[rgba(148,163,184,0.4)] font-semibold rounded-full';
     }
   };
+
+  const getStatusLabel = (status: ChallengeStatus) => STATUS_LABEL_MAP[status] ?? status;
 
   const getStatusBgColor = (status: ChallengeStatus) => {
     switch (status) {
@@ -109,6 +123,7 @@ export default function Challenges() {
       case 'passed': return 'bg-[rgba(16,185,129,0.1)]';
       case 'failed': return 'bg-[rgba(239,68,68,0.1)]';
       case 'refunded': return 'bg-[rgba(245,158,11,0.1)]';
+      case 'step1_completed': return 'bg-[rgba(168,85,247,0.1)]';
       default: return 'bg-[rgba(148,163,184,0.1)]';
     }
   };
@@ -119,6 +134,7 @@ export default function Challenges() {
       case 'passed': return 'text-[#10B981]';
       case 'failed': return 'text-[#EF4444]';
       case 'refunded': return 'text-[#F59E0B]';
+      case 'step1_completed': return 'text-[#A855F7]';
       default: return 'text-[#94A3B8]';
     }
   };
@@ -166,12 +182,40 @@ export default function Challenges() {
     c.status === "passed" &&
     !c.convertedToFunded;
 
+  // Step 1 keeps its own id, trades, and history untouched — it's marked
+  // done and a brand-new linked Challenge is created for Step 2 so the two
+  // steps never share trades/journal/analytics.
   const handleCompleteStep1 = (c: Challenge) => {
-    updateChallenge(c.id, {
+    updateChallenge(c.id, { status: "step1_completed" });
+    addChallenge({
+      propFirmName: c.propFirmName,
+      accountName: `${c.accountName} - Step 2`,
+      accountSize: c.accountSize,
+      challengeType: c.challengeType,
+      challengeKind: "2-step",
       challengeStep: "2",
-      currentProfit: 0,
+      step1ProfitTarget: c.step1ProfitTarget,
+      step2ProfitTarget: c.step2ProfitTarget,
+      purchaseCost: 0,
+      purchaseDate: new Date().toISOString().split("T")[0],
       profitTarget: c.step2ProfitTarget ?? c.profitTarget,
+      currentProfit: 0,
+      maxDrawdown: c.maxDrawdown,
+      remainingDrawdown: c.maxDrawdown,
       status: "active",
+      parentChallengeId: c.id,
+      presetId: c.presetId,
+      drawdownMode: c.drawdownMode,
+      dailyDrawdown: c.dailyDrawdown,
+      maxContracts: c.maxContracts,
+      minTradingDays: c.minTradingDays,
+      consistencyRule: c.consistencyRule,
+      newsTrading: c.newsTrading,
+      payoutDays: c.payoutDays,
+      minPayout: c.minPayout,
+      maxPayoutRequest: c.maxPayoutRequest,
+      payoutSplit: c.payoutSplit,
+      notes: c.notes,
     });
   };
 
@@ -727,7 +771,7 @@ export default function Challenges() {
               {/* Status Badge */}
               <div className="absolute top-4 right-4">
                 <Badge variant="default" className={getStatusColor(challenge.status)}>
-                  {challenge.status}
+                  {getStatusLabel(challenge.status)}
                 </Badge>
               </div>
 
@@ -828,7 +872,7 @@ export default function Challenges() {
                   <option value="failed">Failed</option>
                   <option value="refunded">Refunded</option>
                 </select>
-                {is2Step(challenge) && getCurrentStep(challenge) === '1' && !challenge.convertedToFunded && (
+                {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status !== 'step1_completed' && !challenge.convertedToFunded && (
                   <Button
                     onClick={() => handleCompleteStep1(challenge)}
                     className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl text-sm"
@@ -927,7 +971,7 @@ export default function Challenges() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Badge variant="default" className={getStatusColor(challenge.status)}>
-                          {challenge.status}
+                          {getStatusLabel(challenge.status)}
                         </Badge>
                         {is2Step(challenge) && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[rgba(41,141,255,0.12)] text-[#298DFF] border border-[rgba(41,141,255,0.3)]">
@@ -947,7 +991,7 @@ export default function Challenges() {
                         >
                           <BarChart3 className="w-4 h-4" />
                         </Button>
-                        {is2Step(challenge) && getCurrentStep(challenge) === '1' && !challenge.convertedToFunded && (
+                        {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status !== 'step1_completed' && !challenge.convertedToFunded && (
                           <Button
                             variant="ghost"
                             size="icon"

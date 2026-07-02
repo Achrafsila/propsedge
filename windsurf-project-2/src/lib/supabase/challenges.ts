@@ -23,6 +23,7 @@ interface ChallengeRow {
   status: string;
   converted_to_funded: boolean;
   funded_account_id: string | null;
+  parent_challenge_id: string | null;
   preset_id: string | null;
   drawdown_mode: string | null;
   daily_drawdown: number | null;
@@ -61,6 +62,7 @@ function rowToChallenge(row: ChallengeRow): Challenge {
     status:             row.status as ChallengeStatus,
     convertedToFunded:  row.converted_to_funded,
     fundedAccountId:    row.funded_account_id ?? undefined,
+    parentChallengeId:  row.parent_challenge_id ?? undefined,
     presetId:           row.preset_id ?? undefined,
     drawdownMode:       (row.drawdown_mode as Challenge["drawdownMode"]) ?? undefined,
     dailyDrawdown:      row.daily_drawdown,
@@ -98,6 +100,7 @@ function challengeToInsertRow(challenge: Omit<Challenge, "id">, userId: string) 
     status:              challenge.status,
     converted_to_funded: challenge.convertedToFunded ?? false,
     funded_account_id:   challenge.fundedAccountId ?? null,
+    parent_challenge_id: challenge.parentChallengeId ?? null,
     preset_id:           challenge.presetId ?? null,
     drawdown_mode:       challenge.drawdownMode ?? null,
     daily_drawdown:      challenge.dailyDrawdown ?? null,
@@ -135,6 +138,7 @@ function challengeToUpdateRow(updates: Partial<Challenge>): Record<string, unkno
   if (updates.status            !== undefined) row.status               = updates.status;
   if (updates.convertedToFunded !== undefined) row.converted_to_funded  = updates.convertedToFunded;
   if (updates.fundedAccountId   !== undefined) row.funded_account_id    = updates.fundedAccountId ?? null;
+  if (updates.parentChallengeId !== undefined) row.parent_challenge_id  = updates.parentChallengeId ?? null;
   if (updates.presetId          !== undefined) row.preset_id            = updates.presetId ?? null;
   if (updates.drawdownMode      !== undefined) row.drawdown_mode        = updates.drawdownMode ?? null;
   if (updates.dailyDrawdown     !== undefined) row.daily_drawdown       = updates.dailyDrawdown ?? null;

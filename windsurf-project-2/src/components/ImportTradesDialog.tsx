@@ -18,11 +18,13 @@ import { parseTradeFile, ParsedTrade, SkippedRow } from "@/lib/importTrades";
 interface ImportTradesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultAccountType?: "challenge" | "funded";
+  defaultAccountId?: string;
 }
 
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv"];
 
-export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogProps) {
+export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: ImportTradesDialogProps) {
   const { addTrade, challenges, fundedAccounts } = useAccounts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,6 +36,17 @@ export function ImportTradesDialog({ open, onOpenChange }: ImportTradesDialogPro
   const [isImporting, setIsImporting] = useState(false);
   const [parsedTrades, setParsedTrades] = useState<ParsedTrade[] | null>(null);
   const [skippedRows, setSkippedRows] = useState<SkippedRow[]>([]);
+
+  // Default to the account selected on the Trade Journal page whenever the
+  // dialog opens, so imported trades land on the account being viewed.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setAccountType(defaultAccountType ?? "challenge");
+      setAccountId(defaultAccountId ?? "");
+    }
+  }
 
   const availableAccounts = accountType === "challenge"
     ? challenges.filter((c) => c.status === "active")

@@ -18,9 +18,11 @@ import { Upload, Clock } from "lucide-react";
 interface AddTradeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultAccountType?: "challenge" | "funded";
+  defaultAccountId?: string;
 }
 
-export function AddTradeDialog({ open, onOpenChange }: AddTradeDialogProps) {
+export function AddTradeDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: AddTradeDialogProps) {
   const { addTrade, challenges, fundedAccounts } = useAccounts();
   const [formData, setFormData] = useState({
     accountId: "",
@@ -34,6 +36,21 @@ export function AddTradeDialog({ open, onOpenChange }: AddTradeDialogProps) {
     notes: "",
     picture: null as File | null,
   });
+
+  // Default to the account selected on the Trade Journal page whenever the
+  // dialog opens, so a manually added trade lands on the account the user
+  // is currently viewing.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setFormData((prev) => ({
+        ...prev,
+        accountType: defaultAccountType ?? prev.accountType,
+        accountId: defaultAccountId ?? "",
+      }));
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

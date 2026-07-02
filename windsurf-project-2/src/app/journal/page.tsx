@@ -15,6 +15,14 @@ export default function Journal() {
   const { trades, tradesLoading, deleteTrade, challenges, fundedAccounts } = useAccounts();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [selectedAccountType, setSelectedAccountType] = useState<"challenge" | "funded">("challenge");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+
+  const selectableAccounts = selectedAccountType === "challenge" ? challenges : fundedAccounts;
+  const hasSelectedAccount = selectedAccountId !== "";
+  const accountTrades = hasSelectedAccount
+    ? trades.filter((t) => t.accountId === selectedAccountId && t.accountType === selectedAccountType)
+    : [];
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -25,11 +33,11 @@ export default function Journal() {
     }).format(value);
   };
 
-  const totalTrades = trades.length;
-  const winningTrades = trades.filter(t => t.status === 'win').length;
-  const losingTrades = trades.filter(t => t.status === 'loss').length;
+  const totalTrades = accountTrades.length;
+  const winningTrades = accountTrades.filter(t => t.status === 'win').length;
+  const losingTrades = accountTrades.filter(t => t.status === 'loss').length;
   const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
-  const totalPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
+  const totalPnL = accountTrades.reduce((sum, t) => sum + t.pnl, 0);
   const avgTrade = totalTrades > 0 ? totalPnL / totalTrades : 0;
 
   const getAccountName = (accountId: string, accountType: "challenge" | "funded") => {
@@ -102,16 +110,18 @@ export default function Journal() {
           </Button>
           <Button
             variant="outline"
-            className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl transition-all duration-300"
+            className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
             onClick={() => setIsImportDialogOpen(true)}
+            disabled={!hasSelectedAccount}
             type="button"
           >
             <Upload className="w-4 h-4 mr-2" />
             Import Trades
           </Button>
           <Button
-            className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl pointer-events-auto"
+            className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl pointer-events-auto disabled:opacity-40 disabled:pointer-events-none"
             onClick={() => setIsAddDialogOpen(true)}
+            disabled={!hasSelectedAccount}
             type="button"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -120,6 +130,70 @@ export default function Journal() {
         </div>
       </motion.div>
 
+      {/* Account Selector */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl p-4"
+        style={{
+          background: glassmorphism.card.background,
+          backdropFilter: glassmorphism.card.backdropBlur,
+          border: '1px solid',
+          borderColor: 'rgba(148, 163, 184, 0.08)',
+          borderRadius: borderRadius.xl,
+        }}
+      >
+        <div className="space-y-2">
+          <label className="text-[#8B97A8] text-sm">Account Type</label>
+          <select
+            value={selectedAccountType}
+            onChange={(e) => {
+              setSelectedAccountType(e.target.value as "challenge" | "funded");
+              setSelectedAccountId("");
+            }}
+            className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+          >
+            <option value="challenge">Challenge</option>
+            <option value="funded">Funded</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[#8B97A8] text-sm">Account</label>
+          <select
+            value={selectedAccountId}
+            onChange={(e) => setSelectedAccountId(e.target.value)}
+            className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+          >
+            <option value="">Select an account</option>
+            {selectableAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.accountName}
+              </option>
+            ))}
+          </select>
+        </div>
+      </motion.div>
+
+      {!hasSelectedAccount ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
+          style={{
+            background: glassmorphism.card.background,
+            backdropFilter: glassmorphism.card.backdropBlur,
+            border: '1px solid rgba(148, 163, 184, 0.08)',
+            borderRadius: borderRadius.xl,
+          }}
+        >
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ background: 'rgba(41,141,255, 0.1)' }}>
+            <BookOpen className="w-7 h-7 text-[#298DFF]" />
+          </div>
+          <p className="text-[#F8FAFC] text-lg font-semibold">Select an account to view or import trades</p>
+        </motion.div>
+      ) : (
+      <>
       {/* Stats Overview */}
       <motion.div
         variants={containerVariants}
@@ -344,13 +418,13 @@ export default function Journal() {
             <div className="flex justify-center py-16">
               <div className="w-6 h-6 border-2 border-[#298DFF] border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : trades.length === 0 ? (
+          ) : accountTrades.length === 0 ? (
             <div className="text-center py-8 text-[#94A3B8]">
               <p>No trades recorded yet. Click "Add Trade" to start tracking.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {trades.slice().reverse().map((trade) => (
+              {accountTrades.slice().reverse().map((trade) => (
                 <div 
                   key={trade.id} 
                   className="flex items-center justify-between p-4 rounded-xl transition-all duration-300 hover:scale-[1.02]"
@@ -425,9 +499,21 @@ export default function Journal() {
           )}
         </motion.div>
       </motion.div>
+      </>
+      )}
 
-      <AddTradeDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
-      <ImportTradesDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
+      <AddTradeDialog
+        open={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        defaultAccountType={selectedAccountType}
+        defaultAccountId={selectedAccountId}
+      />
+      <ImportTradesDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        defaultAccountType={selectedAccountType}
+        defaultAccountId={selectedAccountId}
+      />
     </div>
   );
 }

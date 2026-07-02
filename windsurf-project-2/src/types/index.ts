@@ -1,4 +1,4 @@
-export type ChallengeStatus = "active" | "failed" | "passed" | "refunded";
+export type ChallengeStatus = "active" | "failed" | "passed" | "refunded" | "step1_completed";
 export type FundedAccountStatus = "active" | "breached" | "closed";
 export type PayoutStatus = "pending" | "paid" | "rejected";
 export type TradeStatus = "win" | "loss" | "breakeven";
@@ -47,6 +47,7 @@ export interface Challenge {
   status: ChallengeStatus;
   convertedToFunded?: boolean;
   fundedAccountId?: string;
+  parentChallengeId?: string;
   // Additional rule fields from presets
   presetId?: string;
   drawdownMode?: 'EOD' | 'Daily' | 'Trailing';
