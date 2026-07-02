@@ -61,6 +61,15 @@ function devWarn(message: string): void {
   }
 }
 
+// Temporary diagnostic for the entry_time/session-persisted-as-null bug —
+// safe to remove once import is confirmed fixed in production.
+function devLogDateSplit(rowNumber: number, openDateRaw: unknown, entryDate: string, entryTime: string, session: string | undefined): void {
+  if (process.env.NODE_ENV === "production") return;
+  console.log(
+    `[importTrades] Row ${rowNumber} date split — raw Open Date: ${JSON.stringify(openDateRaw)}, entryDate: "${entryDate}", entryTime: "${entryTime}", session: ${session ?? "(none)"}`
+  );
+}
+
 // Parses numbers that may use dot or comma decimals, thousands separators,
 // currency symbols, parenthesized negatives (e.g. "(123.45)"), or be blank.
 // Returns null (not NaN) when the value truly cannot be parsed, so callers
@@ -156,7 +165,12 @@ function toDateString(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) return "";
 
   const trimmed = value.trim();
-  const datePart = trimmed.split(/[T\s]/)[0];
+  // "+" collapses runs of whitespace (double space, tab, etc. between the
+  // date and time) into a single split point — without it, a value like
+  // "02/07/2026  01:37" (two spaces) produces an empty string in the middle
+  // of the split, which only breaks the time half (see toTimeString below);
+  // the date half is unaffected since it's always index 0.
+  const datePart = trimmed.split(/[T\s]+/)[0];
 
   // YYYY-MM-DD / YYYY.MM.DD / YYYY/MM/DD
   let m = datePart.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
@@ -228,7 +242,10 @@ function toTimeString(value: unknown): string {
 
   if (typeof value !== "string" || !value.trim()) return "";
 
-  const parts = value.trim().split(/[T\s]/);
+  // Same "+" collapsing as toDateString — a run of whitespace between the
+  // date and time (not just a single space) must still split into exactly
+  // [datePart, timePart], or the real time-of-day silently gets dropped.
+  const parts = value.trim().split(/[T\s]+/);
   if (parts.length < 2) return "";
   const m = parts[1].match(/^(\d{1,2}):(\d{2})/);
   if (!m) return "";
@@ -350,6 +367,7 @@ export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
     const entryTime = toTimeString(openDateRaw);
     const exitTime = toTimeString(closedDateRaw);
     const session = detectSession(entryTime);
+    devLogDateSplit(rowNumber, openDateRaw, entryDate, entryTime, session);
 
     const entryPrice = parseAmount(findValue(row, ["Open"]));
     const exitPrice = parseAmount(findValue(row, ["Closed"]));
