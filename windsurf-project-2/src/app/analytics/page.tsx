@@ -16,9 +16,9 @@ import {
   getTradingConsistency,
   getPreferredSession,
   getPreferredInstrument,
-  getPreferredDirection,
   getTradingAge,
 } from "@/lib/analytics/traderDNA";
+import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
@@ -56,8 +56,12 @@ export default function GlobalAnalyticsPage() {
   const tradingConsistency = useMemo(() => getTradingConsistency(filteredTrades), [filteredTrades]);
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
-  const preferredDirection = useMemo(() => getPreferredDirection(filteredTrades), [filteredTrades]);
   const tradingAge = useMemo(() => getTradingAge(filteredTrades), [filteredTrades]);
+
+  // Trading Identity (Trader DNA V1) — a dedicated, independent engine; see
+  // src/lib/analytics/traderIdentity.ts. Never fed pnl/win-rate/challenge
+  // data, only the same filtered Trade[] as the rest of this page.
+  const identity = useMemo(() => getTraderIdentity(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -169,9 +173,7 @@ export default function GlobalAnalyticsPage() {
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
         <TraderDNASections
-          preferredSession={preferredSession}
-          preferredInstrument={preferredInstrument}
-          preferredDirection={preferredDirection}
+          identity={identity}
           tradingFrequency={tradingFrequency}
           tradingConsistency={tradingConsistency}
           tradingAge={tradingAge}

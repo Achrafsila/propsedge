@@ -1,14 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Fingerprint, Compass, Sparkles, EyeOff, ShieldCheck, Sprout } from "lucide-react";
+import { Compass, Sparkles, EyeOff, ShieldCheck, Sprout } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import {
-  DNAInsight,
-  SessionKey,
-  TradeDirection,
-  TradingConsistencyBreakdown,
-} from "@/lib/analytics/traderDNA";
+import { DNAInsight, TradingConsistencyBreakdown } from "@/lib/analytics/traderDNA";
+import { TraderIdentity } from "@/lib/analytics/traderIdentity";
+import { TradingIdentityCard } from "@/components/analytics/TradingIdentityCard";
 
 const COMING_SOON = "Coming soon";
 
@@ -99,22 +96,20 @@ function SectionCard({
 }
 
 // ── Trader DNA — final page structure ─────────────────────────────────────
-// Six placeholder sections that sketch out the full Trader DNA experience.
-// "Trading Identity" and "Your Habits" surface real values from the engine
-// (src/lib/analytics/traderDNA.ts) wherever the sample is large enough —
-// everything else is intentionally "Coming soon" until those specific
-// formulas (edge detection, blind-spot flags, discipline, evolution) exist.
+// Trading Identity is a real, fully computed section (see
+// src/lib/analytics/traderIdentity.ts) — no thresholds or fallback values
+// live in this component, it only renders the engine's output. "Your
+// Habits" also surfaces real values from src/lib/analytics/traderDNA.ts
+// wherever the sample is large enough. The remaining four sections are
+// intentionally "Coming soon" until those specific formulas (edge
+// detection, blind-spot flags, discipline, evolution) exist.
 export function TraderDNASections({
-  preferredSession,
-  preferredInstrument,
-  preferredDirection,
+  identity,
   tradingFrequency,
   tradingConsistency,
   tradingAge,
 }: {
-  preferredSession: DNAInsight<SessionKey | null>;
-  preferredInstrument: DNAInsight<string | null>;
-  preferredDirection: DNAInsight<TradeDirection | null>;
+  identity: TraderIdentity;
   tradingFrequency: DNAInsight<number>;
   tradingConsistency: DNAInsight<TradingConsistencyBreakdown>;
   tradingAge: DNAInsight<number>;
@@ -123,39 +118,9 @@ export function TraderDNASections({
     ? `${Math.round((tradingConsistency.value.profitableDays / tradingConsistency.sampleSize) * 100)}%`
     : COMING_SOON;
 
-  const directionLabel: Record<TradeDirection, string> = { long: "Long", short: "Short" };
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <SectionCard
-        icon={Fingerprint}
-        color="#298DFF"
-        title="Trading Identity"
-        description="The core shape of how you trade — the instrument, session, and direction you gravitate to."
-        rows={[
-          {
-            label: "Primary Instrument",
-            value:
-              isReady(preferredInstrument.sampleSize) && preferredInstrument.value
-                ? preferredInstrument.value
-                : COMING_SOON,
-          },
-          {
-            label: "Preferred Session",
-            value:
-              isReady(preferredSession.sampleSize) && preferredSession.value
-                ? preferredSession.value
-                : COMING_SOON,
-          },
-          {
-            label: "Preferred Direction",
-            value:
-              isReady(preferredDirection.sampleSize) && preferredDirection.value
-                ? directionLabel[preferredDirection.value]
-                : COMING_SOON,
-          },
-        ]}
-      />
+      <TradingIdentityCard identity={identity} />
 
       <SectionCard
         icon={Compass}
