@@ -16,9 +16,12 @@ import {
   getTradingConsistency,
   getPreferredSession,
   getPreferredInstrument,
+  getPreferredDirection,
+  getTradingAge,
 } from "@/lib/analytics/traderDNA";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
+import { TraderDNASections } from "@/components/analytics/TraderDNASections";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
 
 const itemVariants = {
@@ -53,6 +56,8 @@ export default function GlobalAnalyticsPage() {
   const tradingConsistency = useMemo(() => getTradingConsistency(filteredTrades), [filteredTrades]);
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
+  const preferredDirection = useMemo(() => getPreferredDirection(filteredTrades), [filteredTrades]);
+  const tradingAge = useMemo(() => getTradingAge(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -159,6 +164,17 @@ export default function GlobalAnalyticsPage() {
           tradingConsistency={tradingConsistency}
           preferredSession={preferredSession}
           preferredInstrument={preferredInstrument}
+        />
+      </motion.div>
+
+      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
+        <TraderDNASections
+          preferredSession={preferredSession}
+          preferredInstrument={preferredInstrument}
+          preferredDirection={preferredDirection}
+          tradingFrequency={tradingFrequency}
+          tradingConsistency={tradingConsistency}
+          tradingAge={tradingAge}
         />
       </motion.div>
     </div>
