@@ -1,11 +1,14 @@
 import * as XLSX from "xlsx";
-import { TradeStatus } from "@/types";
+import { Trade, TradeStatus } from "@/types";
 
 export interface ParsedTrade {
   symbol: string;
   direction: "long" | "short";
   entryDate: string;
   exitDate: string;
+  entryTime?: string;
+  exitTime?: string;
+  session?: Trade["session"];
   entryPrice: number;
   exitPrice: number;
   quantity: number;
@@ -196,6 +199,65 @@ function toDateString(value: unknown): string {
   return "";
 }
 
+// Extracts "HH:mm" from the same cell formats toDateString() accepts —
+// notably the broker export's "DD/MM/YYYY HH:mm" (e.g. "02/07/2026 01:37").
+// Returns "" when the cell has no time component (date-only cells, or an
+// unparseable value) so callers can tell "no time recorded" apart from a
+// genuine midnight timestamp.
+function toTimeString(value: unknown): string {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    const h = value.getUTCHours();
+    const min = value.getUTCMinutes();
+    // A date-only Excel cell becomes a Date at UTC midnight once parsed
+    // (cellDates:true) — indistinguishable from a real 00:00 timestamp, so
+    // exact midnight is treated as "no time" rather than risk fabricating one.
+    if (h === 0 && min === 0) return "";
+    return `${pad(h)}:${pad(min)}`;
+  }
+
+  if (typeof value === "number") {
+    // Excel serial dates store the time-of-day as the fractional part of the
+    // day count, so a whole number is unambiguously a date-only cell.
+    if (Number.isInteger(value)) return "";
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed && (parsed.H !== 0 || parsed.M !== 0)) {
+      return `${pad(parsed.H)}:${pad(parsed.M)}`;
+    }
+    return "";
+  }
+
+  if (typeof value !== "string" || !value.trim()) return "";
+
+  const parts = value.trim().split(/[T\s]/);
+  if (parts.length < 2) return "";
+  const m = parts[1].match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  const h = +m[1];
+  const min = +m[2];
+  if (h < 0 || h > 23 || min < 0 || min > 59) return "";
+  return `${pad(h)}:${pad(min)}`;
+}
+
+// Session windows, in minutes since midnight, per the fixed export format's
+// house rule:
+//   Asian:     00:00–07:59
+//   London:    08:00–13:29
+//   New York:  13:30–22:00
+//   otherwise: unknown (missing entryTime, or outside all three windows)
+const ASIAN_SESSION_END_MINUTES = 8 * 60; // last Asian minute is 07:59
+const LONDON_SESSION_END_MINUTES = 13 * 60 + 30; // last London minute is 13:29
+const NEW_YORK_SESSION_END_MINUTES = 22 * 60; // New York runs through 22:00 inclusive
+
+function detectSession(entryTime: string): Trade["session"] {
+  const m = entryTime.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return undefined;
+  const minutes = +m[1] * 60 + +m[2];
+  if (minutes < ASIAN_SESSION_END_MINUTES) return "Asian";
+  if (minutes < LONDON_SESSION_END_MINUTES) return "London";
+  if (minutes <= NEW_YORK_SESSION_END_MINUTES) return "New York";
+  return undefined;
+}
+
 export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
   // raw: true stops xlsx's CSV parser from guessing cell types itself — its
   // built-in numeric sniffer strips commas as thousands separators before our
@@ -272,14 +334,23 @@ export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
       return;
     }
 
-    const entryDate = toDateString(findValue(row, ["Open Date"]));
+    const openDateRaw = findValue(row, ["Open Date"]);
+    const closedDateRaw = findValue(row, ["Closed Date"]);
+
+    const entryDate = toDateString(openDateRaw);
     if (!entryDate) {
       skippedRows.push({ rowNumber, reason: "Invalid or missing Open Date" });
       devWarn(`Row ${rowNumber} skipped: invalid or missing Open Date`);
       return;
     }
 
-    const exitDate = toDateString(findValue(row, ["Closed Date"]));
+    const exitDate = toDateString(closedDateRaw);
+    // Open Date / Closed Date carry both date and time (e.g. "02/07/2026
+    // 01:37") — split the time out and derive the session from entryTime.
+    const entryTime = toTimeString(openDateRaw);
+    const exitTime = toTimeString(closedDateRaw);
+    const session = detectSession(entryTime);
+
     const entryPrice = parseAmount(findValue(row, ["Open"]));
     const exitPrice = parseAmount(findValue(row, ["Closed"]));
     const quantity = parseAmount(findValue(row, ["Lots"]));
@@ -305,6 +376,9 @@ export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
       direction,
       entryDate,
       exitDate: exitDate || entryDate,
+      entryTime: entryTime || undefined,
+      exitTime: exitTime || undefined,
+      session,
       entryPrice: entryPrice ?? 0,
       exitPrice: exitPrice ?? 0,
       quantity: quantity ?? 0,
