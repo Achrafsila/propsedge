@@ -29,7 +29,7 @@ export function Sidebar() {
     { name: "Challenges", href: "/challenges", icon: Trophy },
     { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
-    { name: "Global Analytics", href: "/analytics", icon: BarChart3 },
+    { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },

@@ -148,10 +148,10 @@ export default function GlobalAnalyticsPage() {
             color: "transparent",
           }}
         >
-          Global Analytics
+          Trader DNA
         </h1>
         <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>
-          The performance of the trader — every trade, across every account.
+          Understand how you trade, not just what you earn.
         </p>
       </motion.div>
 

@@ -1,17 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BarChart3, DollarSign, Target, TrendingUp } from "lucide-react";
+import { Activity, Clock, Layers, Repeat } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { GlobalTradeStats } from "@/lib/analytics/globalAnalytics";
-
-const fmt$ = (value: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 
 const cardVariants = { hover: { y: -4, transition: { duration: 0.3 } } };
 
@@ -78,38 +70,36 @@ function KpiCard({
   );
 }
 
-export function GlobalOverview({ stats }: { stats: GlobalTradeStats }) {
-  const pnlColor = stats.netPnL >= 0 ? "#10B981" : "#EF4444";
-
+export function GlobalOverview({ stats: _stats }: { stats: GlobalTradeStats }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
       <KpiCard
-        icon={BarChart3}
-        label="Total Trades"
-        value={stats.totalTrades.toString()}
+        icon={Activity}
+        label="Trading Frequency"
+        value="—"
         color="#298DFF"
-        sub={`${stats.wins}W · ${stats.losses}L · ${stats.breakeven}BE`}
+        sub="Coming soon"
       />
       <KpiCard
-        icon={DollarSign}
-        label="Net P&L"
-        value={fmt$(stats.netPnL)}
-        color={pnlColor}
-        sub="Across all matching trades"
+        icon={Repeat}
+        label="Consistency"
+        value="—"
+        color="#8B5CF6"
+        sub="Coming soon"
       />
       <KpiCard
-        icon={TrendingUp}
-        label="Win Rate"
-        value={`${stats.winRate.toFixed(1)}%`}
+        icon={Clock}
+        label="Preferred Session"
+        value="—"
         color="#10B981"
-        sub={`${stats.wins} of ${stats.totalTrades} trades`}
+        sub="Coming soon"
       />
       <KpiCard
-        icon={Target}
-        label="Profit Factor"
-        value={stats.profitFactor.toFixed(2)}
+        icon={Layers}
+        label="Primary Instrument"
+        value="—"
         color="#D4AF37"
-        sub={`Avg win ${fmt$(stats.avgWin)}`}
+        sub="Coming soon"
       />
     </div>
   );
