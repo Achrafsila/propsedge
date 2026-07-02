@@ -10,14 +10,6 @@ import {
   buildAccountIndex,
   filterGlobalTrades,
   getOrphanedTrades,
-  globalTradeStats,
-  globalEquityCurve,
-  calendarData,
-  performanceByAccount,
-  performanceByPropFirm,
-  performanceByInstrument,
-  performanceBySession,
-  tradeDistribution,
 } from "@/lib/analytics/globalAnalytics";
 import {
   getTradingFrequency,
@@ -27,10 +19,6 @@ import {
 } from "@/lib/analytics/traderDNA";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
-import { GlobalEquityCurve } from "@/components/analytics/GlobalEquityCurve";
-import { GlobalCalendar } from "@/components/analytics/GlobalCalendar";
-import { PerformanceBreakdown } from "@/components/analytics/PerformanceBreakdown";
-import { TradeDistribution } from "@/components/analytics/TradeDistribution";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
 
 const itemVariants = {
@@ -58,8 +46,6 @@ export default function GlobalAnalyticsPage() {
     [trades, filters, accountIndex]
   );
 
-  const stats = useMemo(() => globalTradeStats(filteredTrades), [filteredTrades]);
-
   // ── Trader DNA: behavioural stats only, derived from the same filtered
   // trade set as the rest of this page. See src/lib/analytics/traderDNA.ts
   // for the "no pnl-ranking, no business metrics" boundary.
@@ -68,17 +54,8 @@ export default function GlobalAnalyticsPage() {
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
 
-  const equityPoints = useMemo(() => globalEquityCurve(filteredTrades), [filteredTrades]);
-  const dailyPnL = useMemo(() => calendarData(filteredTrades), [filteredTrades]);
-  const byAccount = useMemo(() => performanceByAccount(filteredTrades, accountIndex), [filteredTrades, accountIndex]);
-  const byPropFirm = useMemo(() => performanceByPropFirm(filteredTrades, accountIndex), [filteredTrades, accountIndex]);
-  const byInstrument = useMemo(() => performanceByInstrument(filteredTrades), [filteredTrades]);
-  const bySession = useMemo(() => performanceBySession(filteredTrades), [filteredTrades]);
-  const distribution = useMemo(() => tradeDistribution(filteredTrades), [filteredTrades]);
-
   // Trades whose accountId/accountType no longer resolve to a live account
-  // (typically because that account was deleted). Still counted in the
-  // stats/equity/calendar above; only excluded from the account/firm charts.
+  // (typically because that account was deleted).
   const orphanedTrades = useMemo(
     () => getOrphanedTrades(filteredTrades, accountIndex),
     [filteredTrades, accountIndex]
@@ -183,41 +160,6 @@ export default function GlobalAnalyticsPage() {
           preferredSession={preferredSession}
           preferredInstrument={preferredInstrument}
         />
-      </motion.div>
-
-      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
-        <GlobalEquityCurve points={equityPoints} netPnL={stats.netPnL} />
-      </motion.div>
-
-      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
-        <GlobalCalendar dailyPnL={dailyPnL} />
-      </motion.div>
-
-      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.15 }}>
-        <h2 className="text-[#F8FAFC] font-bold mb-4" style={{ fontSize: typography.fontSize.section }}>
-          Performance Breakdown
-        </h2>
-        <PerformanceBreakdown
-          byAccount={byAccount}
-          byPropFirm={byPropFirm}
-          byInstrument={byInstrument}
-          bySession={bySession}
-          activeAccountId={filters.accountId}
-          activePropFirm={filters.propFirm}
-          activeInstrument={filters.instrument}
-          activeSession={filters.session}
-          onSelectAccount={(key) => patchFilters({ accountId: key })}
-          onSelectPropFirm={(key) => patchFilters({ propFirm: key })}
-          onSelectInstrument={(key) => patchFilters({ instrument: key })}
-          onSelectSession={(key) => patchFilters({ session: key })}
-        />
-      </motion.div>
-
-      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.2 }}>
-        <h2 className="text-[#F8FAFC] font-bold mb-4" style={{ fontSize: typography.fontSize.section }}>
-          Trading Distribution
-        </h2>
-        <TradeDistribution winLoss={distribution.winLoss} bySession={distribution.bySession} />
       </motion.div>
     </div>
   );
