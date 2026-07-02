@@ -231,7 +231,7 @@ export default function Dashboard() {
 
     const dates = [...new Set([...Object.keys(pnlByDate), ...Object.keys(paidByDate)])].sort();
     const initBalance = fundedAccounts.reduce((s, a) => s + a.initialBalance, 0);
-    const totalCosts  = challenges.reduce((s, c) => s + c.purchaseCost, 0);
+    const totalCosts  = getRootChallenges(challenges).reduce((s, c) => s + c.purchaseCost, 0);
 
     let equity = initBalance;
     let cumProfit = 0;
@@ -305,7 +305,7 @@ export default function Dashboard() {
   // ── Portfolio breakdown ────────────────────────────────────────────────────
   const byFirmChallenge = useMemo(() => {
     const m: Record<string, number> = {};
-    challenges.forEach((c) => { m[c.propFirmName] = (m[c.propFirmName] || 0) + 1; });
+    getRootChallenges(challenges).forEach((c) => { m[c.propFirmName] = (m[c.propFirmName] || 0) + 1; });
     return Object.entries(m).map(([name, value]) => ({ name, value }));
   }, [challenges]);
 

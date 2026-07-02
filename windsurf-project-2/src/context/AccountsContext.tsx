@@ -430,7 +430,9 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   };
 
   const getROIStats = (): ROIStats => {
-    const totalChallengeCosts = challenges.reduce(
+    // Step 2 rows are a continuation of their root challenge, not a
+    // separate purchase, so only root challenges count toward cost/ROI.
+    const totalChallengeCosts = getRootChallenges(challenges).reduce(
       (sum, c) => sum + c.purchaseCost,
       0
     );

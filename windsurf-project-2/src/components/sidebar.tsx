@@ -14,6 +14,7 @@ import {
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
+import { getRootChallenges } from "@/lib/challenges";
 import { borderRadius } from "@/design-system";
 import { Logo } from "@/components/common/Logo";
 
@@ -41,7 +42,9 @@ export function Sidebar() {
     }).format(value);
   };
 
-  const totalCapital = challenges.reduce((sum, c) => sum + c.accountSize, 0) + 
+  // Step 2 rows are a continuation of their root challenge, not a separate
+  // purchased account, so only root challenges count toward capital.
+  const totalCapital = getRootChallenges(challenges).reduce((sum, c) => sum + c.accountSize, 0) +
                        fundedAccounts.reduce((sum, a) => sum + a.accountSize, 0);
 
   return (
