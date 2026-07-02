@@ -16,9 +16,9 @@ import {
   getTradingConsistency,
   getPreferredSession,
   getPreferredInstrument,
-  getTradingAge,
 } from "@/lib/analytics/traderDNA";
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
+import { getTraderHabits } from "@/lib/analytics/traderHabits";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
@@ -56,12 +56,13 @@ export default function GlobalAnalyticsPage() {
   const tradingConsistency = useMemo(() => getTradingConsistency(filteredTrades), [filteredTrades]);
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
-  const tradingAge = useMemo(() => getTradingAge(filteredTrades), [filteredTrades]);
 
-  // Trading Identity (Trader DNA V1) — a dedicated, independent engine; see
-  // src/lib/analytics/traderIdentity.ts. Never fed pnl/win-rate/challenge
-  // data, only the same filtered Trade[] as the rest of this page.
+  // Trading Identity and Trading Habits (Trader DNA V1) — dedicated,
+  // independent engines; see src/lib/analytics/traderIdentity.ts and
+  // src/lib/analytics/traderHabits.ts. Neither is ever fed pnl/win-rate/
+  // challenge data, only the same filtered Trade[] as the rest of this page.
   const identity = useMemo(() => getTraderIdentity(filteredTrades), [filteredTrades]);
+  const habits = useMemo(() => getTraderHabits(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -172,12 +173,7 @@ export default function GlobalAnalyticsPage() {
       </motion.div>
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
-        <TraderDNASections
-          identity={identity}
-          tradingFrequency={tradingFrequency}
-          tradingConsistency={tradingConsistency}
-          tradingAge={tradingAge}
-        />
+        <TraderDNASections identity={identity} habits={habits} />
       </motion.div>
     </div>
   );

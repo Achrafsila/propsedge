@@ -1,22 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Compass, Sparkles, EyeOff, ShieldCheck, Sprout } from "lucide-react";
+import { Sparkles, EyeOff, ShieldCheck, Sprout } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { DNAInsight, TradingConsistencyBreakdown } from "@/lib/analytics/traderDNA";
 import { TraderIdentity } from "@/lib/analytics/traderIdentity";
+import { TraderHabits } from "@/lib/analytics/traderHabits";
 import { TradingIdentityCard } from "@/components/analytics/TradingIdentityCard";
+import { TradingHabitsCard } from "@/components/analytics/TradingHabitsCard";
 
 const COMING_SOON = "Coming soon";
-
-// Same floor as GlobalOverview.tsx: below this many trades/days an insight's
-// confidence is under ~0.2 (see computeConfidence in traderDNA.ts) — too
-// thin a sample to show as a specific value.
-const MIN_SAMPLE_SIZE_FOR_DISPLAY = 5;
-
-function isReady(sampleSize: number): boolean {
-  return sampleSize >= MIN_SAMPLE_SIZE_FOR_DISPLAY;
-}
 
 interface InsightRow {
   label: string;
@@ -96,49 +88,24 @@ function SectionCard({
 }
 
 // ── Trader DNA — final page structure ─────────────────────────────────────
-// Trading Identity is a real, fully computed section (see
-// src/lib/analytics/traderIdentity.ts) — no thresholds or fallback values
-// live in this component, it only renders the engine's output. "Your
-// Habits" also surfaces real values from src/lib/analytics/traderDNA.ts
-// wherever the sample is large enough. The remaining four sections are
-// intentionally "Coming soon" until those specific formulas (edge
-// detection, blind-spot flags, discipline, evolution) exist.
+// Trading Identity (src/lib/analytics/traderIdentity.ts) and Your Habits
+// (src/lib/analytics/traderHabits.ts) are real, fully computed sections —
+// no thresholds or fallback values live in this component, it only renders
+// each engine's output. The remaining four sections are intentionally
+// "Coming soon" until those specific formulas (edge detection, blind-spot
+// flags, discipline, evolution) exist.
 export function TraderDNASections({
   identity,
-  tradingFrequency,
-  tradingConsistency,
-  tradingAge,
+  habits,
 }: {
   identity: TraderIdentity;
-  tradingFrequency: DNAInsight<number>;
-  tradingConsistency: DNAInsight<TradingConsistencyBreakdown>;
-  tradingAge: DNAInsight<number>;
+  habits: TraderHabits;
 }) {
-  const consistencyValue = isReady(tradingConsistency.sampleSize)
-    ? `${Math.round((tradingConsistency.value.profitableDays / tradingConsistency.sampleSize) * 100)}%`
-    : COMING_SOON;
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <TradingIdentityCard identity={identity} />
 
-      <SectionCard
-        icon={Compass}
-        color="#8B5CF6"
-        title="Your Habits"
-        description="Behavioural patterns in when and how often you trade."
-        rows={[
-          {
-            label: "Trading Frequency",
-            value: isReady(tradingFrequency.sampleSize) ? `${tradingFrequency.value.toFixed(1)}/day` : COMING_SOON,
-          },
-          { label: "Consistency", value: consistencyValue },
-          {
-            label: "Trading Age",
-            value: isReady(tradingAge.sampleSize) ? `${tradingAge.value} days` : COMING_SOON,
-          },
-        ]}
-      />
+      <TradingHabitsCard habits={habits} />
 
       <SectionCard
         icon={Sparkles}
