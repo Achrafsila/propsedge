@@ -15,6 +15,7 @@ import {
   ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell,
 } from "recharts";
 import { useAccounts } from "@/context/AccountsContext";
+import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
@@ -328,9 +329,13 @@ export default function Dashboard() {
 
   // ── Funding pipeline ───────────────────────────────────────────────────────
   const pipeline = useMemo(() => {
-    const total     = challenges.length;
-    const passed    = challenges.filter((c) => c.status === "passed" || c.convertedToFunded).length;
-    const converted = challenges.filter((c) => !!c.convertedToFunded).length;
+    // Step 2 rows are a continuation of their root challenge, not separate
+    // purchases — count roots only, using each root's Step 2 outcome (if any)
+    // as the source of truth for pass/convert.
+    const rootChallenges = getRootChallenges(challenges);
+    const total     = rootChallenges.length;
+    const passed    = rootChallenges.filter((c) => getEffectiveStatus(c, challenges) === "passed" || getEffectiveConvertedToFunded(c, challenges)).length;
+    const converted = rootChallenges.filter((c) => getEffectiveConvertedToFunded(c, challenges)).length;
     const funded    = fundedAccounts.length;
     const withPay   = fundedAccounts.filter((a) => payouts.some((p) => p.fundedAccountId === a.id)).length;
     const totalPay  = payouts.length;

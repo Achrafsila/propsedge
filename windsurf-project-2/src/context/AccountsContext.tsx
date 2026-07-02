@@ -15,6 +15,7 @@ import {
   PayoutStatus,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
 import {
   fetchChallenges,
   insertChallenge,
@@ -390,24 +391,29 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   };
 
   const getFundingRateStats = (): FundingRateStats => {
-    const totalChallengesPurchased = challenges.length;
-    const activeChallenges = challenges.filter(
-      (c) => c.status === "active"
+    // A Step 2 row is a continuation of its parent challenge, not a
+    // separate purchase — only root challenges count toward these totals,
+    // and a root's pass/fail/convert outcome is taken from its Step 2 row
+    // (if one exists) so the two steps are never counted separately.
+    const rootChallenges = getRootChallenges(challenges);
+    const totalChallengesPurchased = rootChallenges.length;
+    const activeChallenges = rootChallenges.filter(
+      (c) => getEffectiveStatus(c, challenges) === "active"
     ).length;
-    const failedChallenges = challenges.filter(
-      (c) => c.status === "failed"
+    const failedChallenges = rootChallenges.filter(
+      (c) => getEffectiveStatus(c, challenges) === "failed"
     ).length;
-    const passedChallenges = challenges.filter(
-      (c) => c.status === "passed"
+    const passedChallenges = rootChallenges.filter(
+      (c) => getEffectiveStatus(c, challenges) === "passed"
     ).length;
-    const convertedToFunded = challenges.filter(
-      (c) => c.convertedToFunded
+    const convertedToFunded = rootChallenges.filter(
+      (c) => getEffectiveConvertedToFunded(c, challenges)
     ).length;
     const fundingRatePercentage =
       totalChallengesPurchased > 0
         ? (convertedToFunded / totalChallengesPurchased) * 100
         : 0;
-    const totalChallengeCost = challenges.reduce(
+    const totalChallengeCost = rootChallenges.reduce(
       (sum, c) => sum + c.purchaseCost,
       0
     );
