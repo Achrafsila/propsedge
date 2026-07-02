@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  Trophy, 
-  Wallet, 
-  BookOpen, 
-  DollarSign, 
+import {
+  LayoutDashboard,
+  Trophy,
+  Wallet,
+  BookOpen,
+  BarChart3,
+  DollarSign,
   Settings,
   Shield
 } from "lucide-react";
@@ -28,6 +29,7 @@ export function Sidebar() {
     { name: "Challenges", href: "/challenges", icon: Trophy },
     { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
+    { name: "Global Analytics", href: "/analytics", icon: BarChart3 },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },

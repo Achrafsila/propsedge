@@ -1,182 +1,179 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BarChart3, TrendingUp, TrendingDown, PieChart, LineChart } from "lucide-react";
+"use client";
 
-export default function Analytics() {
+import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { useAccounts } from "@/context/AccountsContext";
+import { typography, gradientText } from "@/design-system";
+import {
+  DEFAULT_GLOBAL_FILTERS,
+  GlobalFilters,
+  buildAccountIndex,
+  filterGlobalTrades,
+  globalTradeStats,
+  globalEquityCurve,
+  calendarData,
+  performanceByAccount,
+  performanceByPropFirm,
+  performanceByInstrument,
+  performanceBySession,
+  tradeDistribution,
+} from "@/lib/analytics/globalAnalytics";
+import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
+import { GlobalOverview } from "@/components/analytics/GlobalOverview";
+import { GlobalEquityCurve } from "@/components/analytics/GlobalEquityCurve";
+import { GlobalCalendar } from "@/components/analytics/GlobalCalendar";
+import { PerformanceBreakdown } from "@/components/analytics/PerformanceBreakdown";
+import { TradeDistribution } from "@/components/analytics/TradeDistribution";
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+
+export default function GlobalAnalyticsPage() {
+  const { challenges, fundedAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
+  const [filters, setFilters] = useState<GlobalFilters>(DEFAULT_GLOBAL_FILTERS);
+
+  const isLoading = challengesLoading || fundedAccountsLoading || tradesLoading;
+
+  const patchFilters = (patch: Partial<GlobalFilters>) => setFilters((prev) => ({ ...prev, ...patch }));
+  const resetFilters = () => setFilters(DEFAULT_GLOBAL_FILTERS);
+  const isFiltered = JSON.stringify(filters) !== JSON.stringify(DEFAULT_GLOBAL_FILTERS);
+
+  // ── Operational View: every trade counts, Step 1 and Step 2 are never
+  // collapsed into one root — that collapsing only happens in the Business
+  // Metrics engine (src/lib/challenges.ts) used by Dashboard/Challenges.
+  const accountIndex = useMemo(() => buildAccountIndex(challenges, fundedAccounts), [challenges, fundedAccounts]);
+
+  const filteredTrades = useMemo(
+    () => filterGlobalTrades(trades, filters, accountIndex),
+    [trades, filters, accountIndex]
+  );
+
+  const stats = useMemo(() => globalTradeStats(filteredTrades), [filteredTrades]);
+  const equityPoints = useMemo(() => globalEquityCurve(filteredTrades), [filteredTrades]);
+  const dailyPnL = useMemo(() => calendarData(filteredTrades), [filteredTrades]);
+  const byAccount = useMemo(() => performanceByAccount(filteredTrades, accountIndex), [filteredTrades, accountIndex]);
+  const byPropFirm = useMemo(() => performanceByPropFirm(filteredTrades, accountIndex), [filteredTrades, accountIndex]);
+  const byInstrument = useMemo(() => performanceByInstrument(filteredTrades), [filteredTrades]);
+  const bySession = useMemo(() => performanceBySession(filteredTrades), [filteredTrades]);
+  const distribution = useMemo(() => tradeDistribution(filteredTrades), [filteredTrades]);
+
+  // ── Filter option lists ─────────────────────────────────────────────────
+  // Prop firm / account cascade off scope so the pickers never show an
+  // account that couldn't possibly match. Instrument/session are drawn from
+  // the full trade set so they don't disappear as other filters narrow.
+  const scopedAccounts = useMemo(() => {
+    const list: { id: string; name: string; propFirmName: string }[] = [];
+    if (filters.scope !== "funded") {
+      challenges.forEach((c) => list.push({ id: c.id, name: c.accountName, propFirmName: c.propFirmName }));
+    }
+    if (filters.scope !== "challenge") {
+      fundedAccounts.forEach((a) => list.push({ id: a.id, name: a.accountName, propFirmName: a.propFirmName }));
+    }
+    return list;
+  }, [challenges, fundedAccounts, filters.scope]);
+
+  const propFirmOptions = useMemo(
+    () => Array.from(new Set(scopedAccounts.map((a) => a.propFirmName))).sort(),
+    [scopedAccounts]
+  );
+
+  const accountOptions = useMemo(
+    () =>
+      scopedAccounts
+        .filter((a) => !filters.propFirm || a.propFirmName === filters.propFirm)
+        .map((a) => ({ id: a.id, name: a.name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [scopedAccounts, filters.propFirm]
+  );
+
+  const instrumentOptions = useMemo(
+    () => Array.from(new Set(trades.map((t) => t.symbol).filter(Boolean))).sort(),
+    [trades]
+  );
+
+  const sessionOptions = ["London", "New York", "Asian", "No Session"];
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-24">
+        <div className="w-6 h-6 border-2 border-[#298DFF] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Analytics</h1>
-        <p className="text-zinc-400 mt-1">Deep dive into your trading performance</p>
-      </div>
+    <div className="space-y-8">
+      <GlobalFilterBar
+        filters={filters}
+        onChange={patchFilters}
+        onReset={resetFilters}
+        propFirmOptions={propFirmOptions}
+        accountOptions={accountOptions}
+        instrumentOptions={instrumentOptions}
+        sessionOptions={sessionOptions}
+        isFiltered={isFiltered}
+      />
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-400">Total Return</CardTitle>
-            <TrendingUp className="w-4 h-4 text-zinc-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">0%</div>
-            <p className="text-xs text-zinc-500 mt-1">No data</p>
-          </CardContent>
-        </Card>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <h1
+          style={{
+            fontSize: typography.fontSize.display,
+            fontWeight: typography.fontWeight.extraBold,
+            letterSpacing: typography.letterSpacing.display,
+            lineHeight: typography.lineHeight.display,
+            background: gradientText.premium,
+            backgroundClip: "text",
+            WebkitBackgroundClip: "text",
+            color: "transparent",
+          }}
+        >
+          Global Analytics
+        </h1>
+        <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>
+          The performance of the trader — every trade, across every account.
+        </p>
+      </motion.div>
 
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-400">Sharpe Ratio</CardTitle>
-            <BarChart3 className="w-4 h-4 text-zinc-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">0</div>
-            <p className="text-xs text-zinc-500 mt-1">No data</p>
-          </CardContent>
-        </Card>
+      <motion.div variants={itemVariants} initial="hidden" animate="visible">
+        <GlobalOverview stats={stats} />
+      </motion.div>
 
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-400">Win Rate</CardTitle>
-            <PieChart className="w-4 h-4 text-zinc-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">0%</div>
-            <p className="text-xs text-zinc-500 mt-1">No data</p>
-          </CardContent>
-        </Card>
+      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
+        <GlobalEquityCurve points={equityPoints} netPnL={stats.netPnL} />
+      </motion.div>
 
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-400">Avg Trade Duration</CardTitle>
-            <LineChart className="w-4 h-4 text-zinc-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">0h</div>
-            <p className="text-xs text-zinc-500 mt-1">No data</p>
-          </CardContent>
-        </Card>
-      </div>
+      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
+        <GlobalCalendar dailyPnL={dailyPnL} />
+      </motion.div>
 
-      {/* Performance Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader>
-            <CardTitle className="text-white">Equity Curve</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 flex items-center justify-center bg-zinc-950 rounded-lg border border-zinc-800">
-              <div className="text-center">
-                <LineChart className="w-12 h-12 text-zinc-600 mx-auto mb-2" />
-                <p className="text-sm text-zinc-500">No data available</p>
-                <p className="text-xs text-zinc-600 mt-1">Add trades to see charts</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.15 }}>
+        <h2 className="text-[#F8FAFC] font-bold mb-4" style={{ fontSize: typography.fontSize.section }}>
+          Performance Breakdown
+        </h2>
+        <PerformanceBreakdown
+          byAccount={byAccount}
+          byPropFirm={byPropFirm}
+          byInstrument={byInstrument}
+          bySession={bySession}
+          activeAccountId={filters.accountId}
+          activePropFirm={filters.propFirm}
+          activeInstrument={filters.instrument}
+          activeSession={filters.session}
+          onSelectAccount={(key) => patchFilters({ accountId: key })}
+          onSelectPropFirm={(key) => patchFilters({ propFirm: key })}
+          onSelectInstrument={(key) => patchFilters({ instrument: key })}
+          onSelectSession={(key) => patchFilters({ session: key })}
+        />
+      </motion.div>
 
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader>
-            <CardTitle className="text-white">Profit by Instrument</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 flex items-center justify-center bg-zinc-950 rounded-lg border border-zinc-800">
-              <div className="text-center">
-                <PieChart className="w-12 h-12 text-zinc-600 mx-auto mb-2" />
-                <p className="text-sm text-zinc-500">No data available</p>
-                <p className="text-xs text-zinc-600 mt-1">Add trades to see charts</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detailed Statistics */}
-      <Card className="bg-zinc-900 border-zinc-800">
-        <CardHeader>
-          <CardTitle className="text-white">Detailed Statistics</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium text-zinc-400">Winning Trades</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Total Wins</span>
-                  <span className="text-white">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Avg Win</span>
-                  <span className="text-white">$0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Largest Win</span>
-                  <span className="text-white">$0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Win Streak</span>
-                  <span className="text-white">0</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium text-zinc-400">Losing Trades</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Total Losses</span>
-                  <span className="text-white">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Avg Loss</span>
-                  <span className="text-white">$0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Largest Loss</span>
-                  <span className="text-white">$0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Loss Streak</span>
-                  <span className="text-white">0</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium text-zinc-400">Risk Metrics</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Profit Factor</span>
-                  <span className="text-white">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Risk/Reward Ratio</span>
-                  <span className="text-white">0</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Max Drawdown</span>
-                  <span className="text-white">0%</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Recovery Factor</span>
-                  <span className="text-white">0</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trading Session Analysis */}
-      <Card className="bg-zinc-900 border-zinc-800">
-        <CardHeader>
-          <CardTitle className="text-white">Trading Session Analysis</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-zinc-500">
-            <p>No session data available. Add trades to see session analysis.</p>
-          </div>
-        </CardContent>
-      </Card>
+      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.2 }}>
+        <h2 className="text-[#F8FAFC] font-bold mb-4" style={{ fontSize: typography.fontSize.section }}>
+          Trading Distribution
+        </h2>
+        <TradeDistribution winLoss={distribution.winLoss} bySession={distribution.bySession} />
+      </motion.div>
     </div>
   );
 }
