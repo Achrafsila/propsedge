@@ -4,9 +4,9 @@ import { Trade } from "@/types";
 // PropEdge — Trader Habits engine (Trader DNA V1, Block 2)
 // ============================================================
 // Pure, stateless helpers over a Trade[] list. Habits answers exactly one
-// question: "How do I naturally trade every day?" — frequency, holding
-// time, the daily window a trader is active in, which weekday sees the
-// most activity, and average entry/exit clock time.
+// question: "How do I naturally trade every day?" — how long positions are
+// held, what part of the day trading happens in, and how consistent the
+// daily starting routine is.
 //
 // Hard boundary: this file never reads pnl, win/loss status, profit
 // factor, expectancy, account balances, or challenge/funded status.
@@ -17,7 +17,8 @@ import { Trade } from "@/types";
 // Every field is returned already formatted for display — React only
 // renders this object, it never decides thresholds, units, or fallback
 // copy. The engine is a pure function of its input: the same trades
-// always produce the same output.
+// always produce the same output. All narrative text is template-based,
+// never generated (no AI, no P&L, no win rate, no profit factor).
 
 const NOT_ENOUGH_DATA = "Not enough data";
 
@@ -27,7 +28,8 @@ const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 
 // A "window" (typical daily start/end) needs a handful of days to be a
 // pattern rather than a coincidence — one or two days is just what
-// happened that day, not a routine.
+// happened that day, not a routine. Routine Stability shares this
+// threshold since it's derived from the same per-day first-entry times.
 const MIN_TRADING_DAYS_FOR_WINDOW = 3;
 
 // ── Shared helpers ───────────────────────────────────────────────────────
@@ -62,6 +64,12 @@ function averageMinutesOfDay(values: number[]): number {
   return values.reduce((s, m) => s + m, 0) / values.length;
 }
 
+function standardDeviationMinutes(values: number[]): number {
+  const mean = averageMinutesOfDay(values);
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
 function toTimestamp(dateStr: string, timeStr: string): number | null {
   const ts = new Date(`${dateStr}T${timeStr}:00`).getTime();
   return Number.isFinite(ts) ? ts : null;
@@ -89,20 +97,6 @@ function formatHoldingDuration(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
-type DayOfWeek = "Sunday" | "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday";
-
-const DAY_NAMES: DayOfWeek[] = [
-  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-];
-
-function getDayOfWeek(dateStr: string): DayOfWeek | null {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  const date = new Date(y, m - 1, d);
-  return isNaN(date.getTime()) ? null : DAY_NAMES[date.getDay()];
-}
-
 function groupBy<K extends string>(trades: Trade[], keyFn: (t: Trade) => K): Map<K, Trade[]> {
   const map = new Map<K, Trade[]>();
   for (const t of trades) {
@@ -114,48 +108,52 @@ function groupBy<K extends string>(trades: Trade[], keyFn: (t: Trade) => K): Map
   return map;
 }
 
-function mostFrequentDay(trades: Trade[]): DayOfWeek | null {
-  const counts = new Map<DayOfWeek, number>();
-  for (const t of trades) {
-    const day = getDayOfWeek(t.entryDate);
-    if (day === null) continue;
-    counts.set(day, (counts.get(day) ?? 0) + 1);
+// ── 1. Average Holding Time ──────────────────────────────────────────────
+// Same buckets as traderIdentity.ts's trading-style classification
+// (scalp < 15min, intraday < 6h, swing < 3 days, else position), kept as
+// local constants rather than an import to preserve this file's
+// self-contained design — the narrative only needs the boundary, not the
+// full identity engine.
+
+const SCALP_MAX_MINUTES = 15;
+const INTRADAY_MAX_MINUTES = 6 * MINUTES_PER_HOUR;
+const SWING_MAX_MINUTES = 3 * MINUTES_PER_DAY;
+
+function getHoldingTimes(trades: Trade[]): number[] {
+  return trades.map(getHoldingMinutes).filter((m): m is number => m !== null);
+}
+
+function holdingTimeNarrative(avgMinutes: number): string {
+  if (avgMinutes < SCALP_MAX_MINUTES) {
+    return "Your positions are usually closed within minutes, confirming a scalping execution style.";
   }
-  let best: DayOfWeek | null = null;
-  let bestCount = -1;
-  for (const [day, count] of counts) {
-    if (count > bestCount) {
-      best = day;
-      bestCount = count;
-    }
+  if (avgMinutes < INTRADAY_MAX_MINUTES) {
+    return "Your positions are usually closed within the same session, confirming an intraday execution style.";
   }
-  return best;
+  if (avgMinutes < SWING_MAX_MINUTES) {
+    return "Your positions are typically held overnight, confirming a swing trading style.";
+  }
+  return "Your positions are typically held for several days, confirming a position trading style.";
 }
 
-// ── 1. Trading Frequency ─────────────────────────────────────────────────
-
-function computeTradingFrequency(totalTrades: number, tradingDays: number): string {
-  if (tradingDays === 0) return NOT_ENOUGH_DATA;
-  return `${(totalTrades / tradingDays).toFixed(1)} trades/day`;
+function holdingStyleWord(avgMinutes: number): string {
+  if (avgMinutes < SCALP_MAX_MINUTES) return "quickly";
+  if (avgMinutes < INTRADAY_MAX_MINUTES) return "within the session";
+  if (avgMinutes < SWING_MAX_MINUTES) return "after holding overnight";
+  return "after holding for several days";
 }
 
-// ── 2. Average Holding Time ──────────────────────────────────────────────
-
-function computeAverageHoldingTime(trades: Trade[]): string {
-  const holdingTimes = trades.map(getHoldingMinutes).filter((m): m is number => m !== null);
-  if (holdingTimes.length === 0) return NOT_ENOUGH_DATA;
-  const avg = holdingTimes.reduce((s, m) => s + m, 0) / holdingTimes.length;
-  return formatHoldingDuration(avg);
-}
-
-// ── 3. Trading Window ────────────────────────────────────────────────────
+// ── 2. Trading Window ────────────────────────────────────────────────────
 // Per trading day, find that day's earliest and latest entry time, then
 // average those bounds across days — the typical start/end of a trading
-// session, distinct from the flat average entry time in #5 (which isn't
-// bounded per day and would be pulled toward the middle of the day by
-// traders who trade continuously through it).
+// session.
 
-function computeTradingWindow(trades: Trade[]): string {
+interface DailyEntryBounds {
+  dailyFirstEntries: number[];
+  dailyLastEntries: number[];
+}
+
+function computeDailyEntryBounds(trades: Trade[]): DailyEntryBounds {
   const withEntryTime = trades.filter((t) => getMinutesOfDay(t.entryTime) !== null);
   const byDate = groupBy(withEntryTime, (t) => t.entryDate);
 
@@ -166,25 +164,103 @@ function computeTradingWindow(trades: Trade[]): string {
     dailyFirstEntries.push(Math.min(...minutes));
     dailyLastEntries.push(Math.max(...minutes));
   }
+  return { dailyFirstEntries, dailyLastEntries };
+}
 
-  if (dailyFirstEntries.length < MIN_TRADING_DAYS_FOR_WINDOW) return NOT_ENOUGH_DATA;
-
-  const avgFirst = averageMinutesOfDay(dailyFirstEntries);
-  const avgLast = averageMinutesOfDay(dailyLastEntries);
+function computeTradingWindow(bounds: DailyEntryBounds): string {
+  if (bounds.dailyFirstEntries.length < MIN_TRADING_DAYS_FOR_WINDOW) return NOT_ENOUGH_DATA;
+  const avgFirst = averageMinutesOfDay(bounds.dailyFirstEntries);
+  const avgLast = averageMinutesOfDay(bounds.dailyLastEntries);
   return `${formatMinutesOfDay(avgFirst)} → ${formatMinutesOfDay(avgLast)}`;
 }
 
-// ── 4. Most Active Day ───────────────────────────────────────────────────
-
-function computeMostActiveDay(trades: Trade[]): string {
-  return mostFrequentDay(trades) ?? NOT_ENOUGH_DATA;
+// Broad session windows (minutes since midnight), matching the same house
+// rule src/lib/importTrades.ts uses to auto-detect a trade's session
+// (Asian 00:00–07:59, London 08:00–13:29, New York 13:30–22:00). The
+// remaining hours (22:00–24:00) are folded into "late New York" so every
+// time of day maps to a phrase — this is a narrative label only, it never
+// touches Trade.session.
+interface NamedWindow {
+  name: string;
+  start: number;
+  end: number;
 }
 
-// ── 5 & 6. Average Entry / Exit Time ─────────────────────────────────────
+const TIME_OF_DAY_WINDOWS: NamedWindow[] = [
+  { name: "Asian", start: 0, end: 8 * MINUTES_PER_HOUR },
+  { name: "London", start: 8 * MINUTES_PER_HOUR, end: 13 * MINUTES_PER_HOUR + 30 },
+  { name: "New York", start: 13 * MINUTES_PER_HOUR + 30, end: MINUTES_PER_DAY },
+];
 
-function computeAverageTimeOfDay(minutesList: number[]): string {
-  if (minutesList.length === 0) return NOT_ENOUGH_DATA;
-  return formatMinutesOfDay(averageMinutesOfDay(minutesList));
+function describeTimeOfDay(minutesOfDay: number): string {
+  const window =
+    TIME_OF_DAY_WINDOWS.find((w) => minutesOfDay >= w.start && minutesOfDay < w.end) ?? TIME_OF_DAY_WINDOWS[0];
+  const span = window.end - window.start;
+  const position = minutesOfDay - window.start;
+  if (position < span / 3) return `early ${window.name} session`;
+  if (position < (span * 2) / 3) return `${window.name} session`;
+  return `late ${window.name} session`;
+}
+
+function tradingWindowNarrative(bounds: DailyEntryBounds): string {
+  if (bounds.dailyFirstEntries.length < MIN_TRADING_DAYS_FOR_WINDOW) {
+    return "Not enough trading days yet to identify a consistent trading window.";
+  }
+  const avgFirst = averageMinutesOfDay(bounds.dailyFirstEntries);
+  return `Most of your trades occur during the ${describeTimeOfDay(avgFirst)}.`;
+}
+
+// ── 3. Routine Stability ─────────────────────────────────────────────────
+// New behavioral insight: how much a trader's daily starting time varies,
+// measured as the standard deviation of the same per-day first-entry
+// times computeDailyEntryBounds() already produces for Trading Window.
+
+export type RoutineStability = "Highly Structured" | "Structured" | "Flexible" | "Irregular" | "Not enough data";
+
+const ROUTINE_HIGHLY_STRUCTURED_MAX_MINUTES = 15;
+const ROUTINE_STRUCTURED_MAX_MINUTES = 45;
+const ROUTINE_FLEXIBLE_MAX_MINUTES = 120;
+
+function classifyRoutineStability(variationMinutes: number): Exclude<RoutineStability, "Not enough data"> {
+  if (variationMinutes <= ROUTINE_HIGHLY_STRUCTURED_MAX_MINUTES) return "Highly Structured";
+  if (variationMinutes <= ROUTINE_STRUCTURED_MAX_MINUTES) return "Structured";
+  if (variationMinutes <= ROUTINE_FLEXIBLE_MAX_MINUTES) return "Flexible";
+  return "Irregular";
+}
+
+interface RoutineStabilityResult {
+  classification: RoutineStability;
+  reason: string;
+}
+
+function computeRoutineStability(bounds: DailyEntryBounds): RoutineStabilityResult {
+  if (bounds.dailyFirstEntries.length < MIN_TRADING_DAYS_FOR_WINDOW) {
+    return { classification: "Not enough data", reason: "Not enough trading days yet to measure routine stability." };
+  }
+  const variation = standardDeviationMinutes(bounds.dailyFirstEntries);
+  const windowMinutes = Math.max(1, Math.round(variation * 2));
+  return {
+    classification: classifyRoutineStability(variation),
+    reason: `You usually begin trading within a ${windowMinutes}-minute window.`,
+  };
+}
+
+// ── 4. Executive Summary ─────────────────────────────────────────────────
+// A single deterministic paragraph stitched from the three insights above
+// — no data this engine hasn't already computed.
+
+function buildExecutiveSummary(
+  avgHoldingMinutes: number | null,
+  bounds: DailyEntryBounds,
+  routineStability: RoutineStability
+): string {
+  if (avgHoldingMinutes === null || routineStability === "Not enough data") {
+    return "Not enough trade history yet to summarize your routine.";
+  }
+  const sessionPhrase = describeTimeOfDay(averageMinutesOfDay(bounds.dailyFirstEntries));
+  const styleWord = holdingStyleWord(avgHoldingMinutes);
+  const stabilityWord = routineStability.toLowerCase();
+  return `Your routine is concentrated in the ${sessionPhrase}. You usually close trades ${styleWord} and follow a ${stabilityWord} execution window.`;
 }
 
 // ── Metadata ──────────────────────────────────────────────────────────────
@@ -199,12 +275,13 @@ export interface TraderHabitsMetadata {
 // ── TraderHabits ──────────────────────────────────────────────────────────
 
 export interface TraderHabits {
-  tradingFrequency: string;
   averageHoldingTime: string;
+  averageHoldingTimeExplanation: string;
   tradingWindow: string;
-  mostActiveDay: string;
-  averageEntryTime: string;
-  averageExitTime: string;
+  tradingWindowExplanation: string;
+  routineStability: RoutineStability;
+  routineStabilityReason: string;
+  executiveSummary: string;
   metadata: TraderHabitsMetadata;
 }
 
@@ -217,16 +294,24 @@ export function getTraderHabits(trades: Trade[]): TraderHabits {
   const firstTrade = sampleSize > 0 ? sorted[0].entryDate : null;
   const lastTrade = sampleSize > 0 ? sorted[sampleSize - 1].entryDate : null;
 
-  const entryMinutes = sorted.map((t) => getMinutesOfDay(t.entryTime)).filter((m): m is number => m !== null);
-  const exitMinutes = sorted.map((t) => getMinutesOfDay(t.exitTime)).filter((m): m is number => m !== null);
+  const holdingTimes = getHoldingTimes(sorted);
+  const avgHoldingMinutes =
+    holdingTimes.length > 0 ? holdingTimes.reduce((s, m) => s + m, 0) / holdingTimes.length : null;
+
+  const bounds = computeDailyEntryBounds(sorted);
+  const { classification: routineStability, reason: routineStabilityReason } = computeRoutineStability(bounds);
 
   return {
-    tradingFrequency: computeTradingFrequency(sampleSize, tradingDays),
-    averageHoldingTime: computeAverageHoldingTime(sorted),
-    tradingWindow: computeTradingWindow(sorted),
-    mostActiveDay: computeMostActiveDay(sorted),
-    averageEntryTime: computeAverageTimeOfDay(entryMinutes),
-    averageExitTime: computeAverageTimeOfDay(exitMinutes),
+    averageHoldingTime: avgHoldingMinutes !== null ? formatHoldingDuration(avgHoldingMinutes) : NOT_ENOUGH_DATA,
+    averageHoldingTimeExplanation:
+      avgHoldingMinutes !== null
+        ? holdingTimeNarrative(avgHoldingMinutes)
+        : "Not enough completed trades yet to identify a holding-time pattern.",
+    tradingWindow: computeTradingWindow(bounds),
+    tradingWindowExplanation: tradingWindowNarrative(bounds),
+    routineStability,
+    routineStabilityReason,
+    executiveSummary: buildExecutiveSummary(avgHoldingMinutes, bounds, routineStability),
     metadata: {
       sampleSize,
       tradingDays,

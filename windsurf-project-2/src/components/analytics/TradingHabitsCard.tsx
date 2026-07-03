@@ -7,36 +7,35 @@ import { TraderHabits } from "@/lib/analytics/traderHabits";
 
 const HABITS_COLOR = "#8B5CF6";
 
-function formatTradingSince(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-interface HabitRow {
+interface HabitBlock {
   label: string;
   value: string;
+  note: string;
 }
 
 // Renders whatever src/lib/analytics/traderHabits.ts computes — no
 // thresholds, formatting, or fallback copy decided here. This card is real
-// (not a placeholder): it has no "Coming soon" state, only a metadata
-// footer describing the sample the habits were built from.
+// (not a placeholder): each behavioral insight gets its value plus the
+// engine's own deterministic explanation, and the executive summary is
+// the engine's narrative, not something assembled in this component.
 export function TradingHabitsCard({ habits }: { habits: TraderHabits }) {
-  const rows: HabitRow[] = [
-    { label: "Trading Frequency", value: habits.tradingFrequency },
-    { label: "Average Holding Time", value: habits.averageHoldingTime },
-    { label: "Trading Window", value: habits.tradingWindow },
-    { label: "Most Active Day", value: habits.mostActiveDay },
-    { label: "Average Entry Time", value: habits.averageEntryTime },
-    { label: "Average Exit Time", value: habits.averageExitTime },
+  const blocks: HabitBlock[] = [
+    {
+      label: "Average Holding Time",
+      value: habits.averageHoldingTime,
+      note: habits.averageHoldingTimeExplanation,
+    },
+    {
+      label: "Trading Window",
+      value: habits.tradingWindow,
+      note: habits.tradingWindowExplanation,
+    },
+    {
+      label: "Routine Stability",
+      value: habits.routineStability,
+      note: habits.routineStabilityReason,
+    },
   ];
-
-  const { sampleSize, tradingDays, firstTrade } = habits.metadata;
 
   return (
     <motion.div
@@ -68,34 +67,46 @@ export function TradingHabitsCard({ habits }: { habits: TraderHabits }) {
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        How you naturally trade every day — frequency, timing, and routine.
+        How you naturally trade every day — execution style, timing, and routine.
       </p>
 
-      <div className="space-y-3 mb-5">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-4">
-            <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-              {row.label}
-            </span>
-            <span
-              className="text-[#F8FAFC] font-semibold text-right"
-              style={{ fontSize: typography.fontSize.sm }}
+      <div className="space-y-5 mb-5">
+        {blocks.map((block) => (
+          <div key={block.label}>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
+                {block.label}
+              </span>
+              <span
+                className="text-[#F8FAFC] font-semibold text-right"
+                style={{ fontSize: typography.fontSize.sm }}
+              >
+                {block.value}
+              </span>
+            </div>
+            <p
+              className="text-[#94A3B8] mt-1.5"
+              style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
             >
-              {row.value}
-            </span>
+              {block.note}
+            </p>
           </div>
         ))}
       </div>
 
-      <div
-        className="pt-4"
-        style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}
-      >
-        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Based on {sampleSize} trade{sampleSize === 1 ? "" : "s"} · {tradingDays} trading day{tradingDays === 1 ? "" : "s"}
-        </p>
-        <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Trading since {formatTradingSince(firstTrade)}
+      <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
+          Executive Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{
+            fontSize: typography.fontSize.xs,
+            opacity: typography.opacity.tertiary,
+            lineHeight: typography.lineHeight.relaxed,
+          }}
+        >
+          {habits.executiveSummary}
         </p>
       </div>
     </motion.div>
