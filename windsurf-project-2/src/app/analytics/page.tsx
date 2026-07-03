@@ -13,7 +13,7 @@ import {
 } from "@/lib/analytics/globalAnalytics";
 import {
   getTradingFrequency,
-  getTradingConsistency,
+  getPropFirmConsistency,
   getPreferredSession,
   getPreferredInstrument,
 } from "@/lib/analytics/traderDNA";
@@ -57,7 +57,7 @@ export default function GlobalAnalyticsPage() {
   // trade set as the rest of this page. See src/lib/analytics/traderDNA.ts
   // for the "no pnl-ranking, no business metrics" boundary.
   const tradingFrequency = useMemo(() => getTradingFrequency(filteredTrades), [filteredTrades]);
-  const tradingConsistency = useMemo(() => getTradingConsistency(filteredTrades), [filteredTrades]);
+  const propFirmConsistency = useMemo(() => getPropFirmConsistency(filteredTrades), [filteredTrades]);
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
 
@@ -193,7 +193,7 @@ export default function GlobalAnalyticsPage() {
       <motion.div variants={itemVariants} initial="hidden" animate="visible">
         <GlobalOverview
           tradingFrequency={tradingFrequency}
-          tradingConsistency={tradingConsistency}
+          propFirmConsistency={propFirmConsistency}
           preferredSession={preferredSession}
           preferredInstrument={preferredInstrument}
         />

@@ -3,21 +3,16 @@
 import { motion } from "framer-motion";
 import { Activity, Clock, Layers, Repeat } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { DNAInsight, SessionKey, TradingConsistencyBreakdown } from "@/lib/analytics/traderDNA";
+import { DNAInsight, PropFirmConsistency, SessionKey } from "@/lib/analytics/traderDNA";
 
 const cardVariants = { hover: { y: -4, transition: { duration: 0.3 } } };
 
-// Below this many trades/days, an insight's confidence is under ~0.2 (see
-// computeConfidence in traderDNA.ts) — too thin a sample to show a specific
-// value without it reading as more reliable than it is.
+// Below this many trades/days, an insight is drawn from too thin a sample
+// to show a specific value without it reading as more reliable than it is.
 const MIN_SAMPLE_SIZE_FOR_DISPLAY = 5;
 
 function hasEnoughData(sampleSize: number): boolean {
   return sampleSize >= MIN_SAMPLE_SIZE_FOR_DISPLAY;
-}
-
-function confidenceLabel(confidence: number): string {
-  return `${Math.round(confidence * 100)}% confidence`;
 }
 
 function KpiCard({
@@ -85,23 +80,21 @@ function KpiCard({
 
 export function GlobalOverview({
   tradingFrequency,
-  tradingConsistency,
+  propFirmConsistency,
   preferredSession,
   preferredInstrument,
 }: {
   tradingFrequency: DNAInsight<number>;
-  tradingConsistency: DNAInsight<TradingConsistencyBreakdown>;
+  propFirmConsistency: PropFirmConsistency;
   preferredSession: DNAInsight<SessionKey | null>;
   preferredInstrument: DNAInsight<string | null>;
 }) {
   const frequencyReady = hasEnoughData(tradingFrequency.sampleSize);
-  const consistencyReady = hasEnoughData(tradingConsistency.sampleSize);
   const sessionReady = hasEnoughData(preferredSession.sampleSize) && !!preferredSession.value;
   const instrumentReady = hasEnoughData(preferredInstrument.sampleSize) && !!preferredInstrument.value;
 
-  const consistencyPct = consistencyReady
-    ? Math.round((tradingConsistency.value.profitableDays / tradingConsistency.sampleSize) * 100)
-    : 0;
+  const consistencyPct =
+    propFirmConsistency.percentage !== null ? Math.round(propFirmConsistency.percentage) : null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -110,44 +103,28 @@ export function GlobalOverview({
         label="Trading Frequency"
         value={frequencyReady ? `${tradingFrequency.value.toFixed(1)}/day` : "Not enough data"}
         color="#298DFF"
-        sub={
-          frequencyReady
-            ? `${tradingFrequency.sampleSize} active days · ${confidenceLabel(tradingFrequency.confidence)}`
-            : "Need more closed trades"
-        }
+        sub={frequencyReady ? `${tradingFrequency.sampleSize} active trading days` : "Need more closed trades"}
       />
       <KpiCard
         icon={Repeat}
-        label="Consistency"
-        value={consistencyReady ? `${consistencyPct}%` : "Not enough data"}
+        label="Prop Firm Consistency"
+        value={consistencyPct !== null ? `${consistencyPct}%` : "N/A"}
         color="#8B5CF6"
-        sub={
-          consistencyReady
-            ? `${tradingConsistency.value.profitableDays} of ${tradingConsistency.sampleSize} days · ${confidenceLabel(tradingConsistency.confidence)}`
-            : "Need more closed trades"
-        }
+        sub={consistencyPct !== null ? `Largest day: ${consistencyPct}%` : "Need profitable trades"}
       />
       <KpiCard
         icon={Clock}
-        label="Preferred Session"
+        label="Most Traded Session"
         value={sessionReady ? (preferredSession.value as string) : "Not enough data"}
         color="#10B981"
-        sub={
-          sessionReady
-            ? `${preferredSession.sampleSize} trades · ${confidenceLabel(preferredSession.confidence)}`
-            : "Need more closed trades"
-        }
+        sub={sessionReady ? `${preferredSession.sampleSize} trades` : "Need more closed trades"}
       />
       <KpiCard
         icon={Layers}
-        label="Primary Instrument"
+        label="Most Traded Instrument"
         value={instrumentReady ? (preferredInstrument.value as string) : "Not enough data"}
         color="#D4AF37"
-        sub={
-          instrumentReady
-            ? `${preferredInstrument.sampleSize} trades · ${confidenceLabel(preferredInstrument.confidence)}`
-            : "Need more closed trades"
-        }
+        sub={instrumentReady ? `${preferredInstrument.sampleSize} trades` : "Need more closed trades"}
       />
     </div>
   );

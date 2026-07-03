@@ -313,25 +313,38 @@ export function getPreferredDirection(trades: Trade[]): DNAInsight<TradeDirectio
   return buildInsight(stats.preferredDirection, stats.totalTrades);
 }
 
-export interface TradingConsistencyBreakdown {
-  profitableDays: number;
-  losingDays: number;
-  breakEvenDays: number;
-}
-
-export function getTradingConsistency(trades: Trade[]): DNAInsight<TradingConsistencyBreakdown> {
-  const stats = getTraderDNAStats(trades);
-  return buildInsight(
-    {
-      profitableDays: stats.profitableDays,
-      losingDays: stats.losingDays,
-      breakEvenDays: stats.breakEvenDays,
-    },
-    stats.totalTradingDays
-  );
-}
-
 export function getTradingAge(trades: Trade[]): DNAInsight<number> {
   const stats = getTraderDNAStats(trades);
   return buildInsight(stats.tradingAgeDays, stats.totalTrades);
+}
+
+// ── Prop Firm Consistency ────────────────────────────────────────────────
+// How much of total profit comes from a single best day — the metric prop
+// firms use to flag traders who pass an evaluation on one lucky day rather
+// than steady performance. Only meaningful against positive cumulative
+// profit, so a trader who is net negative (or flat) has no consistency
+// figure to report.
+
+export interface PropFirmConsistency {
+  percentage: number | null; // null when totalProfit <= 0 ("N/A")
+  largestWinningDay: number;
+  totalProfit: number;
+}
+
+export function getPropFirmConsistency(trades: Trade[]): PropFirmConsistency {
+  const dated = trades.filter((t) => !!t.entryDate);
+  const totalProfit = dated.reduce((sum, t) => sum + t.pnl, 0);
+
+  const byDate = groupBy(dated, (t) => t.entryDate);
+  let largestWinningDay = 0;
+  for (const dayTrades of byDate.values()) {
+    const dayPnL = dayTrades.reduce((sum, t) => sum + t.pnl, 0);
+    if (dayPnL > largestWinningDay) largestWinningDay = dayPnL;
+  }
+
+  if (totalProfit <= 0) {
+    return { percentage: null, largestWinningDay, totalProfit };
+  }
+
+  return { percentage: (largestWinningDay / totalProfit) * 100, largestWinningDay, totalProfit };
 }
