@@ -1,16 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ShieldCheck, Sprout } from "lucide-react";
+import { Sprout } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { TraderIdentity } from "@/lib/analytics/traderIdentity";
 import { TraderHabits } from "@/lib/analytics/traderHabits";
 import { TraderEdge } from "@/lib/analytics/traderEdge";
 import { TraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
+import { TraderDiscipline } from "@/lib/analytics/traderDiscipline";
 import { TradingIdentityCard } from "@/components/analytics/TradingIdentityCard";
 import { TradingHabitsCard } from "@/components/analytics/TradingHabitsCard";
 import { TradingEdgeCard } from "@/components/analytics/TradingEdgeCard";
 import { TradingBlindSpotsCard } from "@/components/analytics/TradingBlindSpotsCard";
+import { TradingDisciplineCard } from "@/components/analytics/TradingDisciplineCard";
 
 const COMING_SOON = "Coming soon";
 
@@ -94,22 +96,24 @@ function SectionCard({
 // ── Trader DNA — final page structure ─────────────────────────────────────
 // Trading Identity (src/lib/analytics/traderIdentity.ts), Your Habits
 // (src/lib/analytics/traderHabits.ts), Your Edge
-// (src/lib/analytics/traderEdge.ts), and Blind Spots
-// (src/lib/analytics/traderBlindSpots.ts) are real, fully computed sections
+// (src/lib/analytics/traderEdge.ts), Blind Spots
+// (src/lib/analytics/traderBlindSpots.ts), and Discipline
+// (src/lib/analytics/traderDiscipline.ts) are real, fully computed sections
 // — no thresholds or fallback values live in this component, it only
-// renders each engine's output. The remaining two sections are
-// intentionally "Coming soon" until those specific formulas (discipline,
-// evolution) exist.
+// renders each engine's output. The remaining section is intentionally
+// "Coming soon" until its specific formulas (evolution) exist.
 export function TraderDNASections({
   identity,
   habits,
   edge,
   blindSpots,
+  discipline,
 }: {
   identity: TraderIdentity;
   habits: TraderHabits;
   edge: TraderEdge;
   blindSpots: TraderBlindSpots;
+  discipline: TraderDiscipline;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -121,17 +125,7 @@ export function TraderDNASections({
 
       <TradingBlindSpotsCard blindSpots={blindSpots} />
 
-      <SectionCard
-        icon={ShieldCheck}
-        color="#D4AF37"
-        title="Discipline"
-        description="How closely your execution matches your plan — sizing, timing, and rule adherence."
-        rows={[
-          { label: "Plan Adherence", value: COMING_SOON },
-          { label: "Sizing Consistency", value: COMING_SOON },
-          { label: "Rule Violations", value: COMING_SOON },
-        ]}
-      />
+      <TradingDisciplineCard discipline={discipline} />
 
       <SectionCard
         icon={Sprout}

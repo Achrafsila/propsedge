@@ -21,6 +21,7 @@ import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { getTraderHabits } from "@/lib/analytics/traderHabits";
 import { getTraderEdge } from "@/lib/analytics/traderEdge";
 import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
+import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
@@ -77,6 +78,11 @@ export default function GlobalAnalyticsPage() {
   // pnl, but only to surface weak contexts (lowest expectancy), never to
   // report raw totals.
   const blindSpots = useMemo(() => getTraderBlindSpots(filteredTrades), [filteredTrades]);
+
+  // Discipline (Trader DNA V1, Block 5) — see
+  // src/lib/analytics/traderDiscipline.ts. Behavioral only: never reads
+  // pnl/win-rate/profit-factor/expectancy, only trade timing and counts.
+  const discipline = useMemo(() => getTraderDiscipline(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -187,7 +193,13 @@ export default function GlobalAnalyticsPage() {
       </motion.div>
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
-        <TraderDNASections identity={identity} habits={habits} edge={edge} blindSpots={blindSpots} />
+        <TraderDNASections
+          identity={identity}
+          habits={habits}
+          edge={edge}
+          blindSpots={blindSpots}
+          discipline={discipline}
+        />
       </motion.div>
     </div>
   );
