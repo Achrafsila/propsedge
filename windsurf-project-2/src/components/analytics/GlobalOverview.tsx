@@ -82,12 +82,16 @@ export function GlobalOverview({
   tradingFrequency,
   propFirmConsistency,
   preferredSession,
+  sessionTradeCount,
   preferredInstrument,
+  instrumentTradeCount,
 }: {
   tradingFrequency: DNAInsight<number>;
   propFirmConsistency: PropFirmConsistency;
   preferredSession: DNAInsight<SessionKey | null>;
+  sessionTradeCount: number;
   preferredInstrument: DNAInsight<string | null>;
+  instrumentTradeCount: number;
 }) {
   const frequencyReady = hasEnoughData(tradingFrequency.sampleSize);
   const sessionReady = hasEnoughData(preferredSession.sampleSize) && !!preferredSession.value;
@@ -107,24 +111,32 @@ export function GlobalOverview({
       />
       <KpiCard
         icon={Repeat}
-        label="Prop Firm Consistency"
+        label="Profit Consistency"
         value={consistencyPct !== null ? `${consistencyPct}%` : "N/A"}
         color="#8B5CF6"
-        sub={consistencyPct !== null ? `Largest day: ${consistencyPct}%` : "Need profitable trades"}
+        sub={
+          consistencyPct !== null
+            ? `Largest day contributed ${consistencyPct}% of total profits`
+            : "Need profitable trades"
+        }
       />
       <KpiCard
         icon={Clock}
         label="Most Traded Session"
         value={sessionReady ? (preferredSession.value as string) : "Not enough data"}
         color="#10B981"
-        sub={sessionReady ? `${preferredSession.sampleSize} trades` : "Need more closed trades"}
+        sub={sessionReady ? `${sessionTradeCount} of ${preferredSession.sampleSize} trades` : "Need more closed trades"}
       />
       <KpiCard
         icon={Layers}
         label="Most Traded Instrument"
         value={instrumentReady ? (preferredInstrument.value as string) : "Not enough data"}
         color="#D4AF37"
-        sub={instrumentReady ? `${preferredInstrument.sampleSize} trades` : "Need more closed trades"}
+        sub={
+          instrumentReady
+            ? `${instrumentTradeCount} of ${preferredInstrument.sampleSize} trades`
+            : "Need more closed trades"
+        }
       />
     </div>
   );

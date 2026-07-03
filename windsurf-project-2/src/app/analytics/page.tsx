@@ -16,6 +16,7 @@ import {
   getPropFirmConsistency,
   getPreferredSession,
   getPreferredInstrument,
+  getTraderDNAStats,
 } from "@/lib/analytics/traderDNA";
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { getTraderHabits } from "@/lib/analytics/traderHabits";
@@ -60,6 +61,15 @@ export default function GlobalAnalyticsPage() {
   const propFirmConsistency = useMemo(() => getPropFirmConsistency(filteredTrades), [filteredTrades]);
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
+
+  // Trade counts behind the preferred session/instrument, for the "X of Y
+  // trades" KPI subtitles — read-only lookup, doesn't affect the insights
+  // above (getPreferredSession/getPreferredInstrument are unchanged).
+  const dnaStats = useMemo(() => getTraderDNAStats(filteredTrades), [filteredTrades]);
+  const sessionTradeCount = preferredSession.value ? dnaStats.tradesBySession[preferredSession.value] ?? 0 : 0;
+  const instrumentTradeCount = preferredInstrument.value
+    ? dnaStats.tradesByInstrument[preferredInstrument.value] ?? 0
+    : 0;
 
   // Trading Identity and Trading Habits (Trader DNA V1) — dedicated,
   // independent engines; see src/lib/analytics/traderIdentity.ts and
@@ -195,7 +205,9 @@ export default function GlobalAnalyticsPage() {
           tradingFrequency={tradingFrequency}
           propFirmConsistency={propFirmConsistency}
           preferredSession={preferredSession}
+          sessionTradeCount={sessionTradeCount}
           preferredInstrument={preferredInstrument}
+          instrumentTradeCount={instrumentTradeCount}
         />
       </motion.div>
 
