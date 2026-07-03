@@ -152,6 +152,9 @@ const STYLE_CATEGORY_LABEL: Record<Exclude<TradingStyle, "Not enough data">, str
   "Position Trader": "position trading",
 };
 
+// Also used verbatim by traderHabits.ts (duplicated there, not imported,
+// per this file's self-contained convention) so the two cards' holding-time
+// figures render as the exact same text, not just the same number.
 function formatHoldingDuration(minutes: number): string {
   const rounded = Math.round(minutes);
   if (rounded < MINUTES_PER_HOUR) {
@@ -159,10 +162,10 @@ function formatHoldingDuration(minutes: number): string {
   }
   if (minutes < MINUTES_PER_DAY) {
     const hours = Math.round(minutes / MINUTES_PER_HOUR);
-    return `around ${hours} hour${hours === 1 ? "" : "s"}`;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
   }
   const days = Math.round(minutes / MINUTES_PER_DAY);
-  return `around ${days} day${days === 1 ? "" : "s"}`;
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 function explainTradingStyle(style: TradingStyle, medianHoldingMinutes: number): string {
@@ -171,7 +174,7 @@ function explainTradingStyle(style: TradingStyle, medianHoldingMinutes: number):
   }
   const duration = formatHoldingDuration(medianHoldingMinutes);
   const category = STYLE_CATEGORY_LABEL[style];
-  return `You typically hold positions for ${duration}, placing your execution in the ${category} category.`;
+  return `You typically hold positions for around ${duration}, placing your execution in the ${category} category.`;
 }
 
 // ── 2. Market Specialization ─────────────────────────────────────────────

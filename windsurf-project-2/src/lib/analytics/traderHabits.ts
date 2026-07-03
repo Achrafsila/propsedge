@@ -70,18 +70,31 @@ function standardDeviationMinutes(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-function toTimestamp(dateStr: string, timeStr: string): number | null {
-  const ts = new Date(`${dateStr}T${timeStr}:00`).getTime();
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function toTimestamp(dateStr: string, timeStr?: string): number | null {
+  if (!dateStr) return null;
+  const time = timeStr && /^\d{2}:\d{2}$/.test(timeStr) ? timeStr : "00:00";
+  const ts = new Date(`${dateStr}T${time}:00`).getTime();
   return Number.isFinite(ts) ? ts : null;
 }
 
-// Habits' holding-time figure must reflect an actual measured duration, so
-// unlike traderIdentity.ts's holding-time calc (which allows a day-level
-// estimate for multi-day trades missing times), this ignores ANY trade
-// missing either entryTime or exitTime — "ignore trades without both entry
-// and exit times" per spec, not just same-day ones.
+// Identical to traderIdentity.ts's holding-time calc (duplicated, not
+// imported, per this file's self-contained convention) so both cards
+// compute the median from the exact same per-trade durations and can
+// never disagree: same-day trades missing either timestamp are excluded
+// (duration would be ambiguous), while multi-day trades are still measured
+// at day granularity even without times, defaulting the missing
+// time-of-day to 00:00.
 function getHoldingMinutes(trade: Trade): number | null {
-  if (!trade.entryDate || !trade.exitDate || !trade.entryTime || !trade.exitTime) return null;
+  if (!trade.entryDate || !trade.exitDate) return null;
+  const sameDay = trade.entryDate === trade.exitDate;
+  if (sameDay && (!trade.entryTime || !trade.exitTime)) return null;
   const entry = toTimestamp(trade.entryDate, trade.entryTime);
   const exit = toTimestamp(trade.exitDate, trade.exitTime);
   if (entry === null || exit === null) return null;
@@ -89,12 +102,20 @@ function getHoldingMinutes(trade: Trade): number | null {
   return diff >= 0 ? diff : null;
 }
 
+// Identical to traderIdentity.ts's formatter (duplicated, not imported) so
+// "Average Holding Time" here and the holding-time sentence there render
+// the exact same text for the exact same median.
 function formatHoldingDuration(minutes: number): string {
   const rounded = Math.round(minutes);
-  if (rounded < MINUTES_PER_HOUR) return `${rounded} min`;
-  const h = Math.floor(rounded / MINUTES_PER_HOUR);
-  const m = rounded % MINUTES_PER_HOUR;
-  return `${h}h ${m}m`;
+  if (rounded < MINUTES_PER_HOUR) {
+    return `${rounded} minute${rounded === 1 ? "" : "s"}`;
+  }
+  if (minutes < MINUTES_PER_DAY) {
+    const hours = Math.round(minutes / MINUTES_PER_HOUR);
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  const days = Math.round(minutes / MINUTES_PER_DAY);
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 function groupBy<K extends string>(trades: Trade[], keyFn: (t: Trade) => K): Map<K, Trade[]> {
@@ -109,6 +130,12 @@ function groupBy<K extends string>(trades: Trade[], keyFn: (t: Trade) => K): Map
 }
 
 // ── 1. Average Holding Time ──────────────────────────────────────────────
+// The displayed figure is the MEDIAN holding time, not the mean — it's
+// less skewed by a handful of outlier holds, and using the same statistic
+// traderIdentity.ts uses for its holding-time sentence is what keeps the
+// two cards from ever showing different numbers for the same trades. The
+// field/label stays "Average Holding Time" for the user-facing copy.
+//
 // Same buckets as traderIdentity.ts's trading-style classification
 // (scalp < 15min, intraday < 6h, swing < 3 days, else position), kept as
 // local constants rather than an import to preserve this file's
@@ -123,23 +150,23 @@ function getHoldingTimes(trades: Trade[]): number[] {
   return trades.map(getHoldingMinutes).filter((m): m is number => m !== null);
 }
 
-function holdingTimeNarrative(avgMinutes: number): string {
-  if (avgMinutes < SCALP_MAX_MINUTES) {
+function holdingTimeNarrative(medianMinutes: number): string {
+  if (medianMinutes < SCALP_MAX_MINUTES) {
     return "Your positions are usually closed within minutes, confirming a scalping execution style.";
   }
-  if (avgMinutes < INTRADAY_MAX_MINUTES) {
+  if (medianMinutes < INTRADAY_MAX_MINUTES) {
     return "Your positions are usually closed within the same session, confirming an intraday execution style.";
   }
-  if (avgMinutes < SWING_MAX_MINUTES) {
+  if (medianMinutes < SWING_MAX_MINUTES) {
     return "Your positions are typically held overnight, confirming a swing trading style.";
   }
   return "Your positions are typically held for several days, confirming a position trading style.";
 }
 
-function holdingStyleWord(avgMinutes: number): string {
-  if (avgMinutes < SCALP_MAX_MINUTES) return "quickly";
-  if (avgMinutes < INTRADAY_MAX_MINUTES) return "within the session";
-  if (avgMinutes < SWING_MAX_MINUTES) return "after holding overnight";
+function holdingStyleWord(medianMinutes: number): string {
+  if (medianMinutes < SCALP_MAX_MINUTES) return "quickly";
+  if (medianMinutes < INTRADAY_MAX_MINUTES) return "within the session";
+  if (medianMinutes < SWING_MAX_MINUTES) return "after holding overnight";
   return "after holding for several days";
 }
 
@@ -228,6 +255,15 @@ function classifyRoutineStability(variationMinutes: number): Exclude<RoutineStab
   return "Irregular";
 }
 
+// Deterministic behavioral wording per classification — the raw variation
+// number is never surfaced to the UI, only the bucket it falls into.
+const ROUTINE_STABILITY_REASON: Record<Exclude<RoutineStability, "Not enough data">, string> = {
+  "Highly Structured": "You usually begin trading at nearly the same time every trading day.",
+  Structured: "Your trading start time remains fairly consistent across trading days.",
+  Flexible: "Your trading start time varies moderately from one day to another.",
+  Irregular: "Your trading start time changes significantly between trading days.",
+};
+
 interface RoutineStabilityResult {
   classification: RoutineStability;
   reason: string;
@@ -238,27 +274,25 @@ function computeRoutineStability(bounds: DailyEntryBounds): RoutineStabilityResu
     return { classification: "Not enough data", reason: "Not enough trading days yet to measure routine stability." };
   }
   const variation = standardDeviationMinutes(bounds.dailyFirstEntries);
-  const windowMinutes = Math.max(1, Math.round(variation * 2));
-  return {
-    classification: classifyRoutineStability(variation),
-    reason: `You usually begin trading within a ${windowMinutes}-minute window.`,
-  };
+  const classification = classifyRoutineStability(variation);
+  return { classification, reason: ROUTINE_STABILITY_REASON[classification] };
 }
 
 // ── 4. Executive Summary ─────────────────────────────────────────────────
 // A single deterministic paragraph stitched from the three insights above
-// — no data this engine hasn't already computed.
+// — no data this engine hasn't already computed, and never the raw
+// routine-stability variation number.
 
 function buildExecutiveSummary(
-  avgHoldingMinutes: number | null,
+  medianHoldingMinutes: number | null,
   bounds: DailyEntryBounds,
   routineStability: RoutineStability
 ): string {
-  if (avgHoldingMinutes === null || routineStability === "Not enough data") {
+  if (medianHoldingMinutes === null || routineStability === "Not enough data") {
     return "Not enough trade history yet to summarize your routine.";
   }
   const sessionPhrase = describeTimeOfDay(averageMinutesOfDay(bounds.dailyFirstEntries));
-  const styleWord = holdingStyleWord(avgHoldingMinutes);
+  const styleWord = holdingStyleWord(medianHoldingMinutes);
   const stabilityWord = routineStability.toLowerCase();
   return `Your routine is concentrated in the ${sessionPhrase}. You usually close trades ${styleWord} and follow a ${stabilityWord} execution window.`;
 }
@@ -295,23 +329,22 @@ export function getTraderHabits(trades: Trade[]): TraderHabits {
   const lastTrade = sampleSize > 0 ? sorted[sampleSize - 1].entryDate : null;
 
   const holdingTimes = getHoldingTimes(sorted);
-  const avgHoldingMinutes =
-    holdingTimes.length > 0 ? holdingTimes.reduce((s, m) => s + m, 0) / holdingTimes.length : null;
+  const medianHoldingMinutes = holdingTimes.length > 0 ? median(holdingTimes) : null;
 
   const bounds = computeDailyEntryBounds(sorted);
   const { classification: routineStability, reason: routineStabilityReason } = computeRoutineStability(bounds);
 
   return {
-    averageHoldingTime: avgHoldingMinutes !== null ? formatHoldingDuration(avgHoldingMinutes) : NOT_ENOUGH_DATA,
+    averageHoldingTime: medianHoldingMinutes !== null ? formatHoldingDuration(medianHoldingMinutes) : NOT_ENOUGH_DATA,
     averageHoldingTimeExplanation:
-      avgHoldingMinutes !== null
-        ? holdingTimeNarrative(avgHoldingMinutes)
+      medianHoldingMinutes !== null
+        ? holdingTimeNarrative(medianHoldingMinutes)
         : "Not enough completed trades yet to identify a holding-time pattern.",
     tradingWindow: computeTradingWindow(bounds),
     tradingWindowExplanation: tradingWindowNarrative(bounds),
     routineStability,
     routineStabilityReason,
-    executiveSummary: buildExecutiveSummary(avgHoldingMinutes, bounds, routineStability),
+    executiveSummary: buildExecutiveSummary(medianHoldingMinutes, bounds, routineStability),
     metadata: {
       sampleSize,
       tradingDays,
