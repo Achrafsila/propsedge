@@ -20,6 +20,7 @@ import {
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { getTraderHabits } from "@/lib/analytics/traderHabits";
 import { getTraderEdge } from "@/lib/analytics/traderEdge";
+import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
@@ -70,6 +71,12 @@ export default function GlobalAnalyticsPage() {
   // sessions/instruments/weekdays/direction by expectancy, never to report
   // raw totals.
   const edge = useMemo(() => getTraderEdge(filteredTrades), [filteredTrades]);
+
+  // Blind Spots (Trader DNA V1, Block 4) — see
+  // src/lib/analytics/traderBlindSpots.ts. Like Your Edge, this engine reads
+  // pnl, but only to surface weak contexts (lowest expectancy), never to
+  // report raw totals.
+  const blindSpots = useMemo(() => getTraderBlindSpots(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -180,7 +187,7 @@ export default function GlobalAnalyticsPage() {
       </motion.div>
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
-        <TraderDNASections identity={identity} habits={habits} edge={edge} />
+        <TraderDNASections identity={identity} habits={habits} edge={edge} blindSpots={blindSpots} />
       </motion.div>
     </div>
   );

@@ -1,14 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { EyeOff, ShieldCheck, Sprout } from "lucide-react";
+import { ShieldCheck, Sprout } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { TraderIdentity } from "@/lib/analytics/traderIdentity";
 import { TraderHabits } from "@/lib/analytics/traderHabits";
 import { TraderEdge } from "@/lib/analytics/traderEdge";
+import { TraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 import { TradingIdentityCard } from "@/components/analytics/TradingIdentityCard";
 import { TradingHabitsCard } from "@/components/analytics/TradingHabitsCard";
 import { TradingEdgeCard } from "@/components/analytics/TradingEdgeCard";
+import { TradingBlindSpotsCard } from "@/components/analytics/TradingBlindSpotsCard";
 
 const COMING_SOON = "Coming soon";
 
@@ -91,20 +93,23 @@ function SectionCard({
 
 // ── Trader DNA — final page structure ─────────────────────────────────────
 // Trading Identity (src/lib/analytics/traderIdentity.ts), Your Habits
-// (src/lib/analytics/traderHabits.ts), and Your Edge
-// (src/lib/analytics/traderEdge.ts) are real, fully computed sections — no
-// thresholds or fallback values live in this component, it only renders
-// each engine's output. The remaining three sections are intentionally
-// "Coming soon" until those specific formulas (blind-spot flags, discipline,
+// (src/lib/analytics/traderHabits.ts), Your Edge
+// (src/lib/analytics/traderEdge.ts), and Blind Spots
+// (src/lib/analytics/traderBlindSpots.ts) are real, fully computed sections
+// — no thresholds or fallback values live in this component, it only
+// renders each engine's output. The remaining two sections are
+// intentionally "Coming soon" until those specific formulas (discipline,
 // evolution) exist.
 export function TraderDNASections({
   identity,
   habits,
   edge,
+  blindSpots,
 }: {
   identity: TraderIdentity;
   habits: TraderHabits;
   edge: TraderEdge;
+  blindSpots: TraderBlindSpots;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -114,17 +119,7 @@ export function TraderDNASections({
 
       <TradingEdgeCard edge={edge} />
 
-      <SectionCard
-        icon={EyeOff}
-        color="#EF4444"
-        title="Blind Spots"
-        description="Patterns that quietly work against you — overtrading, revenge trades, or sessions that hurt more than help."
-        rows={[
-          { label: "Overtrading Risk", value: COMING_SOON },
-          { label: "Revenge-Trading Signal", value: COMING_SOON },
-          { label: "Weakest Session", value: COMING_SOON },
-        ]}
-      />
+      <TradingBlindSpotsCard blindSpots={blindSpots} />
 
       <SectionCard
         icon={ShieldCheck}
