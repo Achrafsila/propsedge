@@ -3,34 +3,44 @@
 import { motion } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { DisciplineInsight, TraderDiscipline } from "@/lib/analytics/traderDiscipline";
+import { RiskInsight, TraderDiscipline } from "@/lib/analytics/traderDiscipline";
 
-const DISCIPLINE_COLOR = "#D4AF37";
+const RISK_COLOR = "#D4AF37";
 
-function formatTradingSince(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+function InsightRow({ row }: { row: RiskInsight }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
+          {row.label}
+        </span>
+        <span className="text-[#F8FAFC] font-semibold text-right" style={{ fontSize: typography.fontSize.sm }}>
+          {row.value}
+        </span>
+      </div>
+      {row.metricLabel && (
+        <p className="mt-1 text-right" style={{ fontSize: typography.fontSize.xs, color: RISK_COLOR }}>
+          {row.metricLabel}
+        </p>
+      )}
+      {row.narrative && (
+        <p
+          className="text-[#94A3B8] mt-1"
+          style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+        >
+          {row.narrative}
+        </p>
+      )}
+    </div>
+  );
 }
 
 // Renders whatever src/lib/analytics/traderDiscipline.ts computes — no
 // thresholds, classification, or fallback copy decided here. This card is
-// real (not a placeholder): it has no "Coming soon" state, only a metadata
-// footer describing the overall sample the discipline read was built from.
+// real (not a placeholder): each insight gets its value, its metric, and
+// the engine's own deterministic narrative, and the executive summary is
+// the engine's narrative too, not something assembled in this component.
 export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscipline }) {
-  const rows: DisciplineInsight[] = [
-    discipline.tradingConsistency,
-    discipline.overtradingRisk,
-    discipline.tradingRhythm,
-    discipline.sessionDiscipline,
-  ];
-
-  const { sampleSize, tradingDays, firstTrade } = discipline.metadata;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -48,12 +58,12 @@ export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscip
       <div className="flex items-center gap-3 mb-3">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: `${DISCIPLINE_COLOR}1A` }}
+          style={{ background: `${RISK_COLOR}1A` }}
         >
-          <ShieldCheck className="w-5 h-5" style={{ color: DISCIPLINE_COLOR }} />
+          <ShieldCheck className="w-5 h-5" style={{ color: RISK_COLOR }} />
         </div>
         <h3 className="text-[#F8FAFC] font-bold" style={{ fontSize: typography.fontSize.section }}>
-          Discipline
+          Risk Management
         </h3>
       </div>
 
@@ -61,42 +71,86 @@ export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscip
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        How consistent your execution behavior is — not how profitable it is.
+        How you actually manage your trading risk — position sizing behavior, not profitability.
       </p>
 
       <div className="space-y-4 mb-5">
-        {rows.map((row) => (
-          <div key={row.label}>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-                {row.label}
-              </span>
-              <span
-                className="text-[#F8FAFC] font-semibold text-right"
-                style={{ fontSize: typography.fontSize.sm }}
-              >
-                {row.value}
-              </span>
+        <InsightRow row={discipline.riskConsistency} />
+
+        {discipline.averagePositionSize.length > 0 && (
+          <div>
+            <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
+              Average Position Size
+            </span>
+            <div className="mt-1.5 space-y-1">
+              {discipline.averagePositionSize.map((entry) => (
+                <div key={entry.symbol} className="flex items-center justify-between gap-4">
+                  <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs }}>
+                    {entry.symbol}
+                  </span>
+                  <span className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.xs }}>
+                    {entry.averageLot}
+                  </span>
+                </div>
+              ))}
             </div>
             <p
-              className="text-[#64748B] mt-1 text-right"
-              style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}
+              className="text-[#94A3B8] mt-1.5"
+              style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
             >
-              {row.reasons}
+              {discipline.averagePositionSizeNarrative}
             </p>
           </div>
-        ))}
+        )}
+
+        <InsightRow row={discipline.positionSizeAfterWins} />
+        <InsightRow row={discipline.positionSizeAfterLosses} />
+
+        {discipline.lotSizeSweetSpot.length > 0 && (
+          <div>
+            <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
+              Lot Size Sweet Spot
+            </span>
+            <div className="mt-1.5 space-y-2">
+              {discipline.lotSizeSweetSpot.map((entry) => (
+                <div key={entry.symbol}>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs }}>
+                      {entry.symbol}
+                    </span>
+                    <span className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.xs }}>
+                      {entry.lot}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-right" style={{ fontSize: typography.fontSize.xs, color: RISK_COLOR }}>
+                    {entry.metricLabel}
+                  </p>
+                  <p
+                    className="text-[#94A3B8] mt-0.5"
+                    style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+                  >
+                    {entry.narrative}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div
-        className="pt-4"
-        style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}
-      >
-        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Based on {sampleSize} trade{sampleSize === 1 ? "" : "s"} · {tradingDays} trading day{tradingDays === 1 ? "" : "s"}
-        </p>
-        <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Trading since {formatTradingSince(firstTrade)}
+      <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
+          Executive Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{
+            fontSize: typography.fontSize.xs,
+            opacity: typography.opacity.tertiary,
+            lineHeight: typography.lineHeight.relaxed,
+          }}
+        >
+          {discipline.executiveSummary}
         </p>
       </div>
     </motion.div>
