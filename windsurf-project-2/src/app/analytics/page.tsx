@@ -22,6 +22,7 @@ import { getTraderHabits } from "@/lib/analytics/traderHabits";
 import { getTraderEdge } from "@/lib/analytics/traderEdge";
 import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
+import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
@@ -83,6 +84,12 @@ export default function GlobalAnalyticsPage() {
   // src/lib/analytics/traderDiscipline.ts. Behavioral only: never reads
   // pnl/win-rate/profit-factor/expectancy, only trade timing and counts.
   const discipline = useMemo(() => getTraderDiscipline(filteredTrades), [filteredTrades]);
+
+  // Evolution (Trader DNA V1, Block 6) — see
+  // src/lib/analytics/traderEvolution.ts. Behavioral only: compares recent
+  // vs previous 30-day windows on activity/holding-time/focus, never on
+  // pnl/win-rate/profit-factor/expectancy.
+  const evolution = useMemo(() => getTraderEvolution(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -199,6 +206,7 @@ export default function GlobalAnalyticsPage() {
           edge={edge}
           blindSpots={blindSpots}
           discipline={discipline}
+          evolution={evolution}
         />
       </motion.div>
     </div>
