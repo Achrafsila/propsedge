@@ -7,24 +7,14 @@ import { EdgeInsight, TraderEdge } from "@/lib/analytics/traderEdge";
 
 const EDGE_COLOR = "#10B981";
 
-function formatTradingSince(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-// Renders whatever src/lib/analytics/traderEdge.ts computes — no thresholds,
-// ranking, or fallback copy decided here. This card is real (not a
-// placeholder): it has no "Coming soon" state, only a metadata footer
-// describing the overall sample the edge was built from.
+// Renders whatever src/lib/analytics/traderEdge.ts computes — no
+// thresholds, ranking, or fallback copy decided here. This card is real
+// (not a placeholder): each insight gets its value, its expectancy metric,
+// and the engine's own deterministic narrative, and the executive summary
+// is the engine's narrative too, not something assembled in this
+// component.
 export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
-  const rows: EdgeInsight[] = [edge.bestSession, edge.bestInstrument, edge.bestWeekday, edge.bestDirection];
-
-  const { sampleSize, tradingDays, firstTrade } = edge.metadata;
+  const rows: EdgeInsight[] = [edge.bestSession, edge.bestInstrument, edge.bestWeekday];
 
   return (
     <motion.div
@@ -56,7 +46,7 @@ export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        Where you statistically perform best — ranked by expectancy, not total P&amp;L.
+        Under which conditions you statistically perform best — ranked by expectancy, not total P&amp;L.
       </p>
 
       <div className="space-y-4 mb-5">
@@ -73,25 +63,39 @@ export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
                 {row.value}
               </span>
             </div>
-            <p
-              className="text-[#64748B] mt-1 text-right"
-              style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}
-            >
-              {row.reasons}
-            </p>
+            {row.metricLabel && (
+              <p
+                className="mt-1 text-right"
+                style={{ fontSize: typography.fontSize.xs, color: EDGE_COLOR }}
+              >
+                {row.metricLabel}
+              </p>
+            )}
+            {row.narrative && (
+              <p
+                className="text-[#94A3B8] mt-1"
+                style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+              >
+                {row.narrative}
+              </p>
+            )}
           </div>
         ))}
       </div>
 
-      <div
-        className="pt-4"
-        style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}
-      >
-        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Based on {sampleSize} trade{sampleSize === 1 ? "" : "s"} · {tradingDays} trading day{tradingDays === 1 ? "" : "s"}
-        </p>
-        <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Trading since {formatTradingSince(firstTrade)}
+      <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
+          Executive Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{
+            fontSize: typography.fontSize.xs,
+            opacity: typography.opacity.tertiary,
+            lineHeight: typography.lineHeight.relaxed,
+          }}
+        >
+          {edge.executiveSummary}
         </p>
       </div>
     </motion.div>

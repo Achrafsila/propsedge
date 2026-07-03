@@ -7,20 +7,12 @@ import { BlindSpotInsight, TraderBlindSpots } from "@/lib/analytics/traderBlindS
 
 const BLIND_SPOTS_COLOR = "#EF4444";
 
-function formatTradingSince(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 // Renders whatever src/lib/analytics/traderBlindSpots.ts computes — no
 // thresholds, ranking, or fallback copy decided here. This card is real
-// (not a placeholder): it has no "Coming soon" state, only a metadata
-// footer describing the overall sample the blind spots were built from.
+// (not a placeholder): each insight gets its value, its expectancy metric,
+// and the engine's own deterministic narrative, and the executive summary
+// is the engine's narrative too, not something assembled in this
+// component.
 export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindSpots }) {
   const rows: BlindSpotInsight[] = [
     blindSpots.worstSession,
@@ -28,8 +20,6 @@ export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindS
     blindSpots.weakestWeekday,
     blindSpots.performanceAfterTradeNumber,
   ];
-
-  const { sampleSize, tradingDays, firstTrade } = blindSpots.metadata;
 
   return (
     <motion.div
@@ -61,7 +51,7 @@ export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindS
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        Where you lose your edge — contexts that quietly work against you, not a judgment on you.
+        In which situations you should be most careful — contexts that quietly work against you, not a judgment on you.
       </p>
 
       <div className="space-y-4 mb-5">
@@ -78,25 +68,39 @@ export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindS
                 {row.value}
               </span>
             </div>
-            <p
-              className="text-[#64748B] mt-1 text-right"
-              style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}
-            >
-              {row.reasons}
-            </p>
+            {row.metricLabel && (
+              <p
+                className="mt-1 text-right"
+                style={{ fontSize: typography.fontSize.xs, color: BLIND_SPOTS_COLOR }}
+              >
+                {row.metricLabel}
+              </p>
+            )}
+            {row.narrative && (
+              <p
+                className="text-[#94A3B8] mt-1"
+                style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+              >
+                {row.narrative}
+              </p>
+            )}
           </div>
         ))}
       </div>
 
-      <div
-        className="pt-4"
-        style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}
-      >
-        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Based on {sampleSize} trade{sampleSize === 1 ? "" : "s"} · {tradingDays} trading day{tradingDays === 1 ? "" : "s"}
-        </p>
-        <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Trading since {formatTradingSince(firstTrade)}
+      <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
+          Executive Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{
+            fontSize: typography.fontSize.xs,
+            opacity: typography.opacity.tertiary,
+            lineHeight: typography.lineHeight.relaxed,
+          }}
+        >
+          {blindSpots.executiveSummary}
         </p>
       </div>
     </motion.div>

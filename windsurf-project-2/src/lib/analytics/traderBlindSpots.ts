@@ -4,27 +4,37 @@ import { Trade } from "@/types";
 // PropEdge — Trader Blind Spots engine (Trader DNA V1, Block 4)
 // ============================================================
 // Pure, stateless helpers over a Trade[] list. Blind Spots answers exactly
-// one question: "Where do I lose my edge?" — like Your Edge, it's allowed
-// to read pnl, but only to surface weak contexts and risk patterns, never
-// to report total P&L on its own. A single huge losing trade must not be
-// able to condemn a session, instrument, weekday, or trade-order slot as a
-// "blind spot" — every ranking is done on expectancy (average pnl per
-// trade) within a group, and any group below the minimum sample size is
-// excluded from the ranking entirely. This block highlights contexts, not
-// the trader.
+// one question: "In which situations should I be most careful?" — like
+// Your Edge, it's allowed to read pnl, but only to surface weak contexts
+// and risk patterns, never to report total P&L on its own. A single huge
+// losing trade must not be able to condemn a session, instrument, weekday,
+// or trade-order slot as a "blind spot" — every ranking is done on
+// expectancy (average pnl per trade) within a group, and any group below
+// the minimum sample size is excluded from the ranking entirely. This
+// block highlights contexts, not the trader.
 //
 // Self-contained by design (no imports from traderDNA.ts, traderIdentity.ts,
 // traderHabits.ts, traderEdge.ts, or globalAnalytics.ts), same convention as
 // the rest of Trader DNA. Every field is returned already formatted for
 // display — React only renders this object, it never decides thresholds,
-// units, or fallback copy.
+// units, or fallback copy. All narrative text is template-based, never
+// generated (no AI).
 
 const NOT_ENOUGH_DATA = "Not enough data";
 
 // A group's expectancy needs enough trades behind it to be a statistical
 // signal rather than a coincidence (or one outsized loss skewing the
-// average) — 10 trades is the V1 floor.
+// average) — 10 trades is the V1 floor. Used for session, instrument, and
+// the trade-order buckets; weekday uses a separate, stricter rule (see
+// MIN_ACTIVE_DAYS_FOR_WEEKDAY) — same rule Your Edge uses for consistency.
 const MIN_GROUP_SAMPLE_SIZE = 10;
+
+// A weekday's expectancy can look artificially weak from just a couple of
+// calendar days if a trader takes many trades in one sitting — 10 trades on
+// two Fridays isn't a "Friday blind spot," it's two bad days. Weakest
+// Weekday instead requires at least this many DISTINCT trading days landing
+// on that weekday, not just this many trades.
+const MIN_ACTIVE_DAYS_FOR_WEEKDAY = 7;
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
@@ -64,13 +74,13 @@ function groupByDate(trades: Trade[]): Map<string, Trade[]> {
 
 function formatExpectancy(value: number): string {
   const sign = value >= 0 ? "+" : "-";
-  return `${sign}$${Math.abs(value).toFixed(2)}/trade`;
+  return `${sign}$${Math.abs(value).toFixed(2)} expectancy / trade`;
 }
 
-function ordinal(n: number): string {
-  const suffixes = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return `${n}${suffixes[(v - 20) % 10] ?? suffixes[v] ?? suffixes[0]}`;
+// "1" -> "first", "2" -> "second", "3" -> "third" — the only values the
+// trade-number buckets ever produce (see TRADE_NUMBER_BUCKETS below).
+function ordinalWord(n: number): string {
+  return n === 1 ? "first" : n === 2 ? "second" : n === 3 ? "third" : `${n}th`;
 }
 
 interface GroupResult<K extends string> {
@@ -110,23 +120,49 @@ function rankByLowestExpectancy<K extends string>(
   return worst;
 }
 
-function buildInsight<K extends string>(label: string, result: GroupResult<K> | null): BlindSpotInsight {
-  if (result === null) {
-    return {
-      label,
-      value: NOT_ENOUGH_DATA,
-      metric: null,
-      reasons: NOT_ENOUGH_DATA,
-      sampleSize: 0,
-    };
+// Same ranking as rankByLowestExpectancy, but the validity gate is on the
+// number of DISTINCT calendar days landing on that weekday, not the trade
+// count — see MIN_ACTIVE_DAYS_FOR_WEEKDAY above. Mirrors traderEdge.ts's
+// rankWeekdayByExpectancy (duplicated, not imported, per this file's
+// self-contained convention).
+function rankWeekdayByLowestExpectancy(trades: Trade[]): GroupResult<DayOfWeek> | null {
+  const groups = new Map<DayOfWeek, { sum: number; count: number; activeDays: Set<string> }>();
+
+  for (const t of trades) {
+    const key = getDayOfWeek(t.entryDate);
+    if (key === null) continue;
+    const g = groups.get(key) ?? { sum: 0, count: 0, activeDays: new Set<string>() };
+    g.sum += t.pnl;
+    g.count += 1;
+    g.activeDays.add(t.entryDate);
+    groups.set(key, g);
   }
 
-  const formatted = formatExpectancy(result.expectancy);
+  let worst: GroupResult<DayOfWeek> | null = null;
+  for (const [key, { sum, count, activeDays }] of groups) {
+    if (activeDays.size < MIN_ACTIVE_DAYS_FOR_WEEKDAY) continue;
+    const expectancy = sum / count;
+    if (worst === null || expectancy < worst.expectancy) {
+      worst = { key, count, expectancy };
+    }
+  }
+  return worst;
+}
+
+function buildInsight<K extends string>(
+  label: string,
+  result: GroupResult<K> | null,
+  narrative: string,
+  formatValue: (key: K) => string = (key) => key
+): BlindSpotInsight {
+  if (result === null) {
+    return { label, value: NOT_ENOUGH_DATA, metricLabel: "", narrative: "", sampleSize: 0 };
+  }
   return {
     label,
-    value: result.key,
-    metric: result.expectancy,
-    reasons: `Based on ${result.count} trade${result.count === 1 ? "" : "s"} · Avg ${formatted}`,
+    value: formatValue(result.key),
+    metricLabel: formatExpectancy(result.expectancy),
+    narrative,
     sampleSize: result.count,
   };
 }
@@ -182,30 +218,77 @@ function rankTradeNumberBuckets(trades: Trade[]): GroupResult<TradeNumberBucket>
 
 const PERFORMANCE_AFTER_TRADE_NUMBER_LABEL = "Performance After Trade Number";
 
+// "4+" means the entire tail from the 4th trade onward under-performs, so
+// the story is framed as a decline starting right after the 3rd trade. A
+// worst bucket of exactly "1"/"2"/"3" instead means that specific trade
+// slot is the weak one, not a tail — framed as "weakest on trade N".
 function buildTradeNumberInsight(result: GroupResult<TradeNumberBucket> | null): BlindSpotInsight {
   if (result === null) {
     return {
       label: PERFORMANCE_AFTER_TRADE_NUMBER_LABEL,
       value: NOT_ENOUGH_DATA,
-      metric: null,
-      reasons: NOT_ENOUGH_DATA,
+      metricLabel: "",
+      narrative: "",
       sampleSize: 0,
     };
   }
 
-  const formatted = formatExpectancy(result.expectancy);
-  const value =
-    result.key === "4+"
-      ? "Performance drops after your 3rd trade"
-      : `Weakest on your ${ordinal(Number(result.key))} trade of the day`;
+  const metricLabel = formatExpectancy(result.expectancy);
 
+  if (result.key === "4+") {
+    return {
+      label: PERFORMANCE_AFTER_TRADE_NUMBER_LABEL,
+      value: "After Trade #3",
+      metricLabel,
+      narrative: "Your average performance declines after your third trade of the day.",
+      sampleSize: result.count,
+    };
+  }
+
+  const n = Number(result.key);
   return {
     label: PERFORMANCE_AFTER_TRADE_NUMBER_LABEL,
-    value,
-    metric: result.expectancy,
-    reasons: `Based on ${result.count} trade${result.count === 1 ? "" : "s"} · Avg ${formatted}`,
+    value: `Trade #${n}`,
+    metricLabel,
+    narrative: `Your average performance is weakest on your ${ordinalWord(n)} trade of the day.`,
     sampleSize: result.count,
   };
+}
+
+function tradeNumberClause(result: GroupResult<TradeNumberBucket> | null): string | null {
+  if (result === null) return null;
+  return result.key === "4+"
+    ? "from taking trades after your third position of the day"
+    : `from your ${ordinalWord(Number(result.key))} trade of the day`;
+}
+
+// ── Executive Summary ────────────────────────────────────────────────────
+// A single deterministic sentence built from the worst instrument (falling
+// back to worst session) and the trade-number pattern above — no data this
+// engine hasn't already computed.
+
+function buildExecutiveSummary(
+  instrumentResult: GroupResult<string> | null,
+  sessionResult: GroupResult<string> | null,
+  tradeNumberResult: GroupResult<TradeNumberBucket> | null
+): string {
+  const subject = instrumentResult
+    ? `trading ${instrumentResult.key}`
+    : sessionResult
+      ? `trading during the ${sessionResult.key} session`
+      : null;
+  const tradeClause = tradeNumberClause(tradeNumberResult);
+
+  if (subject && tradeClause) {
+    return `Your weakest statistical performance currently comes from ${subject} and ${tradeClause}.`;
+  }
+  if (subject) {
+    return `Your weakest statistical performance currently comes from ${subject}.`;
+  }
+  if (tradeClause) {
+    return `Your weakest statistical performance currently comes ${tradeClause}.`;
+  }
+  return "Not enough trade history yet to identify your weakest statistical performance.";
 }
 
 // ── Insight & Metadata ───────────────────────────────────────────────────
@@ -213,8 +296,8 @@ function buildTradeNumberInsight(result: GroupResult<TradeNumberBucket> | null):
 export interface BlindSpotInsight {
   label: string;
   value: string;
-  metric: number | null;
-  reasons: string;
+  metricLabel: string;
+  narrative: string;
   sampleSize: number;
 }
 
@@ -232,6 +315,7 @@ export interface TraderBlindSpots {
   worstInstrument: BlindSpotInsight;
   weakestWeekday: BlindSpotInsight;
   performanceAfterTradeNumber: BlindSpotInsight;
+  executiveSummary: string;
   metadata: TraderBlindSpotsMetadata;
 }
 
@@ -244,22 +328,35 @@ export function getTraderBlindSpots(trades: Trade[]): TraderBlindSpots {
   const firstTrade = sampleSize > 0 ? sorted[0].entryDate : null;
   const lastTrade = sampleSize > 0 ? sorted[sampleSize - 1].entryDate : null;
 
-  const worstSession = buildInsight("Worst Session", rankByLowestExpectancy(sorted, (t) => t.session ?? null));
+  const sessionResult = rankByLowestExpectancy(sorted, (t) => t.session ?? null);
+  const instrumentResult = rankByLowestExpectancy(sorted, (t) => (t.symbol ? t.symbol : null));
+  const weekdayResult = rankWeekdayByLowestExpectancy(sorted);
+  const tradeNumberResult = rankTradeNumberBuckets(sorted);
+
+  const worstSession = buildInsight(
+    "Worst Session",
+    sessionResult,
+    "This session currently delivers your weakest statistical performance.",
+    (key) => `${key} Session`
+  );
   const worstInstrument = buildInsight(
     "Worst Instrument",
-    rankByLowestExpectancy(sorted, (t) => (t.symbol ? t.symbol : null))
+    instrumentResult,
+    "This market currently produces your weakest statistical edge."
   );
   const weakestWeekday = buildInsight(
     "Weakest Weekday",
-    rankByLowestExpectancy(sorted, (t) => getDayOfWeek(t.entryDate))
+    weekdayResult,
+    "This weekday currently delivers your weakest average expectancy."
   );
-  const performanceAfterTradeNumber = buildTradeNumberInsight(rankTradeNumberBuckets(sorted));
+  const performanceAfterTradeNumber = buildTradeNumberInsight(tradeNumberResult);
 
   return {
     worstSession,
     worstInstrument,
     weakestWeekday,
     performanceAfterTradeNumber,
+    executiveSummary: buildExecutiveSummary(instrumentResult, sessionResult, tradeNumberResult),
     metadata: {
       sampleSize,
       tradingDays,
