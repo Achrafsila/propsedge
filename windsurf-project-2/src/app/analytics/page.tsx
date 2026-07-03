@@ -19,6 +19,7 @@ import {
 } from "@/lib/analytics/traderDNA";
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { getTraderHabits } from "@/lib/analytics/traderHabits";
+import { getTraderEdge } from "@/lib/analytics/traderEdge";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
@@ -63,6 +64,12 @@ export default function GlobalAnalyticsPage() {
   // challenge data, only the same filtered Trade[] as the rest of this page.
   const identity = useMemo(() => getTraderIdentity(filteredTrades), [filteredTrades]);
   const habits = useMemo(() => getTraderHabits(filteredTrades), [filteredTrades]);
+
+  // Your Edge (Trader DNA V1, Block 3) — see src/lib/analytics/traderEdge.ts.
+  // Unlike Identity/Habits, this engine does read pnl, but only to rank
+  // sessions/instruments/weekdays/direction by expectancy, never to report
+  // raw totals.
+  const edge = useMemo(() => getTraderEdge(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -173,7 +180,7 @@ export default function GlobalAnalyticsPage() {
       </motion.div>
 
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
-        <TraderDNASections identity={identity} habits={habits} />
+        <TraderDNASections identity={identity} habits={habits} edge={edge} />
       </motion.div>
     </div>
   );

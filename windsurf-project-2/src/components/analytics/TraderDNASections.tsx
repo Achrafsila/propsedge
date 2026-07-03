@@ -1,12 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Sparkles, EyeOff, ShieldCheck, Sprout } from "lucide-react";
+import { EyeOff, ShieldCheck, Sprout } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { TraderIdentity } from "@/lib/analytics/traderIdentity";
 import { TraderHabits } from "@/lib/analytics/traderHabits";
+import { TraderEdge } from "@/lib/analytics/traderEdge";
 import { TradingIdentityCard } from "@/components/analytics/TradingIdentityCard";
 import { TradingHabitsCard } from "@/components/analytics/TradingHabitsCard";
+import { TradingEdgeCard } from "@/components/analytics/TradingEdgeCard";
 
 const COMING_SOON = "Coming soon";
 
@@ -88,18 +90,21 @@ function SectionCard({
 }
 
 // ── Trader DNA — final page structure ─────────────────────────────────────
-// Trading Identity (src/lib/analytics/traderIdentity.ts) and Your Habits
-// (src/lib/analytics/traderHabits.ts) are real, fully computed sections —
-// no thresholds or fallback values live in this component, it only renders
-// each engine's output. The remaining four sections are intentionally
-// "Coming soon" until those specific formulas (edge detection, blind-spot
-// flags, discipline, evolution) exist.
+// Trading Identity (src/lib/analytics/traderIdentity.ts), Your Habits
+// (src/lib/analytics/traderHabits.ts), and Your Edge
+// (src/lib/analytics/traderEdge.ts) are real, fully computed sections — no
+// thresholds or fallback values live in this component, it only renders
+// each engine's output. The remaining three sections are intentionally
+// "Coming soon" until those specific formulas (blind-spot flags, discipline,
+// evolution) exist.
 export function TraderDNASections({
   identity,
   habits,
+  edge,
 }: {
   identity: TraderIdentity;
   habits: TraderHabits;
+  edge: TraderEdge;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -107,17 +112,7 @@ export function TraderDNASections({
 
       <TradingHabitsCard habits={habits} />
 
-      <SectionCard
-        icon={Sparkles}
-        color="#10B981"
-        title="Your Edge"
-        description="Where your process consistently works — the setups and conditions you tend to win in."
-        rows={[
-          { label: "Best Setup", value: COMING_SOON },
-          { label: "Strongest Session", value: COMING_SOON },
-          { label: "Highest Win-Rate Instrument", value: COMING_SOON },
-        ]}
-      />
+      <TradingEdgeCard edge={edge} />
 
       <SectionCard
         icon={EyeOff}
