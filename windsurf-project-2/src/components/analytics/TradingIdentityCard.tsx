@@ -7,34 +7,38 @@ import { TraderIdentity } from "@/lib/analytics/traderIdentity";
 
 const IDENTITY_COLOR = "#298DFF";
 
-function formatTradingSince(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-interface IdentityRow {
+interface IdentityBlock {
   label: string;
   value: string;
+  distribution: { key: string; percentage: number }[];
+  note?: string;
 }
 
 // Renders whatever src/lib/analytics/traderIdentity.ts computes — no
 // thresholds, category names, or fallback labels are decided here. This
-// card is real (not a placeholder): it has no "Coming soon" state, only a
-// metadata footer describing the sample the identity was built from.
+// card is real (not a placeholder): style, market focus, and session
+// profile each get their classification plus the real distribution behind
+// it, and the executive summary is the engine's own deterministic
+// narrative, not something assembled in this component.
 export function TradingIdentityCard({ identity }: { identity: TraderIdentity }) {
-  const rows: IdentityRow[] = [
-    { label: "Trading Style", value: identity.tradingStyle },
-    { label: "Market Specialization", value: identity.marketSpecialization },
-    { label: "Session Profile", value: identity.sessionProfile },
-    { label: "Direction Bias", value: identity.directionBias },
+  const blocks: IdentityBlock[] = [
+    {
+      label: "Trading Style",
+      value: identity.tradingStyle,
+      distribution: [],
+      note: identity.tradingStyleExplanation,
+    },
+    {
+      label: "Market Focus",
+      value: identity.marketSpecialization,
+      distribution: identity.topInstruments.map((i) => ({ key: i.symbol, percentage: i.percentage })),
+    },
+    {
+      label: "Session Profile",
+      value: identity.sessionProfile,
+      distribution: identity.sessionDistribution.map((s) => ({ key: s.session, percentage: s.percentage })),
+    },
   ];
-
-  const { sampleSize, tradingDays, firstTrade } = identity.metadata;
 
   return (
     <motion.div
@@ -66,34 +70,62 @@ export function TradingIdentityCard({ identity }: { identity: TraderIdentity }) 
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        The core shape of how you trade — style, market, session, and direction.
+        The core shape of how you trade — style, market, and session.
       </p>
 
-      <div className="space-y-3 mb-5">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-4">
-            <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-              {row.label}
-            </span>
-            <span
-              className="text-[#F8FAFC] font-semibold text-right"
-              style={{ fontSize: typography.fontSize.sm }}
-            >
-              {row.value}
-            </span>
+      <div className="space-y-5 mb-5">
+        {blocks.map((block) => (
+          <div key={block.label}>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
+                {block.label}
+              </span>
+              <span
+                className="text-[#F8FAFC] font-semibold text-right"
+                style={{ fontSize: typography.fontSize.sm }}
+              >
+                {block.value}
+              </span>
+            </div>
+
+            {block.note && (
+              <p
+                className="text-[#94A3B8] mt-1.5"
+                style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+              >
+                {block.note}
+              </p>
+            )}
+
+            {block.distribution.length > 0 && (
+              <div className="mt-1.5 space-y-0.5">
+                {block.distribution.map((entry) => (
+                  <p
+                    key={entry.key}
+                    className="text-[#94A3B8]"
+                    style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+                  >
+                    {entry.key} • {entry.percentage}%
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      <div
-        className="pt-4"
-        style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}
-      >
-        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Based on {sampleSize} trade{sampleSize === 1 ? "" : "s"} · {tradingDays} trading day{tradingDays === 1 ? "" : "s"}
-        </p>
-        <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Trading since {formatTradingSince(firstTrade)}
+      <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <h4
+          className="text-[#F8FAFC] font-semibold mb-1.5"
+          style={{ fontSize: typography.fontSize.sm }}
+        >
+          Executive Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary, lineHeight: typography.lineHeight.relaxed }}
+        >
+          {identity.executiveSummary}
         </p>
       </div>
     </motion.div>

@@ -141,6 +141,39 @@ function classifyTradingStyle(
   return "Swing Trader";
 }
 
+// A short, deterministic sentence describing the median hold in plain
+// language, reusing the exact averageHoldingMinutes/medianHoldingMinutes
+// this engine already computes for classifyTradingStyle() — no new timing
+// calculation, just a human-readable rendering of the median.
+const STYLE_CATEGORY_LABEL: Record<Exclude<TradingStyle, "Not enough data">, string> = {
+  Scalper: "scalping",
+  "Intraday Trader": "intraday trading",
+  "Swing Trader": "swing trading",
+  "Position Trader": "position trading",
+};
+
+function formatHoldingDuration(minutes: number): string {
+  const rounded = Math.round(minutes);
+  if (rounded < MINUTES_PER_HOUR) {
+    return `${rounded} minute${rounded === 1 ? "" : "s"}`;
+  }
+  if (minutes < MINUTES_PER_DAY) {
+    const hours = Math.round(minutes / MINUTES_PER_HOUR);
+    return `around ${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  const days = Math.round(minutes / MINUTES_PER_DAY);
+  return `around ${days} day${days === 1 ? "" : "s"}`;
+}
+
+function explainTradingStyle(style: TradingStyle, medianHoldingMinutes: number): string {
+  if (style === "Not enough data") {
+    return "Not enough trade history yet to identify a holding-time pattern.";
+  }
+  const duration = formatHoldingDuration(medianHoldingMinutes);
+  const category = STYLE_CATEGORY_LABEL[style];
+  return `You typically hold positions for ${duration}, placing your execution in the ${category} category.`;
+}
+
 // ── 2. Market Specialization ─────────────────────────────────────────────
 // Symbol -> asset-class classification, purely from the symbol string —
 // no performance data involved.
@@ -207,13 +240,41 @@ function determineMarketSpecialization(trades: Trade[]): string {
   return MULTI_MARKET_TRADER;
 }
 
+// Per-instrument share of trades (e.g. "XAUUSD" -> 52%), for the Market
+// Focus card's distribution line. A different grouping than
+// determineMarketSpecialization above (which buckets by asset *class*, not
+// ticker), but built with the same countBy/percentage approach used
+// throughout this file.
+export interface InstrumentShare {
+  symbol: string;
+  percentage: number;
+}
+
+const TOP_INSTRUMENT_COUNT = 2;
+
+function getTopInstruments(trades: Trade[]): InstrumentShare[] {
+  if (trades.length === 0) return [];
+
+  const counts = countBy(trades, (t) => t.symbol || "Unknown");
+  return Object.entries(counts)
+    .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))
+    .slice(0, TOP_INSTRUMENT_COUNT)
+    .map(([symbol, count]) => ({
+      symbol,
+      percentage: Math.round(((count ?? 0) / trades.length) * 100),
+    }));
+}
+
 // ── 3. Session Profile ───────────────────────────────────────────────────
 // Based purely on session distribution — never win rate, never pnl.
 
-function determineSessionProfile(trades: Trade[]): string {
+function getSessionCounts(trades: Trade[]): Partial<Record<string, number>> {
+  return countBy(trades, (t) => t.session ?? "Unknown");
+}
+
+function determineSessionProfile(trades: Trade[], counts: Partial<Record<string, number>>): string {
   if (trades.length < SPECIALIZATION_MIN_TRADES) return MULTI_SESSION_TRADER;
 
-  const counts = countBy(trades, (t) => t.session ?? "Unknown");
   const { key, count } = topEntry(counts);
   if (key && key !== "Unknown" && count / trades.length >= SPECIALIZATION_MIN_SHARE) {
     return `${key} Specialist`;
@@ -221,19 +282,57 @@ function determineSessionProfile(trades: Trade[]): string {
   return MULTI_SESSION_TRADER;
 }
 
-// ── 4. Direction Bias ────────────────────────────────────────────────────
+// Real session distribution for display, reusing the exact counts
+// determineSessionProfile() classifies from. "Unknown" (no session
+// recorded) is excluded — it isn't a real session to report a share for.
+export interface SessionShare {
+  session: string;
+  percentage: number;
+}
 
-export type DirectionBias = "Long Bias" | "Short Bias" | "Neutral";
+function getSessionDistribution(trades: Trade[], counts: Partial<Record<string, number>>): SessionShare[] {
+  if (trades.length === 0) return [];
 
-const DIRECTION_BIAS_MIN_SHARE = 0.6;
+  return Object.entries(counts)
+    .filter(([session, count]) => session !== "Unknown" && (count ?? 0) > 0)
+    .map(([session, count]) => ({
+      session,
+      percentage: Math.round(((count ?? 0) / trades.length) * 100),
+    }))
+    .sort((a, b) => b.percentage - a.percentage);
+}
 
-function determineDirectionBias(trades: Trade[]): DirectionBias {
-  if (trades.length === 0) return "Neutral";
-  const longCount = trades.filter((t) => t.direction === "long").length;
-  const shortCount = trades.length - longCount;
-  if (longCount / trades.length >= DIRECTION_BIAS_MIN_SHARE) return "Long Bias";
-  if (shortCount / trades.length >= DIRECTION_BIAS_MIN_SHARE) return "Short Bias";
-  return "Neutral";
+// ── Executive Summary ────────────────────────────────────────────────────
+// A single deterministic sentence stitched together from the three
+// classifications above (tradingStyle, marketSpecialization,
+// sessionProfile) — no data this engine hasn't already computed.
+
+const STYLE_NOUN_WITH_ARTICLE: Record<Exclude<TradingStyle, "Not enough data">, string> = {
+  Scalper: "a scalper",
+  "Intraday Trader": "an intraday trader",
+  "Swing Trader": "a swing trader",
+  "Position Trader": "a position trader",
+};
+
+function marketFocusPhrase(marketSpecialization: string): string {
+  if (marketSpecialization === MULTI_MARKET_TRADER) return "no strong market specialization";
+  return `a clear ${marketSpecialization.replace(" Specialist", "")} market focus`;
+}
+
+function sessionProfilePhrase(sessionProfile: string): string {
+  if (sessionProfile === MULTI_SESSION_TRADER) return "no dominant session preference";
+  return `a clear ${sessionProfile.replace(" Specialist", "")} session preference`;
+}
+
+function buildExecutiveSummary(
+  tradingStyle: TradingStyle,
+  marketSpecialization: string,
+  sessionProfile: string
+): string {
+  if (tradingStyle === "Not enough data") {
+    return "Not enough trade history yet to build a trading identity summary.";
+  }
+  return `Your trading identity is that of ${STYLE_NOUN_WITH_ARTICLE[tradingStyle]} with ${marketFocusPhrase(marketSpecialization)} and ${sessionProfilePhrase(sessionProfile)}.`;
 }
 
 // ── Metadata ──────────────────────────────────────────────────────────────
@@ -249,9 +348,12 @@ export interface TraderIdentityMetadata {
 
 export interface TraderIdentity {
   tradingStyle: TradingStyle;
+  tradingStyleExplanation: string;
   marketSpecialization: string;
+  topInstruments: InstrumentShare[];
   sessionProfile: string;
-  directionBias: DirectionBias;
+  sessionDistribution: SessionShare[];
+  executiveSummary: string;
   metadata: TraderIdentityMetadata;
 }
 
@@ -265,13 +367,14 @@ export function getTraderIdentity(trades: Trade[]): TraderIdentity {
   const lastTrade = sampleSize > 0 ? sorted[sampleSize - 1].entryDate : null;
 
   let tradingStyle: TradingStyle;
+  let medianHoldingMinutes = 0;
   if (sampleSize === 0) {
     tradingStyle = "Not enough data";
   } else {
     const holdingTimes = sorted.map(getHoldingMinutes).filter((m): m is number => m !== null);
     const averageHoldingMinutes =
       holdingTimes.length > 0 ? holdingTimes.reduce((s, m) => s + m, 0) / holdingTimes.length : 0;
-    const medianHoldingMinutes = median(holdingTimes);
+    medianHoldingMinutes = median(holdingTimes);
 
     const overnightCount = sorted.filter(isOvernight).length;
     const overnightRatio = overnightCount / sampleSize;
@@ -280,11 +383,18 @@ export function getTraderIdentity(trades: Trade[]): TraderIdentity {
     tradingStyle = classifyTradingStyle(averageHoldingMinutes, medianHoldingMinutes, overnightRatio, sameDayCloseRatio);
   }
 
+  const marketSpecialization = determineMarketSpecialization(sorted);
+  const sessionCounts = getSessionCounts(sorted);
+  const sessionProfile = determineSessionProfile(sorted, sessionCounts);
+
   return {
     tradingStyle,
-    marketSpecialization: determineMarketSpecialization(sorted),
-    sessionProfile: determineSessionProfile(sorted),
-    directionBias: determineDirectionBias(sorted),
+    tradingStyleExplanation: explainTradingStyle(tradingStyle, medianHoldingMinutes),
+    marketSpecialization,
+    topInstruments: getTopInstruments(sorted),
+    sessionProfile,
+    sessionDistribution: getSessionDistribution(sorted, sessionCounts),
+    executiveSummary: buildExecutiveSummary(tradingStyle, marketSpecialization, sessionProfile),
     metadata: {
       sampleSize,
       tradingDays,
