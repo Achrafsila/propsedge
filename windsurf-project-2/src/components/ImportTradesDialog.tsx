@@ -25,7 +25,7 @@ interface ImportTradesDialogProps {
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv"];
 
 export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: ImportTradesDialogProps) {
-  const { addTrade, challenges, fundedAccounts } = useAccounts();
+  const { addTradesBatch, challenges, fundedAccounts } = useAccounts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [accountType, setAccountType] = useState<"challenge" | "funded">("challenge");
@@ -124,30 +124,22 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     if (!parsedTrades || parsedTrades.length === 0 || !isDestinationValid) return;
     setIsImporting(true);
     try {
-      // Promise.allSettled so a single failed insert never stops the rest
-      // of the batch from being imported.
-      const results = await Promise.allSettled(
-        parsedTrades.map((trade) =>
-          addTrade({
-            accountId,
-            accountType,
-            ...trade,
-          })
-        )
-      );
+      // A single chunked bulk insert (see addTradesBatch) instead of one
+      // request per row — firing hundreds/thousands of concurrent
+      // single-row inserts used to exhaust Supabase's connection pool
+      // after roughly the first 100, silently failing the rest.
+      const tradesToImport = parsedTrades.map((trade) => ({ accountId, accountType, ...trade }));
+      const { imported, failed, errors } = await addTradesBatch(tradesToImport);
 
-      const imported = results.filter(
-        (r) => r.status === "fulfilled" && r.value !== null
-      ).length;
-      const failed = results.length - imported;
+      const importedCount = imported.length;
       const skipped = skippedRows.length;
 
-      if (failed > 0) {
-        console.warn(`[ImportTrades] ${failed} trade(s) failed to import`);
+      if (errors.length > 0) {
+        console.warn(`[ImportTrades] ${errors.length} batch(es) failed to import:`, errors);
       }
 
-      if (imported > 0) {
-        toast.success(`${imported} trades imported successfully`, {
+      if (importedCount > 0) {
+        toast.success(`${importedCount} trades imported successfully`, {
           description: `${skipped} skipped, ${failed} failed`,
         });
         handleClose(false);

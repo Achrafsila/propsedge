@@ -32,6 +32,7 @@ import {
 import {
   fetchTrades,
   insertTrade,
+  insertTradesBatch,
   deleteTradeDb,
   deleteTradesByAccountDb,
   deleteTradesByIdsDb,
@@ -43,6 +44,20 @@ import {
   updatePayoutDb,
   deletePayoutDb,
 } from "@/lib/supabase/payouts";
+
+// One failed chunk from a bulk import — enough detail to tell a user (or
+// the console) exactly which rows didn't make it in and why.
+export interface TradeImportBatchError {
+  batchIndex: number;
+  rowRange: string; // e.g. "251-500", 1-based to match spreadsheet row numbering conventions used elsewhere in the importer
+  message: string;
+}
+
+export interface TradeImportResult {
+  imported: Trade[];
+  failed: number;
+  errors: TradeImportBatchError[];
+}
 
 interface AccountsContextType {
   challenges: Challenge[];
@@ -63,6 +78,7 @@ interface AccountsContextType {
   updatePayout: (id: string, payout: Partial<Payout>) => void;
   deletePayout: (id: string) => void;
   addTrade: (trade: Omit<Trade, "id">) => Promise<Trade | null>;
+  addTradesBatch: (trades: Omit<Trade, "id">[]) => Promise<TradeImportResult>;
   deleteTrade: (id: string) => void;
   deleteAllTrades: () => Promise<void>;
   getAccountPnL: (accountId: string, accountType: "challenge" | "funded") => number;
@@ -378,12 +394,12 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Returns the saved trade (or null on failure) so bulk callers — like
-  // trade import — can await each insert and know whether it succeeded.
-  // Uses a functional setTrades update so multiple addTrade calls fired
-  // back-to-back (e.g. importing many rows) each build on the latest
-  // accumulated list instead of a stale `trades` closure, which previously
-  // caused all but the last-resolved insert to be dropped from local state.
+  // Single-trade entry (the manual "Add Trade" dialog). Returns the saved
+  // trade, or null on failure. Bulk CSV import uses addTradesBatch below
+  // instead — firing one of these per row (as import used to) meant a
+  // large file fired hundreds of concurrent inserts *and* concurrent
+  // recalcAccount() writes, which exhausted Supabase's connection pool
+  // after roughly the first 100 and silently failed the rest.
   const addTrade = (trade: Omit<Trade, "id">): Promise<Trade | null> => {
     if (!user) return Promise.resolve(null);
     return insertTrade(user.id, trade)
@@ -400,6 +416,63 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         console.error("Failed to add trade:", err);
         return null;
       });
+  };
+
+  // Trade count per bulk-insert request. A single INSERT of this many rows
+  // is one request, so a 2000-row import becomes ~8 requests instead of
+  // ~2000 — the fix for the connection-pool exhaustion addTrade's doc
+  // comment above describes.
+  const TRADE_IMPORT_BATCH_SIZE = 250;
+
+  // Bulk CSV import. Chunks `trades` into TRADE_IMPORT_BATCH_SIZE-row
+  // batches and inserts each batch with a single request, running batches
+  // sequentially (never more than one in flight) so a large file can never
+  // re-create the original concurrency problem regardless of its size.
+  // Rows with missing/invalid data are never passed in here — those are
+  // already filtered out as "skipped" by the parser before this is called.
+  // Local state is updated once at the end (not per row), and each
+  // affected account is recalculated once (not once per inserted trade).
+  const addTradesBatch = async (newTrades: Omit<Trade, "id">[]): Promise<TradeImportResult> => {
+    if (!user || newTrades.length === 0) {
+      return { imported: [], failed: newTrades.length, errors: [] };
+    }
+
+    const imported: Trade[] = [];
+    const errors: TradeImportBatchError[] = [];
+
+    for (let batchIndex = 0; batchIndex * TRADE_IMPORT_BATCH_SIZE < newTrades.length; batchIndex++) {
+      const start = batchIndex * TRADE_IMPORT_BATCH_SIZE;
+      const chunk = newTrades.slice(start, start + TRADE_IMPORT_BATCH_SIZE);
+      const rowRange = `${start + 1}-${start + chunk.length}`;
+      try {
+        const saved = await insertTradesBatch(user.id, chunk);
+        imported.push(...saved);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[AccountsContext] Trade import batch ${batchIndex} (rows ${rowRange}) failed:`, message);
+        errors.push({ batchIndex, rowRange, message });
+      }
+    }
+
+    if (imported.length > 0) {
+      let updatedTrades: Trade[] = [];
+      setTrades((prev) => {
+        updatedTrades = [...prev, ...imported];
+        return updatedTrades;
+      });
+
+      const affectedAccounts = new Map<string, { accountId: string; accountType: "challenge" | "funded" }>();
+      for (const t of imported) {
+        affectedAccounts.set(`${t.accountType}:${t.accountId}`, { accountId: t.accountId, accountType: t.accountType });
+      }
+      affectedAccounts.forEach(({ accountId, accountType }) => recalcAccount(accountId, accountType, updatedTrades));
+    }
+
+    return {
+      imported,
+      failed: newTrades.length - imported.length,
+      errors,
+    };
   };
 
   const deleteTrade = (id: string) => {
@@ -596,6 +669,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         updatePayout,
         deletePayout,
         addTrade,
+        addTradesBatch,
         deleteTrade,
         deleteAllTrades,
         getAccountPnL,

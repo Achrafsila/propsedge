@@ -101,6 +101,27 @@ export async function insertTrade(
   return rowToTrade(data as TradeRow);
 }
 
+// Inserts many trades in a single request — one bulk INSERT instead of one
+// request per row. Used by bulk CSV import (see addTradesBatch in
+// AccountsContext), which chunks a large import into batches and calls
+// this once per chunk, so a 2000-row file becomes ~8 requests instead of
+// ~2000. Every row is stamped with the same userId, matching the
+// single-row insertTrade()'s behavior.
+export async function insertTradesBatch(
+  userId: string,
+  trades: Omit<Trade, "id">[]
+): Promise<Trade[]> {
+  if (trades.length === 0) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("trades")
+    .insert(trades.map((t) => tradeToInsertRow(t, userId)))
+    .select();
+
+  if (error) throw error;
+  return (data as TradeRow[]).map(rowToTrade);
+}
+
 export async function deleteTradeDb(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase
