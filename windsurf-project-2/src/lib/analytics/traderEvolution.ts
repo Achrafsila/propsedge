@@ -17,7 +17,10 @@ import { Trade } from "@/types";
 // immediately before that. Both periods must clear the same minimum
 // sample floor used elsewhere in Trader DNA (10) before any trend is
 // reported — otherwise the specific insight (not the whole engine) falls
-// back to "Not enough data".
+// back to "Building history". Evolution is the one Trader DNA block where
+// this is a genuine structural gap (there is no second period to compare
+// against yet), not a "not enough data" sample-size judgment, so it's the
+// only insight in Trader DNA that still has a blocked-looking state.
 //
 // Self-contained by design (no imports from traderDNA.ts, traderIdentity.ts,
 // traderHabits.ts, traderEdge.ts, traderBlindSpots.ts, traderDiscipline.ts,
@@ -25,7 +28,7 @@ import { Trade } from "@/types";
 // field is returned already formatted for display — React only renders
 // this object, it never decides thresholds, units, or fallback copy.
 
-const NOT_ENOUGH_DATA = "Not enough data";
+const BUILDING_HISTORY = "Building history";
 
 // Same floor used by Your Edge / Blind Spots / Discipline's session
 // grouping — a period needs at least this many qualifying trades before a
@@ -147,12 +150,12 @@ export interface EvolutionInsight {
   sampleSize: number;
 }
 
-function notEnoughDataInsight(label: string): EvolutionInsight {
+function buildingHistoryInsight(label: string): EvolutionInsight {
   return {
     label,
-    value: NOT_ENOUGH_DATA,
+    value: BUILDING_HISTORY,
     metric: null,
-    reasons: NOT_ENOUGH_DATA,
+    reasons: BUILDING_HISTORY,
     sampleSize: 0,
   };
 }
@@ -173,7 +176,7 @@ const ACTIVITY_LABEL = "Activity Trend";
 
 function buildActivityTrend(periods: Periods): EvolutionInsight {
   if (periods.recent.length < MIN_TRADES_PER_PERIOD || periods.previous.length < MIN_TRADES_PER_PERIOD) {
-    return notEnoughDataInsight(ACTIVITY_LABEL);
+    return buildingHistoryInsight(ACTIVITY_LABEL);
   }
 
   const recentAvg = periods.recent.length / activeDayCount(periods.recent);
@@ -200,7 +203,7 @@ function buildHoldingTimeTrend(periods: Periods): EvolutionInsight {
   const previousHoldings = periods.previous.map(getHoldingMinutes).filter((m): m is number => m !== null);
 
   if (recentHoldings.length < MIN_TRADES_PER_PERIOD || previousHoldings.length < MIN_TRADES_PER_PERIOD) {
-    return notEnoughDataInsight(HOLDING_TIME_LABEL);
+    return buildingHistoryInsight(HOLDING_TIME_LABEL);
   }
 
   const recentAvg = recentHoldings.reduce((s, m) => s + m, 0) / recentHoldings.length;
@@ -253,7 +256,7 @@ function buildFocusTrend<K extends string>(
   const previous = computeConcentration(periods.previous, keyFn);
 
   if (recent.sampleSize < MIN_TRADES_PER_PERIOD || previous.sampleSize < MIN_TRADES_PER_PERIOD) {
-    return notEnoughDataInsight(label);
+    return buildingHistoryInsight(label);
   }
 
   const diff = recent.concentration - previous.concentration;

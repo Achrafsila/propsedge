@@ -3,17 +3,16 @@
 import { motion } from "framer-motion";
 import { Activity, Clock, DollarSign, Layers, Repeat, Scale } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { DNAInsight, ExpectancyResult, ProfitFactorResult, PropFirmConsistency, SessionKey } from "@/lib/analytics/traderDNA";
+import {
+  DNAInsight,
+  ExpectancyResult,
+  getProgressiveDataLabel,
+  ProfitFactorResult,
+  PropFirmConsistency,
+  SessionKey,
+} from "@/lib/analytics/traderDNA";
 
 const cardVariants = { hover: { y: -4, transition: { duration: 0.3 } } };
-
-// Below this many trades/days, an insight is drawn from too thin a sample
-// to show a specific value without it reading as more reliable than it is.
-const MIN_SAMPLE_SIZE_FOR_DISPLAY = 5;
-
-function hasEnoughData(sampleSize: number): boolean {
-  return sampleSize >= MIN_SAMPLE_SIZE_FOR_DISPLAY;
-}
 
 function KpiCard({
   icon: Icon,
@@ -97,9 +96,13 @@ export function GlobalOverview({
   expectancy: ExpectancyResult;
   profitFactor: ProfitFactorResult;
 }) {
-  const frequencyReady = hasEnoughData(tradingFrequency.sampleSize);
-  const sessionReady = hasEnoughData(preferredSession.sampleSize) && !!preferredSession.value;
-  const instrumentReady = hasEnoughData(preferredInstrument.sampleSize) && !!preferredInstrument.value;
+  // Trader DNA never blocks a KPI for low sample size — every card below
+  // always shows its current, mathematically valid value. progressiveLabel
+  // only controls the wording wrapped around that value (see
+  // getProgressiveDataLabel in traderDNA.ts).
+  const progressiveLabel = getProgressiveDataLabel(expectancy.totalTrades);
+  const hasNoTrades = progressiveLabel === "No trades yet";
+  const progressivePrefix = !hasNoTrades && progressiveLabel !== "Normal" ? `${progressiveLabel} · ` : "";
 
   const consistencyPct =
     propFirmConsistency.percentage !== null ? Math.round(propFirmConsistency.percentage) : null;
@@ -107,22 +110,29 @@ export function GlobalOverview({
   const expectancyValue =
     expectancy.expectancy !== null
       ? `${expectancy.expectancy >= 0 ? "+" : "-"}$${Math.abs(expectancy.expectancy).toFixed(2)} / trade`
-      : "Not enough data";
+      : "No trades yet";
 
-  const profitFactorValue = profitFactor.profitFactor !== null ? profitFactor.profitFactor.toFixed(2) : "∞";
+  const profitFactorValue =
+    profitFactor.totalTrades === 0 ? "No trades yet" : profitFactor.profitFactor !== null ? profitFactor.profitFactor.toFixed(2) : "∞";
   const profitFactorSub =
-    profitFactor.profitFactor !== null
-      ? `Gross Profit is ${profitFactor.profitFactor.toFixed(2)}× larger than Gross Loss.`
-      : "No losing trades yet.";
+    profitFactor.totalTrades === 0
+      ? ""
+      : profitFactor.profitFactor !== null
+        ? `Gross Profit is ${profitFactor.profitFactor.toFixed(2)}× larger than Gross Loss.`
+        : "No losing trades yet.";
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
       <KpiCard
         icon={Activity}
         label="Trading Frequency"
-        value={frequencyReady ? `${tradingFrequency.value.toFixed(1)}/day` : "Not enough data"}
+        value={hasNoTrades ? "No trades yet" : `${tradingFrequency.value.toFixed(1)}/day`}
         color="#298DFF"
-        sub={frequencyReady ? `${tradingFrequency.sampleSize} active trading days` : "Need more closed trades"}
+        sub={
+          hasNoTrades
+            ? ""
+            : `${progressivePrefix}${tradingFrequency.sampleSize} active trading day${tradingFrequency.sampleSize === 1 ? "" : "s"}`
+        }
       />
       <KpiCard
         icon={Repeat}
@@ -138,19 +148,17 @@ export function GlobalOverview({
       <KpiCard
         icon={Clock}
         label="Most Traded Session"
-        value={sessionReady ? (preferredSession.value as string) : "Not enough data"}
+        value={hasNoTrades ? "No trades yet" : (preferredSession.value as string)}
         color="#10B981"
-        sub={sessionReady ? `${sessionTradeCount} of ${preferredSession.sampleSize} trades` : "Need more closed trades"}
+        sub={hasNoTrades ? "" : `${progressivePrefix}${sessionTradeCount} of ${preferredSession.sampleSize} trades`}
       />
       <KpiCard
         icon={Layers}
         label="Most Traded Instrument"
-        value={instrumentReady ? (preferredInstrument.value as string) : "Not enough data"}
+        value={hasNoTrades ? "No trades yet" : (preferredInstrument.value as string)}
         color="#D4AF37"
         sub={
-          instrumentReady
-            ? `${instrumentTradeCount} of ${preferredInstrument.sampleSize} trades`
-            : "Need more closed trades"
+          hasNoTrades ? "" : `${progressivePrefix}${instrumentTradeCount} of ${preferredInstrument.sampleSize} trades`
         }
       />
       <KpiCard
@@ -158,7 +166,7 @@ export function GlobalOverview({
         label="Expectancy"
         value={expectancyValue}
         color="#F97316"
-        sub="Average profit generated per executed trade."
+        sub={expectancy.expectancy !== null ? "Average profit generated per executed trade." : ""}
       />
       <KpiCard
         icon={Scale}

@@ -391,6 +391,7 @@ export interface ProfitFactorResult {
   profitFactor: number | null; // null when grossLoss is 0 ("∞" in the UI)
   grossProfit: number;
   grossLoss: number;
+  totalTrades: number; // lets the UI tell "no trades at all" apart from "no losses yet"
 }
 
 export function getProfitFactor(trades: Trade[]): ProfitFactorResult {
@@ -407,5 +408,22 @@ export function getProfitFactor(trades: Trade[]): ProfitFactorResult {
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
     grossProfit,
     grossLoss,
+    totalTrades: dated.length,
   };
+}
+
+// ── Progressive data confidence wording ──────────────────────────────────
+// Trader DNA never blocks an insight for having "too few" trades — every
+// KPI always shows its current, mathematically valid value. This only
+// controls the wording wrapped around that value: a 3-trade "Most Traded
+// Session" is still real data, just worth flagging as an early read rather
+// than a settled pattern.
+
+export type ProgressiveDataLabel = "No trades yet" | "Early signal" | "Emerging pattern" | "Normal";
+
+export function getProgressiveDataLabel(totalTrades: number): ProgressiveDataLabel {
+  if (totalTrades <= 0) return "No trades yet";
+  if (totalTrades < 10) return "Early signal";
+  if (totalTrades < 30) return "Emerging pattern";
+  return "Normal";
 }

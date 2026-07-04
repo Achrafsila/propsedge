@@ -7,10 +7,15 @@ import { Trade } from "@/types";
 // question: "Under which conditions do I statistically perform best?" —
 // unlike Identity and Habits (which never touch pnl), Edge is explicitly
 // allowed to read pnl, but only to rank groups against each other, never to
-// report total P&L on its own. A single huge trade must not be able to
-// crown a session, instrument, or weekday as "best" — every ranking is done
-// on expectancy (average pnl per trade) within a group, and any group below
-// the minimum sample size is excluded from the ranking entirely.
+// report total P&L on its own. Every ranking is done on expectancy
+// (average pnl per trade) within a group, never summed pnl, so one large
+// winner or loser inside a group can't outweigh its actual per-trade track
+// record.
+//
+// This engine never blocks an insight for low sample size — it always
+// ranks and shows whichever group is currently best, even off a single
+// trade. A group's narrative is flagged "Early signal · based on N trades"
+// below SMALL_SAMPLE_THRESHOLD instead of being hidden.
 //
 // Self-contained by design (no imports from traderDNA.ts, traderIdentity.ts,
 // traderHabits.ts, or globalAnalytics.ts), same convention as the rest of
@@ -19,20 +24,11 @@ import { Trade } from "@/types";
 // fallback copy. All narrative text is template-based, never generated (no
 // AI).
 
-const NOT_ENOUGH_DATA = "Not enough data";
+const NO_TRADES_YET = "No trades yet";
 
-// A group's expectancy needs enough trades behind it to be a statistical
-// signal rather than a coincidence (or one outsized trade skewing the
-// average) — 10 trades is the V1 floor. Used for session and instrument;
-// weekday uses a separate, stricter rule (see MIN_ACTIVE_DAYS_FOR_WEEKDAY).
-const MIN_GROUP_SAMPLE_SIZE = 10;
-
-// A weekday's expectancy can look artificially strong from just a couple of
-// calendar days if a trader takes many trades in one sitting — 10 trades on
-// two Mondays isn't a "Monday edge," it's two good days. Best Weekday
-// instead requires at least this many DISTINCT trading days landing on that
-// weekday, not just this many trades.
-const MIN_ACTIVE_DAYS_FOR_WEEKDAY = 7;
+// Below this many trades, a group's result is still real (never hidden or
+// blocked) but is labeled as an early read rather than a settled pattern.
+const SMALL_SAMPLE_THRESHOLD = 10;
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
@@ -61,11 +57,11 @@ interface GroupResult<K extends string> {
   expectancy: number;
 }
 
-// Groups trades by keyFn, computes each group's expectancy (avg pnl per
-// trade), drops any group under MIN_GROUP_SAMPLE_SIZE, and returns the
-// group with the highest expectancy among the ones left. Ranking is always
-// by expectancy — never by summed pnl — so one large winner or loser inside
-// a group can't outweigh the group's actual per-trade track record.
+// Groups trades by keyFn and returns the group with the highest expectancy
+// (avg pnl per trade) — every group with at least one trade is eligible,
+// no minimum sample size. Ranking is always by expectancy — never by
+// summed pnl — so one large winner or loser inside a group can't outweigh
+// the group's actual per-trade track record.
 function rankByExpectancy<K extends string>(
   trades: Trade[],
   keyFn: (t: Trade) => K | null
@@ -83,7 +79,6 @@ function rankByExpectancy<K extends string>(
 
   let best: GroupResult<K> | null = null;
   for (const [key, { sum, count }] of groups) {
-    if (count < MIN_GROUP_SAMPLE_SIZE) continue;
     const expectancy = sum / count;
     if (best === null || expectancy > best.expectancy) {
       best = { key, count, expectancy };
@@ -92,31 +87,8 @@ function rankByExpectancy<K extends string>(
   return best;
 }
 
-// Same ranking as rankByExpectancy, but the validity gate is on the number
-// of DISTINCT calendar days landing on that weekday, not the trade count —
-// see MIN_ACTIVE_DAYS_FOR_WEEKDAY above.
-function rankWeekdayByExpectancy(trades: Trade[]): GroupResult<DayOfWeek> | null {
-  const groups = new Map<DayOfWeek, { sum: number; count: number; activeDays: Set<string> }>();
-
-  for (const t of trades) {
-    const key = getDayOfWeek(t.entryDate);
-    if (key === null) continue;
-    const g = groups.get(key) ?? { sum: 0, count: 0, activeDays: new Set<string>() };
-    g.sum += t.pnl;
-    g.count += 1;
-    g.activeDays.add(t.entryDate);
-    groups.set(key, g);
-  }
-
-  let best: GroupResult<DayOfWeek> | null = null;
-  for (const [key, { sum, count, activeDays }] of groups) {
-    if (activeDays.size < MIN_ACTIVE_DAYS_FOR_WEEKDAY) continue;
-    const expectancy = sum / count;
-    if (best === null || expectancy > best.expectancy) {
-      best = { key, count, expectancy };
-    }
-  }
-  return best;
+function smallSampleNarrative(count: number): string {
+  return `Early signal · based on ${count} trade${count === 1 ? "" : "s"}`;
 }
 
 function buildInsight<K extends string>(
@@ -126,13 +98,13 @@ function buildInsight<K extends string>(
   formatValue: (key: K) => string = (key) => key
 ): EdgeInsight {
   if (result === null) {
-    return { label, value: NOT_ENOUGH_DATA, metricLabel: "", narrative: "", sampleSize: 0 };
+    return { label, value: NO_TRADES_YET, metricLabel: "", narrative: "", sampleSize: 0 };
   }
   return {
     label,
     value: formatValue(result.key),
     metricLabel: formatExpectancy(result.expectancy),
-    narrative,
+    narrative: result.count < SMALL_SAMPLE_THRESHOLD ? smallSampleNarrative(result.count) : narrative,
     sampleSize: result.count,
   };
 }
@@ -154,7 +126,7 @@ function buildExecutiveSummary(
   } else if (sessionResult) {
     base = `Your strongest statistical edge currently comes from trading during the ${sessionResult.key} session.`;
   } else {
-    return "Not enough trade history yet to identify your strongest statistical edge.";
+    return NO_TRADES_YET;
   }
 
   return weekdayResult
@@ -200,7 +172,7 @@ export function getTraderEdge(trades: Trade[]): TraderEdge {
 
   const sessionResult = rankByExpectancy(sorted, (t) => t.session ?? null);
   const instrumentResult = rankByExpectancy(sorted, (t) => (t.symbol ? t.symbol : null));
-  const weekdayResult = rankWeekdayByExpectancy(sorted);
+  const weekdayResult = rankByExpectancy(sorted, (t) => getDayOfWeek(t.entryDate));
 
   const bestSession = buildInsight(
     "Best Session",

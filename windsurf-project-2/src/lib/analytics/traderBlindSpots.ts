@@ -6,12 +6,15 @@ import { Trade } from "@/types";
 // Pure, stateless helpers over a Trade[] list. Blind Spots answers exactly
 // one question: "In which situations should I be most careful?" — like
 // Your Edge, it's allowed to read pnl, but only to surface weak contexts
-// and risk patterns, never to report total P&L on its own. A single huge
-// losing trade must not be able to condemn a session, instrument, weekday,
-// or trade-order slot as a "blind spot" — every ranking is done on
-// expectancy (average pnl per trade) within a group, and any group below
-// the minimum sample size is excluded from the ranking entirely. This
-// block highlights contexts, not the trader.
+// and risk patterns, never to report total P&L on its own. Every ranking
+// is done on expectancy (average pnl per trade) within a group, never
+// summed pnl, so one large losing trade can't outweigh a group's actual
+// per-trade track record. This block highlights contexts, not the trader.
+//
+// This engine never blocks an insight for low sample size — it always
+// ranks and shows whichever group is currently weakest, even off a single
+// trade. A group's narrative is flagged "Early signal · based on N trades"
+// below SMALL_SAMPLE_THRESHOLD instead of being hidden.
 //
 // Self-contained by design (no imports from traderDNA.ts, traderIdentity.ts,
 // traderHabits.ts, traderEdge.ts, or globalAnalytics.ts), same convention as
@@ -20,21 +23,11 @@ import { Trade } from "@/types";
 // units, or fallback copy. All narrative text is template-based, never
 // generated (no AI).
 
-const NOT_ENOUGH_DATA = "Not enough data";
+const NO_TRADES_YET = "No trades yet";
 
-// A group's expectancy needs enough trades behind it to be a statistical
-// signal rather than a coincidence (or one outsized loss skewing the
-// average) — 10 trades is the V1 floor. Used for session, instrument, and
-// the trade-order buckets; weekday uses a separate, stricter rule (see
-// MIN_ACTIVE_DAYS_FOR_WEEKDAY) — same rule Your Edge uses for consistency.
-const MIN_GROUP_SAMPLE_SIZE = 10;
-
-// A weekday's expectancy can look artificially weak from just a couple of
-// calendar days if a trader takes many trades in one sitting — 10 trades on
-// two Fridays isn't a "Friday blind spot," it's two bad days. Weakest
-// Weekday instead requires at least this many DISTINCT trading days landing
-// on that weekday, not just this many trades.
-const MIN_ACTIVE_DAYS_FOR_WEEKDAY = 7;
+// Below this many trades, a group's result is still real (never hidden or
+// blocked) but is labeled as an early read rather than a settled pattern.
+const SMALL_SAMPLE_THRESHOLD = 10;
 
 // ── Shared helpers ───────────────────────────────────────────────────────
 
@@ -89,11 +82,11 @@ interface GroupResult<K extends string> {
   expectancy: number;
 }
 
-// Groups trades by keyFn, computes each group's expectancy (avg pnl per
-// trade), drops any group under MIN_GROUP_SAMPLE_SIZE, and returns the
-// group with the LOWEST expectancy among the ones left. Ranking is always
-// by expectancy — never by summed pnl — so one large losing trade inside a
-// group can't outweigh the group's actual per-trade track record.
+// Groups trades by keyFn and returns the group with the LOWEST expectancy
+// (avg pnl per trade) — every group with at least one trade is eligible,
+// no minimum sample size. Ranking is always by expectancy — never by
+// summed pnl — so one large losing trade inside a group can't outweigh the
+// group's actual per-trade track record.
 function rankByLowestExpectancy<K extends string>(
   trades: Trade[],
   keyFn: (t: Trade) => K | null
@@ -111,7 +104,6 @@ function rankByLowestExpectancy<K extends string>(
 
   let worst: GroupResult<K> | null = null;
   for (const [key, { sum, count }] of groups) {
-    if (count < MIN_GROUP_SAMPLE_SIZE) continue;
     const expectancy = sum / count;
     if (worst === null || expectancy < worst.expectancy) {
       worst = { key, count, expectancy };
@@ -120,33 +112,8 @@ function rankByLowestExpectancy<K extends string>(
   return worst;
 }
 
-// Same ranking as rankByLowestExpectancy, but the validity gate is on the
-// number of DISTINCT calendar days landing on that weekday, not the trade
-// count — see MIN_ACTIVE_DAYS_FOR_WEEKDAY above. Mirrors traderEdge.ts's
-// rankWeekdayByExpectancy (duplicated, not imported, per this file's
-// self-contained convention).
-function rankWeekdayByLowestExpectancy(trades: Trade[]): GroupResult<DayOfWeek> | null {
-  const groups = new Map<DayOfWeek, { sum: number; count: number; activeDays: Set<string> }>();
-
-  for (const t of trades) {
-    const key = getDayOfWeek(t.entryDate);
-    if (key === null) continue;
-    const g = groups.get(key) ?? { sum: 0, count: 0, activeDays: new Set<string>() };
-    g.sum += t.pnl;
-    g.count += 1;
-    g.activeDays.add(t.entryDate);
-    groups.set(key, g);
-  }
-
-  let worst: GroupResult<DayOfWeek> | null = null;
-  for (const [key, { sum, count, activeDays }] of groups) {
-    if (activeDays.size < MIN_ACTIVE_DAYS_FOR_WEEKDAY) continue;
-    const expectancy = sum / count;
-    if (worst === null || expectancy < worst.expectancy) {
-      worst = { key, count, expectancy };
-    }
-  }
-  return worst;
+function smallSampleNarrative(count: number): string {
+  return `Early signal · based on ${count} trade${count === 1 ? "" : "s"}`;
 }
 
 function buildInsight<K extends string>(
@@ -156,13 +123,13 @@ function buildInsight<K extends string>(
   formatValue: (key: K) => string = (key) => key
 ): BlindSpotInsight {
   if (result === null) {
-    return { label, value: NOT_ENOUGH_DATA, metricLabel: "", narrative: "", sampleSize: 0 };
+    return { label, value: NO_TRADES_YET, metricLabel: "", narrative: "", sampleSize: 0 };
   }
   return {
     label,
     value: formatValue(result.key),
     metricLabel: formatExpectancy(result.expectancy),
-    narrative,
+    narrative: result.count < SMALL_SAMPLE_THRESHOLD ? smallSampleNarrative(result.count) : narrative,
     sampleSize: result.count,
   };
 }
@@ -207,7 +174,7 @@ function rankTradeNumberBuckets(trades: Trade[]): GroupResult<TradeNumberBucket>
   let worst: GroupResult<TradeNumberBucket> | null = null;
   for (const bucket of TRADE_NUMBER_BUCKETS) {
     const { sum, count } = groups.get(bucket)!;
-    if (count < MIN_GROUP_SAMPLE_SIZE) continue;
+    if (count === 0) continue; // bucket never occurred — nothing to rank
     const expectancy = sum / count;
     if (worst === null || expectancy < worst.expectancy) {
       worst = { key: bucket, count, expectancy };
@@ -226,7 +193,7 @@ function buildTradeNumberInsight(result: GroupResult<TradeNumberBucket> | null):
   if (result === null) {
     return {
       label: PERFORMANCE_AFTER_TRADE_NUMBER_LABEL,
-      value: NOT_ENOUGH_DATA,
+      value: NO_TRADES_YET,
       metricLabel: "",
       narrative: "",
       sampleSize: 0,
@@ -234,13 +201,16 @@ function buildTradeNumberInsight(result: GroupResult<TradeNumberBucket> | null):
   }
 
   const metricLabel = formatExpectancy(result.expectancy);
+  const isSmallSample = result.count < SMALL_SAMPLE_THRESHOLD;
 
   if (result.key === "4+") {
     return {
       label: PERFORMANCE_AFTER_TRADE_NUMBER_LABEL,
       value: "After Trade #3",
       metricLabel,
-      narrative: "Your average performance declines after your third trade of the day.",
+      narrative: isSmallSample
+        ? smallSampleNarrative(result.count)
+        : "Your average performance declines after your third trade of the day.",
       sampleSize: result.count,
     };
   }
@@ -250,7 +220,9 @@ function buildTradeNumberInsight(result: GroupResult<TradeNumberBucket> | null):
     label: PERFORMANCE_AFTER_TRADE_NUMBER_LABEL,
     value: `Trade #${n}`,
     metricLabel,
-    narrative: `Your average performance is weakest on your ${ordinalWord(n)} trade of the day.`,
+    narrative: isSmallSample
+      ? smallSampleNarrative(result.count)
+      : `Your average performance is weakest on your ${ordinalWord(n)} trade of the day.`,
     sampleSize: result.count,
   };
 }
@@ -288,7 +260,7 @@ function buildExecutiveSummary(
   if (tradeClause) {
     return `Your weakest statistical performance currently comes ${tradeClause}.`;
   }
-  return "Not enough trade history yet to identify your weakest statistical performance.";
+  return NO_TRADES_YET;
 }
 
 // ── Insight & Metadata ───────────────────────────────────────────────────
@@ -330,7 +302,7 @@ export function getTraderBlindSpots(trades: Trade[]): TraderBlindSpots {
 
   const sessionResult = rankByLowestExpectancy(sorted, (t) => t.session ?? null);
   const instrumentResult = rankByLowestExpectancy(sorted, (t) => (t.symbol ? t.symbol : null));
-  const weekdayResult = rankWeekdayByLowestExpectancy(sorted);
+  const weekdayResult = rankByLowestExpectancy(sorted, (t) => getDayOfWeek(t.entryDate));
   const tradeNumberResult = rankTradeNumberBuckets(sorted);
 
   const worstSession = buildInsight(
