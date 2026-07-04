@@ -26,10 +26,12 @@ import { getTraderEdge } from "@/lib/analytics/traderEdge";
 import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
 import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
+import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
+import { DataConfidenceCard } from "@/components/analytics/DataConfidenceCard";
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -104,6 +106,12 @@ export default function GlobalAnalyticsPage() {
   // vs previous 30-day windows on activity/holding-time/focus, never on
   // pnl/win-rate/profit-factor/expectancy.
   const evolution = useMemo(() => getTraderEvolution(filteredTrades), [filteredTrades]);
+
+  // Data Confidence (Trader DNA V2) — see
+  // src/lib/analytics/dataConfidence.ts. Purely informational: never blocks
+  // or hides any KPI/card above, just labels how much trade history backs
+  // them right now.
+  const dataConfidence = useMemo(() => getDataConfidence(filteredTrades), [filteredTrades]);
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -197,6 +205,8 @@ export default function GlobalAnalyticsPage() {
           Understand how you trade, not just what you earn.
         </p>
       </motion.div>
+
+      <DataConfidenceCard confidence={dataConfidence} />
 
       {orphanedTrades.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
