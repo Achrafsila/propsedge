@@ -15,6 +15,21 @@ export interface ParsedTrade {
   pnl: number;
   status: TradeStatus;
   notes?: string;
+  // Present when the source file carried them (TP/SL/Commission/Swap for
+  // the legacy format, stop_loss/take_profit/commission/swap for the UTC
+  // broker format) — both parsers populate the same fields here so
+  // downstream code never has to know which format a trade came from.
+  // Trade/Supabase have no dedicated columns for these yet, so they're
+  // also folded into `notes` below for now, same as before this format
+  // was added.
+  stopLoss?: number;
+  takeProfit?: number;
+  commission?: number;
+  swap?: number;
+  // UTC broker format only: the broker's own trade/ticket id and its
+  // close reason, carried through as metadata for possible future use.
+  externalTradeId?: string;
+  closeReason?: string;
 }
 
 export interface SkippedRow {
@@ -42,11 +57,6 @@ const REQUIRED_COLUMNS = [
   "Lots",
   "Profit",
 ];
-
-// Columns that identify the newer UTC broker export format. Distinctive
-// enough (opening_time_utc/closing_time_utc) that they won't accidentally
-// match an unrelated unknown format.
-const UTC_BROKER_REQUIRED_COLUMNS = ["opening_time_utc", "closing_time_utc", "symbol", "lots", "profit", "type"];
 
 const UNKNOWN_FORMAT_ERROR =
   "Some columns could not be detected. Manual column mapping will be added in a later version.";
@@ -296,30 +306,33 @@ function statusFromPnl(pnl: number): TradeStatus {
 // ============================================================
 // Format detection
 // ============================================================
-// Every known parser has a fixed, distinctive set of required column names.
-// A file is only routed to a known parser if ALL of that parser's required
-// columns are present — anything else falls through to the best-effort
-// fallbackGenericParser() rather than being rejected outright.
+// The dispatcher: opening_time_utc is unique to the new broker export, so
+// its presence alone is enough to route to parseUtcBrokerFormat() — no
+// need to check the rest of that format's columns first. Anything without
+// it is assumed to be the legacy format.
 
-type KnownFormat = "existing" | "utcBroker" | "unknown";
+type ImportFormat = "legacy" | "utcBroker";
+
+function hasColumn(headers: string[], columnName: string): boolean {
+  const target = normalizeHeader(columnName);
+  return headers.some((h) => normalizeHeader(h) === target);
+}
 
 function hasAllColumns(headers: string[], requiredColumns: string[]): boolean {
   const normalizedHeaders = headers.map(normalizeHeader);
   return requiredColumns.every((col) => normalizedHeaders.includes(normalizeHeader(col)));
 }
 
-function detectKnownFormat(headers: string[]): KnownFormat {
-  if (hasAllColumns(headers, REQUIRED_COLUMNS)) return "existing";
-  if (hasAllColumns(headers, UTC_BROKER_REQUIRED_COLUMNS)) return "utcBroker";
-  return "unknown";
+function detectImportFormat(headers: string[]): ImportFormat {
+  return hasColumn(headers, "opening_time_utc") ? "utcBroker" : "legacy";
 }
 
 // ============================================================
-// Existing format: Symbol / Type / Open Date / Open / Closed Date / Closed
-// / Lots / Profit (+ optional TP / SL / Commission)
+// Legacy format: Symbol / Type / Open Date / Open / Closed Date / Closed
+// / Lots / Profit (+ optional TP / SL / Commission / Swap)
 // ============================================================
 
-function parseExistingFormat(rows: Row[]): ParsedTradeFile {
+function parseLegacyFormat(rows: Row[]): ParsedTradeFile {
   const trades: ParsedTrade[] = [];
   const skippedRows: SkippedRow[] = [];
 
@@ -335,6 +348,7 @@ function parseExistingFormat(rows: Row[]): ParsedTradeFile {
     const tp = findValue(row, ["TP"]);
     const sl = findValue(row, ["SL"]);
     const commission = findValue(row, ["Commission"]);
+    const swap = findValue(row, ["Swap"]);
 
     const isBlankRow =
       !symbol &&
@@ -390,17 +404,25 @@ function parseExistingFormat(rows: Row[]): ParsedTradeFile {
     const direction = directionFromType(typeValue);
     const status = statusFromPnl(pnl);
 
-    // TP/SL/Commission have no dedicated Trade fields, so they're preserved as
-    // notes. Commission is informational only and is never subtracted from
-    // pnl — the Profit column already reflects the net result.
+    // TP/SL/Commission/Swap have no dedicated Trade fields, so they're
+    // preserved both as structured ParsedTrade fields (for parity with the
+    // UTC broker format) and as notes text for now, same as before this
+    // format was added. Commission/swap are informational only and are
+    // never subtracted from pnl — the Profit column already reflects the
+    // net result.
+    const takeProfitValue = parseAmount(tp);
+    const stopLossValue = parseAmount(sl);
+    const commissionValue = parseAmount(commission);
+    const swapValue = parseAmount(swap);
+
     const notesParts: string[] = [];
     if (tp !== undefined && tp !== "") notesParts.push(`TP: ${tp}`);
     if (sl !== undefined && sl !== "") notesParts.push(`SL: ${sl}`);
-    if (commission !== undefined && commission !== "") {
-      const commissionValue = parseAmount(commission);
-      if (commissionValue !== null && commissionValue !== 0) {
-        notesParts.push(`Commission: ${commission}`);
-      }
+    if (commission !== undefined && commission !== "" && commissionValue !== null && commissionValue !== 0) {
+      notesParts.push(`Commission: ${commission}`);
+    }
+    if (swap !== undefined && swap !== "" && swapValue !== null && swapValue !== 0) {
+      notesParts.push(`Swap: ${swap}`);
     }
 
     trades.push({
@@ -417,6 +439,10 @@ function parseExistingFormat(rows: Row[]): ParsedTradeFile {
       pnl,
       status,
       notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+      takeProfit: takeProfitValue ?? undefined,
+      stopLoss: stopLossValue ?? undefined,
+      commission: commissionValue ?? undefined,
+      swap: swapValue ?? undefined,
     });
   });
 
@@ -484,31 +510,32 @@ function parseUtcBrokerFormat(rows: Row[]): ParsedTradeFile {
     const direction = directionFromType(typeValue);
     const status = statusFromPnl(pnl);
 
-    // ticket/stop_loss/take_profit/commission/swap have no dedicated Trade
-    // fields, so they're preserved as notes — same treatment TP/SL/
-    // Commission get in the existing format. Commission and swap are
-    // informational only and are never subtracted from pnl.
+    // ticket/stop_loss/take_profit/commission/swap/close_reason have no
+    // dedicated Trade columns yet, so — same as the legacy format — they're
+    // preserved both as structured ParsedTrade fields and as notes text.
+    // Commission and swap are informational only and are never subtracted
+    // from pnl; ticket/close_reason are carried through as metadata only.
     const ticket = findValue(row, ["ticket"]);
     const takeProfit = findValue(row, ["take_profit"]);
     const stopLoss = findValue(row, ["stop_loss"]);
     const commission = findValue(row, ["commission"]);
     const swap = findValue(row, ["swap"]);
+    const closeReason = findValue(row, ["close_reason"]);
+
+    const takeProfitValue = parseAmount(takeProfit);
+    const stopLossValue = parseAmount(stopLoss);
+    const commissionValue = parseAmount(commission);
+    const swapValue = parseAmount(swap);
 
     const notesParts: string[] = [];
     if (ticket !== undefined && ticket !== "") notesParts.push(`Ticket: ${ticket}`);
     if (takeProfit !== undefined && takeProfit !== "") notesParts.push(`TP: ${takeProfit}`);
     if (stopLoss !== undefined && stopLoss !== "") notesParts.push(`SL: ${stopLoss}`);
-    if (commission !== undefined && commission !== "") {
-      const commissionValue = parseAmount(commission);
-      if (commissionValue !== null && commissionValue !== 0) {
-        notesParts.push(`Commission: ${commission}`);
-      }
+    if (commission !== undefined && commission !== "" && commissionValue !== null && commissionValue !== 0) {
+      notesParts.push(`Commission: ${commission}`);
     }
-    if (swap !== undefined && swap !== "") {
-      const swapValue = parseAmount(swap);
-      if (swapValue !== null && swapValue !== 0) {
-        notesParts.push(`Swap: ${swap}`);
-      }
+    if (swap !== undefined && swap !== "" && swapValue !== null && swapValue !== 0) {
+      notesParts.push(`Swap: ${swap}`);
     }
 
     trades.push({
@@ -525,6 +552,12 @@ function parseUtcBrokerFormat(rows: Row[]): ParsedTradeFile {
       pnl,
       status,
       notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+      takeProfit: takeProfitValue ?? undefined,
+      stopLoss: stopLossValue ?? undefined,
+      commission: commissionValue ?? undefined,
+      swap: swapValue ?? undefined,
+      externalTradeId: ticket !== undefined && ticket !== "" ? String(ticket) : undefined,
+      closeReason: closeReason !== undefined && closeReason !== "" ? String(closeReason) : undefined,
     });
   });
 
@@ -683,9 +716,14 @@ export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
   }
 
   const headers = Object.keys(rows[0]);
-  const format = detectKnownFormat(headers);
+  const format = detectImportFormat(headers);
 
-  if (format === "existing") return parseExistingFormat(rows);
   if (format === "utcBroker") return parseUtcBrokerFormat(rows);
+
+  // "legacy" only means "not the UTC broker format" — if this file doesn't
+  // actually carry the legacy format's full required-column set either,
+  // it's an unrecognized third format, so fall through to best-effort
+  // column auto-mapping instead of forcing it through parseLegacyFormat().
+  if (hasAllColumns(headers, REQUIRED_COLUMNS)) return parseLegacyFormat(rows);
   return fallbackGenericParser(rows, headers);
 }
