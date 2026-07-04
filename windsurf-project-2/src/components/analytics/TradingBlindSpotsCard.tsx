@@ -3,23 +3,19 @@
 import { motion } from "framer-motion";
 import { EyeOff } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { BlindSpotInsight, TraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
+import { TraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 
 const BLIND_SPOTS_COLOR = "#EF4444";
 
 // Renders whatever src/lib/analytics/traderBlindSpots.ts computes — no
-// thresholds, ranking, or fallback copy decided here. This card is real
-// (not a placeholder): each insight gets its value, its expectancy metric,
-// and the engine's own deterministic narrative, and the executive summary
-// is the engine's narrative too, not something assembled in this
-// component.
+// thresholds, ranking, or fallback copy decided here. Trader DNA V4: this
+// card answers exactly one question — "Where do I lose my edge?" — with a
+// single flagship insight (Biggest Leak) instead of a list of per-dimension
+// rankings. Worst Session/Instrument/Weekday and Performance After Trade
+// Number are still computed by the engine for the AI Coach; they just
+// aren't rendered here.
 export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindSpots }) {
-  const rows: BlindSpotInsight[] = [
-    blindSpots.worstSession,
-    blindSpots.worstInstrument,
-    blindSpots.weakestWeekday,
-    blindSpots.performanceAfterTradeNumber,
-  ];
+  const { biggestLeak } = blindSpots;
 
   return (
     <motion.div
@@ -51,41 +47,41 @@ export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindS
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        In which situations you should be most careful — contexts that quietly work against you, not a judgment on you.
+        Where you lose your edge — contexts that quietly work against you, not a judgment on you.
       </p>
 
-      <div className="space-y-4 mb-5">
-        {rows.map((row) => (
-          <div key={row.label}>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-                {row.label}
-              </span>
-              <span
-                className="text-[#F8FAFC] font-semibold text-right"
-                style={{ fontSize: typography.fontSize.sm }}
-              >
-                {row.value}
-              </span>
-            </div>
-            {row.metricLabel && (
-              <p
-                className="mt-1 text-right"
-                style={{ fontSize: typography.fontSize.xs, color: BLIND_SPOTS_COLOR }}
-              >
-                {row.metricLabel}
-              </p>
-            )}
-            {row.narrative && (
-              <p
-                className="text-[#94A3B8] mt-1"
-                style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
-              >
-                {row.narrative}
-              </p>
-            )}
-          </div>
-        ))}
+      <div className="mb-5">
+        <p
+          className="uppercase mb-2"
+          style={{
+            color: "#94A3B8",
+            fontSize: typography.fontSize.xs,
+            fontWeight: typography.fontWeight.medium,
+            letterSpacing: typography.letterSpacing.label,
+            opacity: typography.opacity.secondary,
+          }}
+        >
+          Biggest Leak
+        </p>
+        <p
+          className="font-extrabold"
+          style={{ color: "#F8FAFC", fontSize: typography.fontSize.kpi, lineHeight: typography.lineHeight.kpi }}
+        >
+          {biggestLeak.value}
+        </p>
+        {biggestLeak.metricLabel && (
+          <p className="mt-2 font-semibold" style={{ color: BLIND_SPOTS_COLOR, fontSize: typography.fontSize.base }}>
+            {biggestLeak.metricLabel}
+          </p>
+        )}
+        {biggestLeak.narrative && (
+          <p
+            className="mt-2"
+            style={{ color: "#94A3B8", fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+          >
+            {biggestLeak.narrative}
+          </p>
+        )}
       </div>
 
       <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>

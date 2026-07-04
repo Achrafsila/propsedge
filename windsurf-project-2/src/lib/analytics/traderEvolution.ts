@@ -4,13 +4,13 @@ import { Trade } from "@/types";
 // PropEdge — Trader Evolution engine (Trader DNA V1, Block 6)
 // ============================================================
 // Pure, stateless helpers over a Trade[] list. Evolution answers exactly
-// one question: "How is my trading behavior changing over time?" — it
-// never reads pnl, win rate, profit factor, or expectancy. Same hard
-// boundary as traderIdentity.ts, traderHabits.ts, and
-// traderDiscipline.ts: a trader can be trading more/less, holding longer/
-// shorter, or drifting across sessions and instruments regardless of
-// whether that shift made or lost money. This file has no opinion on
-// which is happening, only on whether the behavior itself is changing.
+// one question: "Am I improving over time?" — comparing a recent 30-day
+// window against the 30 days before it. V1 kept this file pnl-free
+// (activity, holding time, session/instrument focus); Trader DNA V4 adds
+// Expectancy Trend and Setup Quality Trend, which do read pnl the same
+// way traderEdge.ts/traderBlindSpots.ts already do (to rank/compare, never
+// to report a raw running total) — this file no longer has a "never reads
+// pnl" boundary, but it still never reports total P&L on its own.
 //
 // V1 comparison window: the "recent" period is the 30 calendar days ending
 // on the most recent trade's date; "previous" is the 30 calendar days
@@ -117,6 +117,26 @@ function formatHoldingDuration(minutes: number): string {
 
 function formatPercent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+// Identical to traderDiscipline.ts's stdDev (duplicated, not imported, per
+// this file's self-contained convention) — used by Discipline Trend to
+// measure position-sizing consistency the same way Risk Consistency does.
+function stdDev(values: number[]): number {
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  const variance = values.reduce((s, v) => s + (v - m) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function formatMoneyPerTrade(value: number): string {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}$${Math.abs(value).toFixed(2)}/trade`;
 }
 
 function countBy<K extends string>(items: Trade[], keyFn: (t: Trade) => K): Partial<Record<K, number>> {
@@ -273,9 +293,170 @@ function buildFocusTrend<K extends string>(
 const SESSION_FOCUS_LABEL = "Session Focus Trend";
 const INSTRUMENT_FOCUS_LABEL = "Instrument Focus Trend";
 
+// ── 5. Expectancy Trend (Trader DNA V4) ──────────────────────────────────
+// Compares mean pnl per trade (expectancy) between the two periods — the
+// one Evolution insight that answers "is my edge itself improving?"
+
+const EXPECTANCY_TREND_LABEL = "Expectancy Trend";
+
+function buildExpectancyTrend(periods: Periods): EvolutionInsight {
+  if (periods.recent.length < MIN_TRADES_PER_PERIOD || periods.previous.length < MIN_TRADES_PER_PERIOD) {
+    return buildingHistoryInsight(EXPECTANCY_TREND_LABEL);
+  }
+
+  const recentExpectancy = mean(periods.recent.map((t) => t.pnl));
+  const previousExpectancy = mean(periods.previous.map((t) => t.pnl));
+  const scale = Math.max(Math.abs(previousExpectancy), 1);
+  const relativeChange = (recentExpectancy - previousExpectancy) / scale;
+
+  return {
+    label: EXPECTANCY_TREND_LABEL,
+    value: classifyDirectionalTrend(relativeChange, "Increasing", "Decreasing"),
+    metric: relativeChange,
+    reasons: `Recent 30d: ${formatMoneyPerTrade(recentExpectancy)} · Previous 30d: ${formatMoneyPerTrade(previousExpectancy)}`,
+    sampleSize: periods.recent.length + periods.previous.length,
+  };
+}
+
+// ── 6. Discipline Trend (Trader DNA V4) ──────────────────────────────────
+// A behavioral proxy for "is my execution getting more or less disciplined
+// over time?" — the coefficient of variation (stdDev/mean) of lot size
+// within each period, same statistic traderDiscipline.ts's Risk
+// Consistency uses, just compared period-over-period instead of read as a
+// single snapshot. Rising variation reads as declining discipline.
+
+const DISCIPLINE_TREND_LABEL = "Discipline Trend";
+
+interface LotSizeConsistency {
+  cv: number;
+  count: number;
+}
+
+function computeLotSizeConsistency(trades: Trade[]): LotSizeConsistency | null {
+  const lots = trades.map((t) => t.quantity).filter((q) => q > 0);
+  if (lots.length < MIN_TRADES_PER_PERIOD) return null;
+  const avg = mean(lots);
+  return { cv: avg > 0 ? stdDev(lots) / avg : 0, count: lots.length };
+}
+
+function buildDisciplineTrend(periods: Periods): EvolutionInsight {
+  const recent = computeLotSizeConsistency(periods.recent);
+  const previous = computeLotSizeConsistency(periods.previous);
+  if (recent === null || previous === null) return buildingHistoryInsight(DISCIPLINE_TREND_LABEL);
+
+  const relativeChange = previous.cv > 0 ? (recent.cv - previous.cv) / previous.cv : 0;
+
+  return {
+    label: DISCIPLINE_TREND_LABEL,
+    // Rising position-sizing variation is declining discipline, so the
+    // "increasing" direction maps to the "Declining" label and vice versa.
+    value: classifyDirectionalTrend(relativeChange, "Declining", "Improving"),
+    metric: relativeChange,
+    reasons: `Recent 30d position-sizing variation: ${formatPercent(recent.cv)} · Previous 30d: ${formatPercent(previous.cv)}`,
+    sampleSize: recent.count + previous.count,
+  };
+}
+
+// ── 7. Setup Quality Trend (Trader DNA V4) ───────────────────────────────
+// A behavioral proxy for "are my best setups getting better or worse?" —
+// each period's single strongest (instrument, session, direction)
+// combination by expectancy, compared period-over-period. This is a
+// simpler stand-in for a full A+/B/C setup grade (see the Hidden Metrics
+// this ticket keeps alive elsewhere in Trader DNA), which needs more
+// history than a single comparison to define meaningfully.
+
+const SETUP_QUALITY_LABEL = "Setup Quality Trend";
+// A combo needs to repeat at least this many times within a single
+// 30-day period before its expectancy means anything — much lower than
+// MIN_TRADES_PER_PERIOD since a specific (instrument, session, direction)
+// triple is naturally thinner than the period's overall trade count.
+const MIN_TRADES_PER_COMBO = 3;
+
+interface ComboExpectancy {
+  expectancy: number;
+  count: number;
+}
+
+function bestComboExpectancy(trades: Trade[]): ComboExpectancy | null {
+  const groups = new Map<string, { sum: number; count: number }>();
+  for (const t of trades) {
+    if (!t.symbol || !t.session) continue;
+    const key = `${t.symbol}|||${t.session}|||${t.direction}`;
+    const g = groups.get(key) ?? { sum: 0, count: 0 };
+    g.sum += t.pnl;
+    g.count += 1;
+    groups.set(key, g);
+  }
+
+  let best: ComboExpectancy | null = null;
+  for (const { sum, count } of groups.values()) {
+    if (count < MIN_TRADES_PER_COMBO) continue;
+    const expectancy = sum / count;
+    if (best === null || expectancy > best.expectancy) best = { expectancy, count };
+  }
+  return best;
+}
+
+function buildSetupQualityTrend(periods: Periods): EvolutionInsight {
+  if (periods.recent.length < MIN_TRADES_PER_PERIOD || periods.previous.length < MIN_TRADES_PER_PERIOD) {
+    return buildingHistoryInsight(SETUP_QUALITY_LABEL);
+  }
+
+  const recentBest = bestComboExpectancy(periods.recent);
+  const previousBest = bestComboExpectancy(periods.previous);
+  if (recentBest === null || previousBest === null) return buildingHistoryInsight(SETUP_QUALITY_LABEL);
+
+  const scale = Math.max(Math.abs(previousBest.expectancy), 1);
+  const relativeChange = (recentBest.expectancy - previousBest.expectancy) / scale;
+
+  return {
+    label: SETUP_QUALITY_LABEL,
+    value: classifyDirectionalTrend(relativeChange, "Improving", "Declining"),
+    metric: relativeChange,
+    reasons: `Recent 30d best setup: ${formatMoneyPerTrade(recentBest.expectancy)} · Previous 30d: ${formatMoneyPerTrade(previousBest.expectancy)}`,
+    sampleSize: recentBest.count + previousBest.count,
+  };
+}
+
+// ── 8. Executive Summary (Trader DNA V4) ─────────────────────────────────
+// A single deterministic paragraph stitched from the three trends the
+// card actually shows — no data this engine hasn't already computed.
+
+function trendClause(label: string, value: string, positiveWord: string, negativeWord: string): string | null {
+  if (value === BUILDING_HISTORY) return null;
+  if (value === "Stable") return `your ${label} has stayed stable`;
+  return value === positiveWord ? `your ${label} is improving` : `your ${label} is ${negativeWord}`;
+}
+
+function buildEvolutionExecutiveSummary(
+  expectancyTrend: EvolutionInsight,
+  disciplineTrend: EvolutionInsight,
+  setupQualityTrend: EvolutionInsight
+): string {
+  const clauses = [
+    trendClause("expectancy", expectancyTrend.value, "Increasing", "declining"),
+    trendClause("discipline", disciplineTrend.value, "Improving", "declining"),
+    trendClause("setup quality", setupQualityTrend.value, "Improving", "declining"),
+  ].filter((c): c is string => c !== null);
+
+  if (clauses.length === 0) {
+    return "Building history — check back once you have two comparable 30-day trading periods.";
+  }
+
+  const sentence = clauses.length === 1 ? clauses[0] : `${clauses.slice(0, -1).join(", ")} and ${clauses[clauses.length - 1]}`;
+  return `Overall, ${sentence}.`;
+}
+
 // ── TraderEvolution ──────────────────────────────────────────────────────
 
 export interface TraderEvolution {
+  // Surfaced on the card (Trader DNA V4 simplification).
+  expectancyTrend: EvolutionInsight;
+  disciplineTrend: EvolutionInsight;
+  setupQualityTrend: EvolutionInsight;
+  executiveSummary: string;
+  // Kept for the AI Coach — no longer shown on the card, but still
+  // computed on every call.
   activityTrend: EvolutionInsight;
   holdingTimeTrend: EvolutionInsight;
   sessionFocusTrend: EvolutionInsight;
@@ -294,7 +475,15 @@ export function getTraderEvolution(trades: Trade[]): TraderEvolution {
 
   const periods = splitIntoPeriods(sorted);
 
+  const expectancyTrend = buildExpectancyTrend(periods);
+  const disciplineTrend = buildDisciplineTrend(periods);
+  const setupQualityTrend = buildSetupQualityTrend(periods);
+
   return {
+    expectancyTrend,
+    disciplineTrend,
+    setupQualityTrend,
+    executiveSummary: buildEvolutionExecutiveSummary(expectancyTrend, disciplineTrend, setupQualityTrend),
     activityTrend: buildActivityTrend(periods),
     holdingTimeTrend: buildHoldingTimeTrend(periods),
     sessionFocusTrend: buildFocusTrend(SESSION_FOCUS_LABEL, periods, (t) => t.session ?? null, "More Scattered"),

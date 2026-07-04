@@ -278,23 +278,65 @@ function computeRoutineStability(bounds: DailyEntryBounds): RoutineStabilityResu
   return { classification, reason: ROUTINE_STABILITY_REASON[classification] };
 }
 
-// ── 4. Executive Summary ─────────────────────────────────────────────────
-// A single deterministic paragraph stitched from the three insights above
-// — no data this engine hasn't already computed, and never the raw
-// routine-stability variation number.
+// ── 4. Execution Pace (Trader DNA V4) ─────────────────────────────────────
+// A single qualitative read on how often a trader executes, reusing the
+// sampleSize/tradingDays this engine's metadata already computes — no new
+// raw data, just a classification layer on trades-per-active-day. This is
+// the surfaced replacement for showing raw trade-frequency numbers
+// directly (still available via metadata for the AI Coach).
+
+export type ExecutionPace = "High Frequency" | "Active" | "Measured" | "Selective" | "Not enough data";
+
+const EXECUTION_PACE_HIGH_FREQUENCY_MIN = 5;
+const EXECUTION_PACE_ACTIVE_MIN = 2;
+const EXECUTION_PACE_MEASURED_MIN = 1;
+
+function classifyExecutionPace(tradesPerDay: number): Exclude<ExecutionPace, "Not enough data"> {
+  if (tradesPerDay >= EXECUTION_PACE_HIGH_FREQUENCY_MIN) return "High Frequency";
+  if (tradesPerDay >= EXECUTION_PACE_ACTIVE_MIN) return "Active";
+  if (tradesPerDay >= EXECUTION_PACE_MEASURED_MIN) return "Measured";
+  return "Selective";
+}
+
+const EXECUTION_PACE_EXPLANATION: Record<Exclude<ExecutionPace, "Not enough data">, string> = {
+  "High Frequency": "You typically execute many trades within a single trading day.",
+  Active: "You typically execute a healthy handful of trades per trading day.",
+  Measured: "You typically execute around one trade per trading day.",
+  Selective: "You typically wait for a handful of higher-conviction setups rather than trading daily.",
+};
+
+interface ExecutionPaceResult {
+  pace: ExecutionPace;
+  explanation: string;
+}
+
+function computeExecutionPace(sampleSize: number, tradingDays: number): ExecutionPaceResult {
+  if (tradingDays === 0) {
+    return { pace: "Not enough data", explanation: "Not enough trade history yet to measure execution pace." };
+  }
+  const pace = classifyExecutionPace(sampleSize / tradingDays);
+  return { pace, explanation: EXECUTION_PACE_EXPLANATION[pace] };
+}
+
+// ── 5. Executive Summary ─────────────────────────────────────────────────
+// A single deterministic paragraph stitched from Average Holding Time,
+// Trading Window, and Execution Pace — the three insights this card
+// surfaces — no data this engine hasn't already computed. Routine
+// Stability still feeds the AI Coach via its own field, but no longer
+// appears here since it isn't shown on the card either.
 
 function buildExecutiveSummary(
   medianHoldingMinutes: number | null,
   bounds: DailyEntryBounds,
-  routineStability: RoutineStability
+  executionPace: ExecutionPace
 ): string {
-  if (medianHoldingMinutes === null || routineStability === "Not enough data") {
+  if (medianHoldingMinutes === null || executionPace === "Not enough data") {
     return "Not enough trade history yet to summarize your routine.";
   }
   const sessionPhrase = describeTimeOfDay(averageMinutesOfDay(bounds.dailyFirstEntries));
   const styleWord = holdingStyleWord(medianHoldingMinutes);
-  const stabilityWord = routineStability.toLowerCase();
-  return `Your routine is concentrated in the ${sessionPhrase}. You usually close trades ${styleWord} and follow a ${stabilityWord} execution window.`;
+  const paceWord = executionPace.toLowerCase();
+  return `Your routine is concentrated in the ${sessionPhrase}. You usually close trades ${styleWord}, trading at a ${paceWord} pace.`;
 }
 
 // ── Metadata ──────────────────────────────────────────────────────────────
@@ -313,9 +355,13 @@ export interface TraderHabits {
   averageHoldingTimeExplanation: string;
   tradingWindow: string;
   tradingWindowExplanation: string;
+  executionPace: ExecutionPace;
+  executionPaceExplanation: string;
+  executiveSummary: string;
+  // Kept for the AI Coach — no longer shown on the card (Trader DNA V4
+  // simplification), but still computed on every call.
   routineStability: RoutineStability;
   routineStabilityReason: string;
-  executiveSummary: string;
   metadata: TraderHabitsMetadata;
 }
 
@@ -333,6 +379,7 @@ export function getTraderHabits(trades: Trade[]): TraderHabits {
 
   const bounds = computeDailyEntryBounds(sorted);
   const { classification: routineStability, reason: routineStabilityReason } = computeRoutineStability(bounds);
+  const { pace: executionPace, explanation: executionPaceExplanation } = computeExecutionPace(sampleSize, tradingDays);
 
   return {
     averageHoldingTime: medianHoldingMinutes !== null ? formatHoldingDuration(medianHoldingMinutes) : NOT_ENOUGH_DATA,
@@ -342,9 +389,11 @@ export function getTraderHabits(trades: Trade[]): TraderHabits {
         : "Not enough completed trades yet to identify a holding-time pattern.",
     tradingWindow: computeTradingWindow(bounds),
     tradingWindowExplanation: tradingWindowNarrative(bounds),
+    executionPace,
+    executionPaceExplanation,
+    executiveSummary: buildExecutiveSummary(medianHoldingMinutes, bounds, executionPace),
     routineStability,
     routineStabilityReason,
-    executiveSummary: buildExecutiveSummary(medianHoldingMinutes, bounds, routineStability),
     metadata: {
       sampleSize,
       tradingDays,

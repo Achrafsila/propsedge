@@ -31,9 +31,9 @@ export function TradingHabitsCard({ habits }: { habits: TraderHabits }) {
       note: habits.tradingWindowExplanation,
     },
     {
-      label: "Routine Stability",
-      value: habits.routineStability,
-      note: habits.routineStabilityReason,
+      label: "Execution Pace",
+      value: habits.executionPace,
+      note: habits.executionPaceExplanation,
     },
   ];
 

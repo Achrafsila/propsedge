@@ -109,29 +109,56 @@ function buildInsight<K extends string>(
   };
 }
 
-// ── Executive Summary ────────────────────────────────────────────────────
-// A single deterministic sentence built from the same three ranked results
-// above — no data this engine hasn't already computed.
+// ── Best Setup (Trader DNA V4) ────────────────────────────────────────────
+// The one insight the card actually shows: the single (instrument, session,
+// direction) combination with the highest expectancy, found by reusing
+// rankByExpectancy() with a composite key instead of a single field —
+// same ranking machinery as bestSession/bestInstrument/bestWeekday below,
+// just a richer key. Those three per-dimension rankings are kept
+// (computed and returned) for the AI Coach; only Best Setup is surfaced.
 
-function buildExecutiveSummary(
-  sessionResult: GroupResult<DayOfWeek | string> | null,
-  instrumentResult: GroupResult<string> | null,
-  weekdayResult: GroupResult<DayOfWeek> | null
-): string {
-  let base: string;
-  if (instrumentResult && sessionResult) {
-    base = `Your strongest statistical edge currently comes from trading ${instrumentResult.key} during the ${sessionResult.key} session.`;
-  } else if (instrumentResult) {
-    base = `Your strongest edge currently comes from trading ${instrumentResult.key}.`;
-  } else if (sessionResult) {
-    base = `Your strongest statistical edge currently comes from trading during the ${sessionResult.key} session.`;
-  } else {
-    return NO_TRADES_YET;
+const SETUP_KEY_SEPARATOR = "|||";
+
+function buildSetupKey(trade: Trade): string | null {
+  if (!trade.session) return null;
+  const symbol = trade.symbol ? trade.symbol : null;
+  if (!symbol) return null;
+  return [symbol, trade.session, trade.direction].join(SETUP_KEY_SEPARATOR);
+}
+
+function parseSetupKey(key: string): { symbol: string; session: string; direction: string } {
+  const [symbol, session, direction] = key.split(SETUP_KEY_SEPARATOR);
+  return { symbol, session, direction };
+}
+
+function buildBestSetupInsight(result: GroupResult<string> | null): EdgeInsight {
+  if (result === null) {
+    return { label: "Best Setup", value: NO_TRADES_YET, detail: "", metricLabel: "", narrative: "", sampleSize: 0 };
   }
+  const { symbol, session, direction } = parseSetupKey(result.key);
+  const directionLabel = direction === "short" ? "Short" : "Long";
+  return {
+    label: "Best Setup",
+    value: symbol,
+    detail: `${session} Session • ${directionLabel}`,
+    metricLabel: formatExpectancy(result.expectancy),
+    narrative:
+      result.count < SMALL_SAMPLE_THRESHOLD
+        ? smallSampleNarrative(result.count)
+        : "This combination currently produces your strongest statistical edge.",
+    sampleSize: result.count,
+  };
+}
 
-  return weekdayResult
-    ? `${base} ${weekdayResult.key} also stands out as your strongest trading day.`
-    : `${base} More historical data is required before identifying a reliable weekday.`;
+// ── Executive Summary ────────────────────────────────────────────────────
+// A single deterministic sentence built from Best Setup — the one ranking
+// the card actually shows.
+
+function buildExecutiveSummary(bestSetupResult: GroupResult<string> | null): string {
+  if (bestSetupResult === null) return NO_TRADES_YET;
+  const { symbol, session, direction } = parseSetupKey(bestSetupResult.key);
+  const directionLabel = direction === "short" ? "short" : "long";
+  return `Your strongest statistical edge currently comes from trading ${symbol} during the ${session} session on the ${directionLabel} side.`;
 }
 
 // ── Insight & Metadata ───────────────────────────────────────────────────
@@ -139,6 +166,9 @@ function buildExecutiveSummary(
 export interface EdgeInsight {
   label: string;
   value: string;
+  // Secondary line for a multi-part value (Best Setup's session/direction);
+  // empty for the single-dimension insights.
+  detail?: string;
   metricLabel: string;
   narrative: string;
   sampleSize: number;
@@ -154,10 +184,14 @@ export interface TraderEdgeMetadata {
 // ── TraderEdge ───────────────────────────────────────────────────────────
 
 export interface TraderEdge {
+  // Surfaced on the card (Trader DNA V4 simplification).
+  bestSetup: EdgeInsight;
+  executiveSummary: string;
+  // Kept for the AI Coach — no longer shown on the card, but still
+  // computed on every call.
   bestSession: EdgeInsight;
   bestInstrument: EdgeInsight;
   bestWeekday: EdgeInsight;
-  executiveSummary: string;
   metadata: TraderEdgeMetadata;
 }
 
@@ -173,6 +207,7 @@ export function getTraderEdge(trades: Trade[]): TraderEdge {
   const sessionResult = rankByExpectancy(sorted, (t) => t.session ?? null);
   const instrumentResult = rankByExpectancy(sorted, (t) => (t.symbol ? t.symbol : null));
   const weekdayResult = rankByExpectancy(sorted, (t) => getDayOfWeek(t.entryDate));
+  const setupResult = rankByExpectancy(sorted, buildSetupKey);
 
   const bestSession = buildInsight(
     "Best Session",
@@ -190,12 +225,14 @@ export function getTraderEdge(trades: Trade[]): TraderEdge {
     weekdayResult,
     "This weekday currently delivers your strongest average expectancy."
   );
+  const bestSetup = buildBestSetupInsight(setupResult);
 
   return {
+    bestSetup,
+    executiveSummary: buildExecutiveSummary(setupResult),
     bestSession,
     bestInstrument,
     bestWeekday,
-    executiveSummary: buildExecutiveSummary(sessionResult, instrumentResult, weekdayResult),
     metadata: {
       sampleSize,
       tradingDays,

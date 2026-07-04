@@ -3,18 +3,18 @@
 import { motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { EdgeInsight, TraderEdge } from "@/lib/analytics/traderEdge";
+import { TraderEdge } from "@/lib/analytics/traderEdge";
 
 const EDGE_COLOR = "#10B981";
 
 // Renders whatever src/lib/analytics/traderEdge.ts computes — no
-// thresholds, ranking, or fallback copy decided here. This card is real
-// (not a placeholder): each insight gets its value, its expectancy metric,
-// and the engine's own deterministic narrative, and the executive summary
-// is the engine's narrative too, not something assembled in this
-// component.
+// thresholds, ranking, or fallback copy decided here. Trader DNA V4: this
+// card answers exactly one question — "Where do I statistically perform
+// best?" — with a single flagship insight (Best Setup) instead of a list
+// of per-dimension rankings. Best Session/Instrument/Weekday are still
+// computed by the engine for the AI Coach; they just aren't rendered here.
 export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
-  const rows: EdgeInsight[] = [edge.bestSession, edge.bestInstrument, edge.bestWeekday];
+  const { bestSetup } = edge;
 
   return (
     <motion.div
@@ -46,41 +46,46 @@ export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
         className="text-[#94A3B8] mb-5"
         style={{ fontSize: typography.fontSize.sm, opacity: typography.opacity.tertiary }}
       >
-        Under which conditions you statistically perform best — ranked by expectancy, not total P&amp;L.
+        Where you statistically perform best — ranked by expectancy, not total P&amp;L.
       </p>
 
-      <div className="space-y-4 mb-5">
-        {rows.map((row) => (
-          <div key={row.label}>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-                {row.label}
-              </span>
-              <span
-                className="text-[#F8FAFC] font-semibold text-right"
-                style={{ fontSize: typography.fontSize.sm }}
-              >
-                {row.value}
-              </span>
-            </div>
-            {row.metricLabel && (
-              <p
-                className="mt-1 text-right"
-                style={{ fontSize: typography.fontSize.xs, color: EDGE_COLOR }}
-              >
-                {row.metricLabel}
-              </p>
-            )}
-            {row.narrative && (
-              <p
-                className="text-[#94A3B8] mt-1"
-                style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
-              >
-                {row.narrative}
-              </p>
-            )}
-          </div>
-        ))}
+      <div className="mb-5">
+        <p
+          className="uppercase mb-2"
+          style={{
+            color: "#94A3B8",
+            fontSize: typography.fontSize.xs,
+            fontWeight: typography.fontWeight.medium,
+            letterSpacing: typography.letterSpacing.label,
+            opacity: typography.opacity.secondary,
+          }}
+        >
+          Best Setup
+        </p>
+        <p
+          className="font-extrabold"
+          style={{ color: "#F8FAFC", fontSize: typography.fontSize.kpi, lineHeight: typography.lineHeight.kpi }}
+        >
+          {bestSetup.value}
+        </p>
+        {bestSetup.detail && (
+          <p className="mt-1" style={{ color: "#94A3B8", fontSize: typography.fontSize.sm }}>
+            {bestSetup.detail}
+          </p>
+        )}
+        {bestSetup.metricLabel && (
+          <p className="mt-2 font-semibold" style={{ color: EDGE_COLOR, fontSize: typography.fontSize.base }}>
+            {bestSetup.metricLabel}
+          </p>
+        )}
+        {bestSetup.narrative && (
+          <p
+            className="mt-2"
+            style={{ color: "#94A3B8", fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+          >
+            {bestSetup.narrative}
+          </p>
+        )}
       </div>
 
       <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>

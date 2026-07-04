@@ -227,40 +227,50 @@ function buildTradeNumberInsight(result: GroupResult<TradeNumberBucket> | null):
   };
 }
 
-function tradeNumberClause(result: GroupResult<TradeNumberBucket> | null): string | null {
-  if (result === null) return null;
-  return result.key === "4+"
-    ? "from taking trades after your third position of the day"
-    : `from your ${ordinalWord(Number(result.key))} trade of the day`;
+function tradeNumberDisplayValue(key: TradeNumberBucket): string {
+  return key === "4+" ? "Trades after #3" : `Trade #${key}`;
+}
+
+// ── Biggest Leak (Trader DNA V4) ──────────────────────────────────────────
+// The one insight the card actually shows: whichever of the four
+// dimensions this engine already ranks (session, instrument, weekday,
+// trade-number) currently has the single lowest expectancy — a "worst of
+// the worsts" comparison layer over rankings that already exist, not a new
+// ranking of its own. All four per-dimension rankings are kept (computed
+// and returned) for the AI Coach; only Biggest Leak is surfaced.
+
+interface LeakCandidate {
+  value: string;
+  expectancy: number;
+  sampleSize: number;
+}
+
+function pickBiggestLeak(candidates: LeakCandidate[]): BlindSpotInsight {
+  const available = candidates.filter((c) => c.sampleSize > 0);
+  if (available.length === 0) {
+    return { label: "Biggest Leak", value: NO_TRADES_YET, metricLabel: "", narrative: "", sampleSize: 0 };
+  }
+
+  const worst = available.reduce((a, b) => (b.expectancy < a.expectancy ? b : a));
+  return {
+    label: "Biggest Leak",
+    value: worst.value,
+    metricLabel: formatExpectancy(worst.expectancy),
+    narrative:
+      worst.sampleSize < SMALL_SAMPLE_THRESHOLD
+        ? smallSampleNarrative(worst.sampleSize)
+        : "This currently has the greatest negative impact on your expectancy.",
+    sampleSize: worst.sampleSize,
+  };
 }
 
 // ── Executive Summary ────────────────────────────────────────────────────
-// A single deterministic sentence built from the worst instrument (falling
-// back to worst session) and the trade-number pattern above — no data this
-// engine hasn't already computed.
+// A single deterministic sentence built from Biggest Leak — the one
+// ranking the card actually shows.
 
-function buildExecutiveSummary(
-  instrumentResult: GroupResult<string> | null,
-  sessionResult: GroupResult<string> | null,
-  tradeNumberResult: GroupResult<TradeNumberBucket> | null
-): string {
-  const subject = instrumentResult
-    ? `trading ${instrumentResult.key}`
-    : sessionResult
-      ? `trading during the ${sessionResult.key} session`
-      : null;
-  const tradeClause = tradeNumberClause(tradeNumberResult);
-
-  if (subject && tradeClause) {
-    return `Your weakest statistical performance currently comes from ${subject} and ${tradeClause}.`;
-  }
-  if (subject) {
-    return `Your weakest statistical performance currently comes from ${subject}.`;
-  }
-  if (tradeClause) {
-    return `Your weakest statistical performance currently comes ${tradeClause}.`;
-  }
-  return NO_TRADES_YET;
+function buildExecutiveSummary(biggestLeak: BlindSpotInsight): string {
+  if (biggestLeak.value === NO_TRADES_YET) return NO_TRADES_YET;
+  return `Your biggest statistical leak currently comes from ${biggestLeak.value}.`;
 }
 
 // ── Insight & Metadata ───────────────────────────────────────────────────
@@ -283,11 +293,15 @@ export interface TraderBlindSpotsMetadata {
 // ── TraderBlindSpots ─────────────────────────────────────────────────────
 
 export interface TraderBlindSpots {
+  // Surfaced on the card (Trader DNA V4 simplification).
+  biggestLeak: BlindSpotInsight;
+  executiveSummary: string;
+  // Kept for the AI Coach — no longer shown on the card, but still
+  // computed on every call.
   worstSession: BlindSpotInsight;
   worstInstrument: BlindSpotInsight;
   weakestWeekday: BlindSpotInsight;
   performanceAfterTradeNumber: BlindSpotInsight;
-  executiveSummary: string;
   metadata: TraderBlindSpotsMetadata;
 }
 
@@ -323,12 +337,22 @@ export function getTraderBlindSpots(trades: Trade[]): TraderBlindSpots {
   );
   const performanceAfterTradeNumber = buildTradeNumberInsight(tradeNumberResult);
 
+  const biggestLeak = pickBiggestLeak([
+    sessionResult ? { value: `${sessionResult.key} Session`, expectancy: sessionResult.expectancy, sampleSize: sessionResult.count } : null,
+    instrumentResult ? { value: instrumentResult.key, expectancy: instrumentResult.expectancy, sampleSize: instrumentResult.count } : null,
+    weekdayResult ? { value: weekdayResult.key, expectancy: weekdayResult.expectancy, sampleSize: weekdayResult.count } : null,
+    tradeNumberResult
+      ? { value: tradeNumberDisplayValue(tradeNumberResult.key), expectancy: tradeNumberResult.expectancy, sampleSize: tradeNumberResult.count }
+      : null,
+  ].filter((c): c is LeakCandidate => c !== null));
+
   return {
+    biggestLeak,
+    executiveSummary: buildExecutiveSummary(biggestLeak),
     worstSession,
     worstInstrument,
     weakestWeekday,
     performanceAfterTradeNumber,
-    executiveSummary: buildExecutiveSummary(instrumentResult, sessionResult, tradeNumberResult),
     metadata: {
       sampleSize,
       tradingDays,

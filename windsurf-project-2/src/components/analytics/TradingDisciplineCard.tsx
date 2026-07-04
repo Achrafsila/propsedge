@@ -1,14 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Brain, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { RiskInsight, TraderDiscipline } from "@/lib/analytics/traderDiscipline";
 
 const RISK_COLOR = "#D4AF37";
-const LOSS_PSYCHOLOGY_COLOR = "#EF4444";
 
-function InsightRow({ row, color = RISK_COLOR }: { row: RiskInsight; color?: string }) {
+function InsightRow({ row }: { row: RiskInsight }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-4">
@@ -20,7 +19,7 @@ function InsightRow({ row, color = RISK_COLOR }: { row: RiskInsight; color?: str
         </span>
       </div>
       {row.metricLabel && (
-        <p className="mt-1 text-right" style={{ fontSize: typography.fontSize.xs, color }}>
+        <p className="mt-1 text-right" style={{ fontSize: typography.fontSize.xs, color: RISK_COLOR }}>
           {row.metricLabel}
         </p>
       )}
@@ -37,10 +36,14 @@ function InsightRow({ row, color = RISK_COLOR }: { row: RiskInsight; color?: str
 }
 
 // Renders whatever src/lib/analytics/traderDiscipline.ts computes — no
-// thresholds, classification, or fallback copy decided here. This card is
-// real (not a placeholder): each insight gets its value, its metric, and
-// the engine's own deterministic narrative, and the executive summary is
-// the engine's narrative too, not something assembled in this component.
+// thresholds, classification, or fallback copy decided here. Trader DNA
+// V4: this card answers exactly one question — "Am I managing risk
+// correctly?" — with three rows (Risk Consistency, Position Size After
+// Loss, and the Loss Discipline Score composite) instead of the full
+// position-sizing and loss-psychology breakdown. Average Position Size,
+// Position Size After Wins, Lot Size Sweet Spot, and every individual
+// Loss Psychology insight are still computed by the engine for the AI
+// Coach; they just aren't rendered here.
 export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscipline }) {
   return (
     <motion.div
@@ -77,66 +80,8 @@ export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscip
 
       <div className="space-y-4 mb-5">
         <InsightRow row={discipline.riskConsistency} />
-
-        {discipline.averagePositionSize.length > 0 && (
-          <div>
-            <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-              Average Position Size
-            </span>
-            <div className="mt-1.5 space-y-1">
-              {discipline.averagePositionSize.map((entry) => (
-                <div key={entry.symbol} className="flex items-center justify-between gap-4">
-                  <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs }}>
-                    {entry.symbol}
-                  </span>
-                  <span className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.xs }}>
-                    {entry.averageLot}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p
-              className="text-[#94A3B8] mt-1.5"
-              style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
-            >
-              {discipline.averagePositionSizeNarrative}
-            </p>
-          </div>
-        )}
-
-        <InsightRow row={discipline.positionSizeAfterWins} />
         <InsightRow row={discipline.positionSizeAfterLosses} />
-
-        {discipline.lotSizeSweetSpot.length > 0 && (
-          <div>
-            <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>
-              Lot Size Sweet Spot
-            </span>
-            <div className="mt-1.5 space-y-2">
-              {discipline.lotSizeSweetSpot.map((entry) => (
-                <div key={entry.symbol}>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs }}>
-                      {entry.symbol}
-                    </span>
-                    <span className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.xs }}>
-                      {entry.lot}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-right" style={{ fontSize: typography.fontSize.xs, color: RISK_COLOR }}>
-                    {entry.metricLabel}
-                  </p>
-                  <p
-                    className="text-[#94A3B8] mt-0.5"
-                    style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
-                  >
-                    {entry.narrative}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <InsightRow row={discipline.lossDisciplineScore} />
       </div>
 
       <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
@@ -152,43 +97,6 @@ export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscip
           }}
         >
           {discipline.executiveSummary}
-        </p>
-      </div>
-
-      <div className="pt-4 mt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
-        <div className="flex items-center gap-2 mb-1">
-          <Brain className="w-4 h-4" style={{ color: LOSS_PSYCHOLOGY_COLOR }} />
-          <h4 className="text-[#F8FAFC] font-bold" style={{ fontSize: typography.fontSize.sm }}>
-            Loss Psychology
-          </h4>
-        </div>
-        <p
-          className="text-[#94A3B8] mb-4"
-          style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
-        >
-          How you behave immediately after losing or winning.
-        </p>
-
-        <div className="space-y-4 mb-4">
-          <InsightRow row={discipline.performanceAfterLoss} color={LOSS_PSYCHOLOGY_COLOR} />
-          <InsightRow row={discipline.performanceAfterWin} color={LOSS_PSYCHOLOGY_COLOR} />
-          <InsightRow row={discipline.revengeTradingRisk} color={LOSS_PSYCHOLOGY_COLOR} />
-          <InsightRow row={discipline.recoveryRate} color={LOSS_PSYCHOLOGY_COLOR} />
-          <InsightRow row={discipline.revengeTradingScore} color={LOSS_PSYCHOLOGY_COLOR} />
-        </div>
-
-        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
-          Behavioural Summary
-        </h4>
-        <p
-          className="text-[#94A3B8]"
-          style={{
-            fontSize: typography.fontSize.xs,
-            opacity: typography.opacity.tertiary,
-            lineHeight: typography.lineHeight.relaxed,
-          }}
-        >
-          {discipline.lossPsychologySummary}
         </p>
       </div>
     </motion.div>

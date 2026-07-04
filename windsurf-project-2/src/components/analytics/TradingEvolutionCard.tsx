@@ -7,29 +7,15 @@ import { EvolutionInsight, TraderEvolution } from "@/lib/analytics/traderEvoluti
 
 const EVOLUTION_COLOR = "#3B82F6";
 
-function formatTradingSince(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 // Renders whatever src/lib/analytics/traderEvolution.ts computes — no
-// thresholds, comparisons, or fallback copy decided here. This card is
-// real (not a placeholder): it has no "Coming soon" state, only a metadata
-// footer describing the overall sample the evolution read was built from.
+// thresholds, comparisons, or fallback copy decided here. Trader DNA V4:
+// this card answers exactly one question — "Am I improving over time?" —
+// with three trend rows (Expectancy, Discipline, Setup Quality) instead of
+// the full behavioral trend breakdown. Activity/Holding Time/Session/
+// Instrument Focus Trends are still computed by the engine for the AI
+// Coach; they just aren't rendered here.
 export function TradingEvolutionCard({ evolution }: { evolution: TraderEvolution }) {
-  const rows: EvolutionInsight[] = [
-    evolution.activityTrend,
-    evolution.holdingTimeTrend,
-    evolution.sessionFocusTrend,
-    evolution.instrumentFocusTrend,
-  ];
-
-  const { sampleSize, tradingDays, firstTrade } = evolution.metadata;
+  const rows: EvolutionInsight[] = [evolution.expectancyTrend, evolution.disciplineTrend, evolution.setupQualityTrend];
 
   return (
     <motion.div
@@ -88,15 +74,19 @@ export function TradingEvolutionCard({ evolution }: { evolution: TraderEvolution
         ))}
       </div>
 
-      <div
-        className="pt-4"
-        style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}
-      >
-        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Based on {sampleSize} trade{sampleSize === 1 ? "" : "s"} · {tradingDays} trading day{tradingDays === 1 ? "" : "s"}
-        </p>
-        <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
-          Trading since {formatTradingSince(firstTrade)}
+      <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
+          Executive Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{
+            fontSize: typography.fontSize.xs,
+            opacity: typography.opacity.tertiary,
+            lineHeight: typography.lineHeight.relaxed,
+          }}
+        >
+          {evolution.executiveSummary}
         </p>
       </div>
     </motion.div>

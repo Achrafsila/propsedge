@@ -263,13 +263,21 @@ const AFTER_LOSS_NARRATIVE: Record<string, string> = {
   "Reducing Risk": "You tend to reduce your position size after a losing trade.",
 };
 
+// The percentage change in lot size (e.g. "+34%"/"-18%") this returns is
+// the one metric the simplified Risk Management card shows for Position
+// Size After Loss — Trader DNA V4.
+function formatSizeShiftPercent(shift: SizeShift): string {
+  const pct = shift.before > 0 ? Math.round(((shift.after - shift.before) / shift.before) * 100) : 0;
+  return `${pct >= 0 ? "+" : ""}${pct}%`;
+}
+
 function buildSizeShiftInsight(label: string, shift: SizeShift | null, narrativeMap: Record<string, string>): RiskInsight {
   if (shift === null) return notEnoughDataInsight(label);
   const classification = classifySizeShift(shift);
   return {
     label,
     value: classification,
-    metricLabel: `${formatLot(shift.before)} → ${formatLot(shift.after)}`,
+    metricLabel: formatSizeShiftPercent(shift),
     narrative: narrativeMap[classification],
     sampleSize: shift.count,
   };
@@ -368,16 +376,18 @@ function summaryMiddle(riskConsistency: RiskInsight, afterLosses: RiskInsight): 
   return "";
 }
 
-function summaryClosing(sweetSpots: LotExpectancy[]): string {
-  if (sweetSpots.length === 0) return "";
-  const best = sweetSpots.reduce((a, b) => (b.expectancy > a.expectancy ? b : a));
-  return `Your strongest statistical performance currently occurs around ${best.lot.toFixed(2)} lot on ${best.symbol}.`;
+// Referencing the Loss Discipline Score (rather than the Lot Size Sweet
+// Spot, which V4 no longer surfaces) keeps this summary consistent with
+// what the simplified card actually shows.
+function summaryClosing(lossDisciplineScore: RiskInsight): string {
+  if (lossDisciplineScore.value === NOT_ENOUGH_DATA) return "";
+  return `Your loss discipline score is ${lossDisciplineScore.value.toLowerCase()} at ${lossDisciplineScore.metricLabel}.`;
 }
 
-function buildExecutiveSummary(riskConsistency: RiskInsight, afterLosses: RiskInsight, sweetSpots: LotExpectancy[]): string {
+function buildExecutiveSummary(riskConsistency: RiskInsight, afterLosses: RiskInsight, lossDisciplineScore: RiskInsight): string {
   const opener = summaryOpener(riskConsistency);
   const middle = summaryMiddle(riskConsistency, afterLosses);
-  const closing = summaryClosing(sweetSpots);
+  const closing = summaryClosing(lossDisciplineScore);
 
   if (!opener && !middle && !closing) {
     return "Not enough trade history yet to assess your risk management.";
@@ -643,7 +653,106 @@ function buildRevengeTradingScore(
   };
 }
 
-// ── 12. Loss Psychology Executive Summary ────────────────────────────────
+// ── 12. Loss Discipline Score (Trader DNA V4) ─────────────────────────────
+// The single number the simplified Risk Management card shows for "how
+// disciplined am I after a loss?" — a 0-100 composite averaging four
+// sub-scores from insights this file already computed: Recovery Rate
+// (parsed straight from its own "NN%" value), Revenge Trading Risk,
+// Performance After Loss, and Position Size After Loss. Any sub-score
+// whose source insight is NOT_ENOUGH_DATA is simply left out of the
+// average rather than forced to a default — a trader missing only the
+// Revenge Trading Risk sample still gets a score from the other three.
+// Future behavioural metrics (drawdown behavior, fatigue/overtrading
+// indicators, etc. — see the "Hidden Metrics" list this ticket keeps
+// alive elsewhere in Trader DNA) can be folded in the same way later.
+
+const LOSS_DISCIPLINE_SCORE_LABEL = "Loss Discipline Score";
+
+function parseRecoveryRatePercent(recoveryRate: RiskInsight): number | null {
+  const match = recoveryRate.value.match(/^(\d+)%$/);
+  return match ? Number(match[1]) : null;
+}
+
+function revengeRiskSubScore(revengeTradingRisk: RiskInsight): number | null {
+  switch (revengeTradingRisk.value) {
+    case "Low":
+      return 100;
+    case "Moderate":
+      return 50;
+    case "High":
+      return 0;
+    default:
+      return null;
+  }
+}
+
+function performanceAfterLossSubScore(performanceAfterLoss: RiskInsight): number | null {
+  switch (performanceAfterLoss.value) {
+    case "Positive Recovery":
+      return 100;
+    case "Neutral":
+      return 50;
+    case "Negative Recovery":
+      return 0;
+    default:
+      return null;
+  }
+}
+
+function positionSizeAfterLossSubScore(positionSizeAfterLosses: RiskInsight): number | null {
+  switch (positionSizeAfterLosses.value) {
+    case "Reducing Risk":
+      return 100;
+    case "Stable":
+      return 75;
+    case "Increasing Risk":
+      return 0;
+    default:
+      return null;
+  }
+}
+
+function classifyLossDisciplineScore(score: number): string {
+  if (score >= 85) return "Excellent";
+  if (score >= 70) return "Good";
+  if (score >= 50) return "Average";
+  return "Needs Attention";
+}
+
+const LOSS_DISCIPLINE_SCORE_NARRATIVE: Record<string, string> = {
+  Excellent: "Your discipline after losing trades is excellent, with no signs of harmful behavioural patterns.",
+  Good: "You generally handle losses well, with only minor behavioural drift.",
+  Average: "Your behaviour after losses is mixed — some patterns could use attention.",
+  "Needs Attention": "Your behaviour after losses shows clear room for improvement.",
+};
+
+function buildLossDisciplineScore(
+  recoveryRate: RiskInsight,
+  revengeTradingRisk: RiskInsight,
+  performanceAfterLoss: RiskInsight,
+  positionSizeAfterLosses: RiskInsight
+): RiskInsight {
+  const components = [
+    { score: parseRecoveryRatePercent(recoveryRate), sampleSize: recoveryRate.sampleSize },
+    { score: revengeRiskSubScore(revengeTradingRisk), sampleSize: revengeTradingRisk.sampleSize },
+    { score: performanceAfterLossSubScore(performanceAfterLoss), sampleSize: performanceAfterLoss.sampleSize },
+    { score: positionSizeAfterLossSubScore(positionSizeAfterLosses), sampleSize: positionSizeAfterLosses.sampleSize },
+  ].filter((c): c is { score: number; sampleSize: number } => c.score !== null);
+
+  if (components.length === 0) return notEnoughDataInsight(LOSS_DISCIPLINE_SCORE_LABEL);
+
+  const score = Math.round(mean(components.map((c) => c.score)));
+  const classification = classifyLossDisciplineScore(score);
+  return {
+    label: LOSS_DISCIPLINE_SCORE_LABEL,
+    value: classification,
+    metricLabel: `${score}/100`,
+    narrative: LOSS_DISCIPLINE_SCORE_NARRATIVE[classification],
+    sampleSize: Math.min(...components.map((c) => c.sampleSize)),
+  };
+}
+
+// ── 13. Loss Psychology Executive Summary ────────────────────────────────
 // A second, dedicated summary (separate from Risk Management's own) built
 // only from this section's own insights and the existing lossShift
 // (before/after lot size around a loss) already computed for Position
@@ -696,14 +805,17 @@ function buildLossPsychologySummary(
 // ── TraderDiscipline ("Risk Management") ─────────────────────────────────
 
 export interface TraderDiscipline {
+  // Surfaced on the card (Trader DNA V4 simplification).
   riskConsistency: RiskInsight;
+  positionSizeAfterLosses: RiskInsight;
+  lossDisciplineScore: RiskInsight;
+  executiveSummary: string;
+  // Kept for the AI Coach — no longer shown on the card, but still
+  // computed on every call.
   averagePositionSize: InstrumentLotSize[];
   averagePositionSizeNarrative: string;
   positionSizeAfterWins: RiskInsight;
-  positionSizeAfterLosses: RiskInsight;
   lotSizeSweetSpot: InstrumentSweetSpot[];
-  executiveSummary: string;
-  // Loss Psychology (Trader DNA V3)
   performanceAfterLoss: RiskInsight;
   performanceAfterWin: RiskInsight;
   revengeTradingRisk: RiskInsight;
@@ -761,6 +873,13 @@ export function getTraderDiscipline(trades: Trade[]): TraderDiscipline {
 
   const revengeTradingScore = buildRevengeTradingScore(positionSizeAfterLosses, revengeTradingRisk, performanceAfterLoss);
 
+  const lossDisciplineScore = buildLossDisciplineScore(
+    recoveryRate,
+    revengeTradingRisk,
+    performanceAfterLoss,
+    positionSizeAfterLosses
+  );
+
   const lossPsychologySummary = buildLossPsychologySummary(
     performanceAfterWin,
     positionSizeAfterLosses,
@@ -771,15 +890,16 @@ export function getTraderDiscipline(trades: Trade[]): TraderDiscipline {
 
   return {
     riskConsistency,
+    positionSizeAfterLosses,
+    lossDisciplineScore,
+    executiveSummary: buildExecutiveSummary(riskConsistency, positionSizeAfterLosses, lossDisciplineScore),
     averagePositionSize: topInstruments,
     averagePositionSizeNarrative:
       topInstruments.length > 0
         ? "This is your typical position size for each market."
         : "Not enough trade history yet to measure typical position size.",
     positionSizeAfterWins,
-    positionSizeAfterLosses,
     lotSizeSweetSpot,
-    executiveSummary: buildExecutiveSummary(riskConsistency, positionSizeAfterLosses, sweetSpots),
     performanceAfterLoss,
     performanceAfterWin,
     revengeTradingRisk,
