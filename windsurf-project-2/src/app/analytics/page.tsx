@@ -48,6 +48,20 @@ export default function GlobalAnalyticsPage() {
   const resetFilters = () => setFilters(DEFAULT_GLOBAL_FILTERS);
   const isFiltered = JSON.stringify(filters) !== JSON.stringify(DEFAULT_GLOBAL_FILTERS);
 
+  // Smart reset: once trades finish loading with zero rows (e.g. right
+  // after "Delete All Trades" in the Journal), snap filters back to
+  // default so this page reads exactly like a brand-new account instead
+  // of showing a stale date range/account filter over no data. Adjusted
+  // directly during render (React's recommended pattern for "reset state
+  // when an external value changes") rather than in a useEffect, which
+  // this project's lint config flags as a cascading-render risk.
+  const tradesEmpty = !tradesLoading && trades.length === 0;
+  const [wasTradesEmpty, setWasTradesEmpty] = useState(false);
+  if (tradesEmpty !== wasTradesEmpty) {
+    setWasTradesEmpty(tradesEmpty);
+    if (tradesEmpty) resetFilters();
+  }
+
   // ── Operational View: every trade counts, Step 1 and Step 2 are never
   // collapsed into one root — that collapsing only happens in the Business
   // Metrics engine (src/lib/challenges.ts) used by Dashboard/Challenges.

@@ -142,3 +142,19 @@ export async function deleteTradesByIdsDb(ids: string[]): Promise<void> {
 
   if (error) throw error;
 }
+
+// Deletes every trade belonging to a single user — used by "Delete All
+// Trades" in the Trade Journal. Explicitly scoped with .eq("user_id", ...)
+// so this can never touch another user's rows even if RLS were ever
+// misconfigured, matching the same explicit-scoping convention
+// fetchTrades() already uses (RLS enforces auth.uid() = user_id too, but
+// this query never relies on that alone).
+export async function deleteAllTradesDb(userId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("trades")
+    .delete()
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}

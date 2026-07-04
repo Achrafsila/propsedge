@@ -1,28 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Plus, TrendingUp, TrendingDown, Filter, Trash2, Upload } from "lucide-react";
+import { BookOpen, Plus, TrendingUp, TrendingDown, Trash2, Upload } from "lucide-react";
 import { useAccounts } from "@/context/AccountsContext";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { ImportTradesDialog } from "@/components/ImportTradesDialog";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { DeleteAllTradesDialog } from "@/components/DeleteAllTradesDialog";
 import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
+import { buildAccountIndex, filterGlobalTrades, GlobalFilters } from "@/lib/analytics/globalAnalytics";
 
 export default function Journal() {
-  const { trades, tradesLoading, deleteTrade, challenges, fundedAccounts } = useAccounts();
+  const { trades, tradesLoading, deleteTrade, deleteAllTrades, challenges, fundedAccounts } = useAccounts();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [selectedAccountType, setSelectedAccountType] = useState<"challenge" | "funded">("challenge");
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const selectableAccounts = selectedAccountType === "challenge" ? challenges : fundedAccounts;
   const hasSelectedAccount = selectedAccountId !== "";
-  const accountTrades = hasSelectedAccount
-    ? trades.filter((t) => t.accountId === selectedAccountId && t.accountType === selectedAccountType)
-    : [];
+
+  // Same filtering engine Trader DNA / Analytics uses (filterGlobalTrades),
+  // so "From"/"To" here behaves identically everywhere dates are filtered.
+  // scope/accountId narrow to the single account selected above; propFirm/
+  // instrument/session are left unbounded since the Journal doesn't expose
+  // those filters.
+  const accountIndex = useMemo(() => buildAccountIndex(challenges, fundedAccounts), [challenges, fundedAccounts]);
+  const journalFilters: GlobalFilters = useMemo(
+    () => ({
+      scope: selectedAccountType,
+      dateFrom,
+      dateTo,
+      propFirm: "",
+      accountId: selectedAccountId,
+      instrument: "",
+      session: "",
+    }),
+    [selectedAccountType, selectedAccountId, dateFrom, dateTo]
+  );
+  const accountTrades = hasSelectedAccount ? filterGlobalTrades(trades, journalFilters, accountIndex) : [];
+
+  const handleDeleteAllTrades = async () => {
+    setIsDeletingAll(true);
+    try {
+      await deleteAllTrades();
+      setIsDeleteAllDialogOpen(false);
+      // Smart reset — behave like a brand-new account: no account selected,
+      // no date range applied.
+      setSelectedAccountId("");
+      setDateFrom("");
+      setDateTo("");
+    } catch {
+      // deleteAllTrades() already surfaces an error toast; nothing else to do.
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -104,9 +145,15 @@ export default function Journal() {
           <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>Track and analyze your trading history</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl transition-all duration-300">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
+          <Button
+            variant="outline"
+            className="border-[rgba(239,68,68,0.3)] text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] hover:border-[#EF4444] rounded-xl transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
+            onClick={() => setIsDeleteAllDialogOpen(true)}
+            disabled={trades.length === 0}
+            type="button"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete All Trades
           </Button>
           <Button
             variant="outline"
@@ -135,7 +182,7 @@ export default function Journal() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.05 }}
-        className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl p-4"
+        className="rounded-xl p-4 space-y-4"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -144,35 +191,47 @@ export default function Journal() {
           borderRadius: borderRadius.xl,
         }}
       >
-        <div className="space-y-2">
-          <label className="text-[#8B97A8] text-sm">Account Type</label>
-          <select
-            value={selectedAccountType}
-            onChange={(e) => {
-              setSelectedAccountType(e.target.value as "challenge" | "funded");
-              setSelectedAccountId("");
-            }}
-            className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
-          >
-            <option value="challenge">Challenge</option>
-            <option value="funded">Funded</option>
-          </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[#8B97A8] text-sm">Account Type</label>
+            <select
+              value={selectedAccountType}
+              onChange={(e) => {
+                setSelectedAccountType(e.target.value as "challenge" | "funded");
+                setSelectedAccountId("");
+              }}
+              className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+            >
+              <option value="challenge">Challenge</option>
+              <option value="funded">Funded</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[#8B97A8] text-sm">Account</label>
+            <select
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+              className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+            >
+              <option value="">Select an account</option>
+              {selectableAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.accountName}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="space-y-2">
-          <label className="text-[#8B97A8] text-sm">Account</label>
-          <select
-            value={selectedAccountId}
-            onChange={(e) => setSelectedAccountId(e.target.value)}
-            className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
-          >
-            <option value="">Select an account</option>
-            {selectableAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.accountName}
-              </option>
-            ))}
-          </select>
-        </div>
+
+        {hasSelectedAccount && (
+          <div className="pt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onChange={(range) => { setDateFrom(range.dateFrom); setDateTo(range.dateTo); }}
+            />
+          </div>
+        )}
       </motion.div>
 
       {!hasSelectedAccount ? (
@@ -513,6 +572,12 @@ export default function Journal() {
         onOpenChange={setIsImportDialogOpen}
         defaultAccountType={selectedAccountType}
         defaultAccountId={selectedAccountId}
+      />
+      <DeleteAllTradesDialog
+        open={isDeleteAllDialogOpen}
+        onOpenChange={setIsDeleteAllDialogOpen}
+        onConfirm={handleDeleteAllTrades}
+        isDeleting={isDeletingAll}
       />
     </div>
   );

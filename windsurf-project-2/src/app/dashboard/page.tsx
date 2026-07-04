@@ -15,6 +15,7 @@ import {
   ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell,
 } from "recharts";
 import { useAccounts } from "@/context/AccountsContext";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
@@ -151,7 +152,6 @@ function DonutChart({ title, data }: { title: string; data: { name: string; valu
 
 // ─── Chart types ──────────────────────────────────────────────────────────────
 type ChartMetric = "equity" | "profit" | "payouts" | "roi";
-type ChartFilter = "7d" | "30d" | "90d" | "all";
 
 const METRIC_META: Record<ChartMetric, { label: string; color: string; format: (v: number) => string }> = {
   equity:  { label: "Portfolio Equity",   color: "#298DFF", format: fmt$    },
@@ -204,7 +204,8 @@ export default function Dashboard() {
   } = useAccounts();
 
   const [metric, setMetric] = useState<ChartMetric>("equity");
-  const [filter, setFilter] = useState<ChartFilter>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [openChallenge, setOpenChallenge] = useState(false);
   const [openTrade, setOpenTrade]         = useState(false);
   const [openPayout, setOpenPayout]       = useState(false);
@@ -249,13 +250,24 @@ export default function Dashboard() {
   }, [trades, payouts, fundedAccounts, challenges]);
 
   const chartData = useMemo(() => {
-    if (filter === "all") return allChartData;
-    const days = filter === "7d" ? 7 : filter === "30d" ? 30 : 90;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const cutStr = cutoff.toISOString().split("T")[0];
-    return allChartData.filter((d) => d.date >= cutStr);
-  }, [allChartData, filter]);
+    if (!dateFrom && !dateTo) return allChartData;
+    return allChartData.filter((d) => (!dateFrom || d.date >= dateFrom) && (!dateTo || d.date <= dateTo));
+  }, [allChartData, dateFrom, dateTo]);
+
+  // Smart reset: once trades finish loading with zero rows (e.g. right
+  // after "Delete All Trades" in the Journal), snap the chart's date range
+  // back to "All Time" so this page reads like a brand-new account. See
+  // src/app/analytics/page.tsx for why this is done during render rather
+  // than in a useEffect.
+  const tradesEmpty = !tradesLoading && trades.length === 0;
+  const [wasTradesEmpty, setWasTradesEmpty] = useState(false);
+  if (tradesEmpty !== wasTradesEmpty) {
+    setWasTradesEmpty(tradesEmpty);
+    if (tradesEmpty) {
+      setDateFrom("");
+      setDateTo("");
+    }
+  }
 
   // ── Activity feed ──────────────────────────────────────────────────────────
   const activity = useMemo((): ActivityEvent[] => {
@@ -396,34 +408,29 @@ export default function Dashboard() {
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}
         className="relative rounded-xl p-6" style={CARD}>
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-[#298DFF]" />
             <h3 className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.section }}>Performance</h3>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Metric tabs */}
-            <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.12)" }}>
-              {(["equity", "profit", "payouts", "roi"] as ChartMetric[]).map((m) => (
-                <button key={m} type="button" onClick={() => setMetric(m)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 pointer-events-auto"
-                  style={{ color: metric === m ? "#F8FAFC" : "#94A3B8", background: metric === m ? `${METRIC_META[m].color}28` : "transparent" }}>
-                  {m === "equity" ? "Equity" : m === "profit" ? "Cum. Profit" : m === "payouts" ? "Payouts" : "ROI"}
-                </button>
-              ))}
-            </div>
-            {/* Time filter */}
-            <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.12)" }}>
-              {(["7d", "30d", "90d", "all"] as ChartFilter[]).map((f) => (
-                <button key={f} type="button" onClick={() => setFilter(f)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 pointer-events-auto"
-                  style={{ color: filter === f ? "#F8FAFC" : "#94A3B8", background: filter === f ? "rgba(41,141,255,0.2)" : "transparent" }}>
-                  {f === "all" ? "All" : f.toUpperCase()}
-                </button>
-              ))}
-            </div>
+          {/* Metric tabs */}
+          <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.12)" }}>
+            {(["equity", "profit", "payouts", "roi"] as ChartMetric[]).map((m) => (
+              <button key={m} type="button" onClick={() => setMetric(m)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 pointer-events-auto"
+                style={{ color: metric === m ? "#F8FAFC" : "#94A3B8", background: metric === m ? `${METRIC_META[m].color}28` : "transparent" }}>
+                {m === "equity" ? "Equity" : m === "profit" ? "Cum. Profit" : m === "payouts" ? "Payouts" : "ROI"}
+              </button>
+            ))}
           </div>
         </div>
+
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onChange={(range) => { setDateFrom(range.dateFrom); setDateTo(range.dateTo); }}
+          className="mb-6"
+        />
 
         {/* Chart or empty state */}
         {allChartData.length === 0 ? (

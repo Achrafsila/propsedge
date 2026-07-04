@@ -3,6 +3,7 @@
 import { SlidersHorizontal, X } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { AnalysisScope, GlobalFilters } from "@/lib/analytics/globalAnalytics";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
 
 interface AccountOption {
   id: string;
@@ -100,25 +101,14 @@ export function GlobalFilterBar({
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="space-y-1">
-            <label className="text-[#64748B] text-[10px] uppercase tracking-wide">From</label>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => onChange({ dateFrom: e.target.value })}
-              className={selectClass}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[#64748B] text-[10px] uppercase tracking-wide">To</label>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => onChange({ dateTo: e.target.value })}
-              className={selectClass}
-            />
-          </div>
+        <DateRangeFilter
+          dateFrom={filters.dateFrom}
+          dateTo={filters.dateTo}
+          onChange={(range) => onChange(range)}
+          className="mb-3"
+        />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="space-y-1">
             <label className="text-[#64748B] text-[10px] uppercase tracking-wide">Prop Firm</label>
             <select

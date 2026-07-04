@@ -35,6 +35,7 @@ import {
   deleteTradeDb,
   deleteTradesByAccountDb,
   deleteTradesByIdsDb,
+  deleteAllTradesDb,
 } from "@/lib/supabase/trades";
 import {
   fetchPayouts,
@@ -63,6 +64,7 @@ interface AccountsContextType {
   deletePayout: (id: string) => void;
   addTrade: (trade: Omit<Trade, "id">) => Promise<Trade | null>;
   deleteTrade: (id: string) => void;
+  deleteAllTrades: () => Promise<void>;
   getAccountPnL: (accountId: string, accountType: "challenge" | "funded") => number;
   convertChallengeToFunded: (challengeId: string, fundedAccount: Omit<FundedAccount, "id">) => void;
   getFundingRateStats: () => FundingRateStats;
@@ -415,6 +417,39 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       });
   };
 
+  // Wipes every trade the current user owns — used by "Delete All Trades"
+  // in the Trade Journal. deleteAllTradesDb is explicitly scoped to
+  // user.id (see src/lib/supabase/trades.ts), so this can never touch
+  // another user's data. Every account's P&L/drawdown was derived from
+  // trades that no longer exist, so each one is recalculated against an
+  // empty trade list — the exact same recalcAccount() math a single
+  // deleteTrade() already uses, just run once per account instead of once
+  // for the one account a single deleted trade belonged to. Every context
+  // consumer (Dashboard, Trader DNA, Analytics, Journal) reads
+  // trades/challenges/fundedAccounts straight from this context, so
+  // clearing them here refreshes every page with no separate refetch.
+  const deleteAllTrades = (): Promise<void> => {
+    if (!user) return Promise.resolve();
+    const previousTrades = trades;
+    const previousChallenges = challenges;
+    const previousFundedAccounts = fundedAccounts;
+
+    setTrades([]); // optimistic clear
+
+    return deleteAllTradesDb(user.id)
+      .then(() => {
+        previousChallenges.forEach((c) => recalcAccount(c.id, "challenge", []));
+        previousFundedAccounts.forEach((a) => recalcAccount(a.id, "funded", []));
+        toast.success("All trades deleted successfully.");
+      })
+      .catch((err) => {
+        console.error("Failed to delete all trades:", err);
+        setTrades(previousTrades); // rollback
+        toast.error(`Failed to delete all trades: ${err?.message ?? String(err)}`);
+        throw err;
+      });
+  };
+
   // Returns 0 — account fields are the canonical source of truth after M4.
   // UI formulas like `challenge.currentProfit + getAccountPnL()` stay correct.
   const getAccountPnL = (_accountId: string, _accountType: "challenge" | "funded") => {
@@ -562,6 +597,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         deletePayout,
         addTrade,
         deleteTrade,
+        deleteAllTrades,
         getAccountPnL,
         convertChallengeToFunded,
         getFundingRateStats,
