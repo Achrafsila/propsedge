@@ -28,6 +28,8 @@ export interface ParsedTradeFile {
   skippedRows: SkippedRow[];
 }
 
+type Row = Record<string, unknown>;
+
 // Columns required in the imported Symbol/Type/.../Profit spreadsheet.
 // TP, SL and Commission are optional and must never cause a row to be skipped.
 const REQUIRED_COLUMNS = [
@@ -41,11 +43,19 @@ const REQUIRED_COLUMNS = [
   "Profit",
 ];
 
+// Columns that identify the newer UTC broker export format. Distinctive
+// enough (opening_time_utc/closing_time_utc) that they won't accidentally
+// match an unrelated unknown format.
+const UTC_BROKER_REQUIRED_COLUMNS = ["opening_time_utc", "closing_time_utc", "symbol", "lots", "profit", "type"];
+
+const UNKNOWN_FORMAT_ERROR =
+  "Some columns could not be detected. Manual column mapping will be added in a later version.";
+
 function normalizeHeader(header: string): string {
   return header.trim().toLowerCase().replace(/[\s_]+/g, "");
 }
 
-function findValue(row: Record<string, unknown>, names: string[]): unknown {
+function findValue(row: Row, names: string[]): unknown {
   const targets = names.map(normalizeHeader);
   for (const key of Object.keys(row)) {
     if (targets.includes(normalizeHeader(key))) {
@@ -275,37 +285,41 @@ function detectSession(entryTime: string): Trade["session"] {
   return undefined;
 }
 
-export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
-  // raw: true stops xlsx's CSV parser from guessing cell types itself — its
-  // built-in numeric sniffer strips commas as thousands separators before our
-  // own parseAmount() ever runs, silently corrupting decimal-comma values
-  // (e.g. "-543,21" becomes -54321). With raw:true, CSV cells stay untouched
-  // strings, while real .xlsx/.xls binary cells (already numbers/Dates in the
-  // file format) and cellDates are unaffected.
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
-    throw new Error("The file has no sheets");
-  }
-  const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: "",
-    raw: true,
-  });
+function directionFromType(typeValue: string): "long" | "short" {
+  return typeValue === "sell" || typeValue === "short" ? "short" : "long";
+}
 
-  if (rows.length === 0) {
-    throw new Error("No rows found in file");
-  }
+function statusFromPnl(pnl: number): TradeStatus {
+  return pnl > 0 ? "win" : pnl < 0 ? "loss" : "breakeven";
+}
 
-  const headers = Object.keys(rows[0]);
-  const missing = REQUIRED_COLUMNS.filter(
-    (col) => !headers.some((h) => normalizeHeader(h) === normalizeHeader(col))
-  );
-  if (missing.length > 0) {
-    throw new Error(`Missing required column(s): ${missing.join(", ")}`);
-  }
+// ============================================================
+// Format detection
+// ============================================================
+// Every known parser has a fixed, distinctive set of required column names.
+// A file is only routed to a known parser if ALL of that parser's required
+// columns are present — anything else falls through to the best-effort
+// fallbackGenericParser() rather than being rejected outright.
 
+type KnownFormat = "existing" | "utcBroker" | "unknown";
+
+function hasAllColumns(headers: string[], requiredColumns: string[]): boolean {
+  const normalizedHeaders = headers.map(normalizeHeader);
+  return requiredColumns.every((col) => normalizedHeaders.includes(normalizeHeader(col)));
+}
+
+function detectKnownFormat(headers: string[]): KnownFormat {
+  if (hasAllColumns(headers, REQUIRED_COLUMNS)) return "existing";
+  if (hasAllColumns(headers, UTC_BROKER_REQUIRED_COLUMNS)) return "utcBroker";
+  return "unknown";
+}
+
+// ============================================================
+// Existing format: Symbol / Type / Open Date / Open / Closed Date / Closed
+// / Lots / Profit (+ optional TP / SL / Commission)
+// ============================================================
+
+function parseExistingFormat(rows: Row[]): ParsedTradeFile {
   const trades: ParsedTrade[] = [];
   const skippedRows: SkippedRow[] = [];
 
@@ -373,8 +387,8 @@ export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
     const exitPrice = parseAmount(findValue(row, ["Closed"]));
     const quantity = parseAmount(findValue(row, ["Lots"]));
 
-    const direction: "long" | "short" = typeValue === "sell" ? "short" : "long";
-    const status: TradeStatus = pnl > 0 ? "win" : pnl < 0 ? "loss" : "breakeven";
+    const direction = directionFromType(typeValue);
+    const status = statusFromPnl(pnl);
 
     // TP/SL/Commission have no dedicated Trade fields, so they're preserved as
     // notes. Commission is informational only and is never subtracted from
@@ -407,4 +421,271 @@ export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
   });
 
   return { trades, skippedRows };
+}
+
+// ============================================================
+// New UTC broker format: ticket / opening_time_utc / closing_time_utc /
+// type / lots / symbol / opening_price / closing_price / stop_loss /
+// take_profit / commission / swap / profit
+// ============================================================
+
+function parseUtcBrokerFormat(rows: Row[]): ParsedTradeFile {
+  const trades: ParsedTrade[] = [];
+  const skippedRows: SkippedRow[] = [];
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+
+    const symbol = String(findValue(row, ["symbol"]) ?? "").trim();
+    const typeValue = String(findValue(row, ["type"]) ?? "")
+      .trim()
+      .toLowerCase();
+    const profitRaw = findValue(row, ["profit"]);
+    const openingTimeRaw = findValue(row, ["opening_time_utc"]);
+    const closingTimeRaw = findValue(row, ["closing_time_utc"]);
+
+    const isBlankRow =
+      !symbol && !typeValue && (profitRaw === "" || profitRaw === undefined) && !openingTimeRaw && !closingTimeRaw;
+    if (isBlankRow) return;
+
+    if (!symbol) {
+      skippedRows.push({ rowNumber, reason: "Missing symbol" });
+      devWarn(`Row ${rowNumber} skipped: missing symbol`);
+      return;
+    }
+
+    // profit is the source of truth for pnl — used as-is, never recalculated
+    // and never combined with commission/swap.
+    const pnl = parseAmount(profitRaw);
+    if (pnl === null) {
+      const reason =
+        profitRaw === "" || profitRaw === undefined ? "Missing profit value" : `Invalid profit value: "${profitRaw}"`;
+      skippedRows.push({ rowNumber, reason });
+      devWarn(`Row ${rowNumber} skipped: ${reason}`);
+      return;
+    }
+
+    const entryDate = toDateString(openingTimeRaw);
+    if (!entryDate) {
+      skippedRows.push({ rowNumber, reason: "Invalid or missing opening_time_utc" });
+      devWarn(`Row ${rowNumber} skipped: invalid or missing opening_time_utc`);
+      return;
+    }
+
+    const exitDate = toDateString(closingTimeRaw);
+    const entryTime = toTimeString(openingTimeRaw);
+    const exitTime = toTimeString(closingTimeRaw);
+    const session = detectSession(entryTime);
+
+    const entryPrice = parseAmount(findValue(row, ["opening_price"]));
+    const exitPrice = parseAmount(findValue(row, ["closing_price"]));
+    const quantity = parseAmount(findValue(row, ["lots"]));
+
+    const direction = directionFromType(typeValue);
+    const status = statusFromPnl(pnl);
+
+    // ticket/stop_loss/take_profit/commission/swap have no dedicated Trade
+    // fields, so they're preserved as notes — same treatment TP/SL/
+    // Commission get in the existing format. Commission and swap are
+    // informational only and are never subtracted from pnl.
+    const ticket = findValue(row, ["ticket"]);
+    const takeProfit = findValue(row, ["take_profit"]);
+    const stopLoss = findValue(row, ["stop_loss"]);
+    const commission = findValue(row, ["commission"]);
+    const swap = findValue(row, ["swap"]);
+
+    const notesParts: string[] = [];
+    if (ticket !== undefined && ticket !== "") notesParts.push(`Ticket: ${ticket}`);
+    if (takeProfit !== undefined && takeProfit !== "") notesParts.push(`TP: ${takeProfit}`);
+    if (stopLoss !== undefined && stopLoss !== "") notesParts.push(`SL: ${stopLoss}`);
+    if (commission !== undefined && commission !== "") {
+      const commissionValue = parseAmount(commission);
+      if (commissionValue !== null && commissionValue !== 0) {
+        notesParts.push(`Commission: ${commission}`);
+      }
+    }
+    if (swap !== undefined && swap !== "") {
+      const swapValue = parseAmount(swap);
+      if (swapValue !== null && swapValue !== 0) {
+        notesParts.push(`Swap: ${swap}`);
+      }
+    }
+
+    trades.push({
+      symbol: symbol.toUpperCase(),
+      direction,
+      entryDate,
+      exitDate: exitDate || entryDate,
+      entryTime: entryTime || undefined,
+      exitTime: exitTime || undefined,
+      session,
+      entryPrice: entryPrice ?? 0,
+      exitPrice: exitPrice ?? 0,
+      quantity: quantity ?? 0,
+      pnl,
+      status,
+      notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+    });
+  });
+
+  return { trades, skippedRows };
+}
+
+// ============================================================
+// Fallback generic parser for unrecognized formats
+// ============================================================
+// Best-effort column auto-mapping by common alias names. Only symbol,
+// profit, and an open/entry date are treated as non-negotiable — direction,
+// lot size, and close date all have safe defaults, the same "degrade
+// gracefully rather than reject" philosophy the existing format already
+// uses for its optional TP/SL/Commission columns. If even the
+// non-negotiable three can't be found, this is truly an unknown format and
+// we say so rather than guessing further — this project deliberately does
+// not try to hand-support every prop firm's export layout.
+
+const FALLBACK_ALIASES = {
+  symbol: ["symbol", "instrument", "pair"],
+  type: ["type", "side", "direction"],
+  lots: ["lots", "volume", "size"],
+  profit: ["profit", "pnl", "net_pnl"],
+  openDate: ["open_date", "entry_date", "opening_time"],
+  closeDate: ["close_date", "exit_date", "closing_time"],
+};
+
+interface FallbackColumnMap {
+  symbol: string | null;
+  type: string | null;
+  lots: string | null;
+  profit: string | null;
+  openDate: string | null;
+  closeDate: string | null;
+}
+
+function findHeader(headers: string[], aliases: string[]): string | null {
+  const normalizedAliases = aliases.map(normalizeHeader);
+  return headers.find((h) => normalizedAliases.includes(normalizeHeader(h))) ?? null;
+}
+
+function detectFallbackColumns(headers: string[]): FallbackColumnMap {
+  return {
+    symbol: findHeader(headers, FALLBACK_ALIASES.symbol),
+    type: findHeader(headers, FALLBACK_ALIASES.type),
+    lots: findHeader(headers, FALLBACK_ALIASES.lots),
+    profit: findHeader(headers, FALLBACK_ALIASES.profit),
+    openDate: findHeader(headers, FALLBACK_ALIASES.openDate),
+    closeDate: findHeader(headers, FALLBACK_ALIASES.closeDate),
+  };
+}
+
+function fallbackGenericParser(rows: Row[], headers: string[]): ParsedTradeFile {
+  const columns = detectFallbackColumns(headers);
+
+  if (!columns.symbol || !columns.profit || !columns.openDate) {
+    throw new Error(UNKNOWN_FORMAT_ERROR);
+  }
+  const { symbol: symbolCol, profit: profitCol, openDate: openDateCol, type: typeCol, lots: lotsCol, closeDate: closeDateCol } =
+    columns;
+
+  const trades: ParsedTrade[] = [];
+  const skippedRows: SkippedRow[] = [];
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+
+    const symbol = String(row[symbolCol] ?? "").trim();
+    const typeValue = typeCol
+      ? String(row[typeCol] ?? "")
+          .trim()
+          .toLowerCase()
+      : "";
+    const profitRaw = row[profitCol];
+    const openDateRaw = row[openDateCol];
+
+    const isBlankRow = !symbol && !typeValue && (profitRaw === "" || profitRaw === undefined) && !openDateRaw;
+    if (isBlankRow) return;
+
+    if (!symbol) {
+      skippedRows.push({ rowNumber, reason: "Missing symbol" });
+      devWarn(`Row ${rowNumber} skipped: missing symbol`);
+      return;
+    }
+
+    const pnl = parseAmount(profitRaw);
+    if (pnl === null) {
+      const reason =
+        profitRaw === "" || profitRaw === undefined ? "Missing profit value" : `Invalid profit value: "${profitRaw}"`;
+      skippedRows.push({ rowNumber, reason });
+      devWarn(`Row ${rowNumber} skipped: ${reason}`);
+      return;
+    }
+
+    const entryDate = toDateString(openDateRaw);
+    if (!entryDate) {
+      skippedRows.push({ rowNumber, reason: "Invalid or missing open/entry date" });
+      devWarn(`Row ${rowNumber} skipped: invalid or missing open/entry date`);
+      return;
+    }
+
+    const closeDateRaw = closeDateCol ? row[closeDateCol] : undefined;
+    const exitDate = toDateString(closeDateRaw);
+    const entryTime = toTimeString(openDateRaw);
+    const exitTime = toTimeString(closeDateRaw);
+    const session = detectSession(entryTime);
+
+    const quantity = lotsCol ? parseAmount(row[lotsCol]) : null;
+    const direction = directionFromType(typeValue);
+    const status = statusFromPnl(pnl);
+
+    trades.push({
+      symbol: symbol.toUpperCase(),
+      direction,
+      entryDate,
+      exitDate: exitDate || entryDate,
+      entryTime: entryTime || undefined,
+      exitTime: exitTime || undefined,
+      session,
+      entryPrice: 0,
+      exitPrice: 0,
+      quantity: quantity ?? 0,
+      pnl,
+      status,
+    });
+  });
+
+  return { trades, skippedRows };
+}
+
+// ============================================================
+// Entry point
+// ============================================================
+
+export async function parseTradeFile(file: File): Promise<ParsedTradeFile> {
+  // raw: true stops xlsx's CSV parser from guessing cell types itself — its
+  // built-in numeric sniffer strips commas as thousands separators before our
+  // own parseAmount() ever runs, silently corrupting decimal-comma values
+  // (e.g. "-543,21" becomes -54321). With raw:true, CSV cells stay untouched
+  // strings, while real .xlsx/.xls binary cells (already numbers/Dates in the
+  // file format) and cellDates are unaffected.
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) {
+    throw new Error("The file has no sheets");
+  }
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<Row>(sheet, {
+    defval: "",
+    raw: true,
+  });
+
+  if (rows.length === 0) {
+    throw new Error("No rows found in file");
+  }
+
+  const headers = Object.keys(rows[0]);
+  const format = detectKnownFormat(headers);
+
+  if (format === "existing") return parseExistingFormat(rows);
+  if (format === "utcBroker") return parseUtcBrokerFormat(rows);
+  return fallbackGenericParser(rows, headers);
 }
