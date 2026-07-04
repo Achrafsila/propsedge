@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, Clock, Layers, Repeat } from "lucide-react";
+import { Activity, Clock, DollarSign, Layers, Repeat, Scale } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
-import { DNAInsight, PropFirmConsistency, SessionKey } from "@/lib/analytics/traderDNA";
+import { DNAInsight, ExpectancyResult, ProfitFactorResult, PropFirmConsistency, SessionKey } from "@/lib/analytics/traderDNA";
 
 const cardVariants = { hover: { y: -4, transition: { duration: 0.3 } } };
 
@@ -85,6 +85,8 @@ export function GlobalOverview({
   sessionTradeCount,
   preferredInstrument,
   instrumentTradeCount,
+  expectancy,
+  profitFactor,
 }: {
   tradingFrequency: DNAInsight<number>;
   propFirmConsistency: PropFirmConsistency;
@@ -92,6 +94,8 @@ export function GlobalOverview({
   sessionTradeCount: number;
   preferredInstrument: DNAInsight<string | null>;
   instrumentTradeCount: number;
+  expectancy: ExpectancyResult;
+  profitFactor: ProfitFactorResult;
 }) {
   const frequencyReady = hasEnoughData(tradingFrequency.sampleSize);
   const sessionReady = hasEnoughData(preferredSession.sampleSize) && !!preferredSession.value;
@@ -99,6 +103,17 @@ export function GlobalOverview({
 
   const consistencyPct =
     propFirmConsistency.percentage !== null ? Math.round(propFirmConsistency.percentage) : null;
+
+  const expectancyValue =
+    expectancy.expectancy !== null
+      ? `${expectancy.expectancy >= 0 ? "+" : "-"}$${Math.abs(expectancy.expectancy).toFixed(2)} / trade`
+      : "Not enough data";
+
+  const profitFactorValue = profitFactor.profitFactor !== null ? profitFactor.profitFactor.toFixed(2) : "∞";
+  const profitFactorSub =
+    profitFactor.profitFactor !== null
+      ? `Gross Profit is ${profitFactor.profitFactor.toFixed(2)}× larger than Gross Loss.`
+      : "No losing trades yet.";
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -137,6 +152,20 @@ export function GlobalOverview({
             ? `${instrumentTradeCount} of ${preferredInstrument.sampleSize} trades`
             : "Need more closed trades"
         }
+      />
+      <KpiCard
+        icon={DollarSign}
+        label="Expectancy"
+        value={expectancyValue}
+        color="#F97316"
+        sub="Average profit generated per executed trade."
+      />
+      <KpiCard
+        icon={Scale}
+        label="Profit Factor"
+        value={profitFactorValue}
+        color="#06B6D4"
+        sub={profitFactorSub}
       />
     </div>
   );

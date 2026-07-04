@@ -318,6 +318,15 @@ export function getTradingAge(trades: Trade[]): DNAInsight<number> {
   return buildInsight(stats.tradingAgeDays, stats.totalTrades);
 }
 
+// ── Net Profit ───────────────────────────────────────────────────────────
+// Shared by every profitability-based KPI below (Prop Firm Consistency,
+// Expectancy) so "net profit" is computed exactly once and can never drift
+// between them.
+
+function computeNetProfit(trades: Trade[]): number {
+  return trades.reduce((sum, t) => sum + t.pnl, 0);
+}
+
 // ── Prop Firm Consistency ────────────────────────────────────────────────
 // How much of total profit comes from a single best day — the metric prop
 // firms use to flag traders who pass an evaluation on one lucky day rather
@@ -333,12 +342,12 @@ export interface PropFirmConsistency {
 
 export function getPropFirmConsistency(trades: Trade[]): PropFirmConsistency {
   const dated = trades.filter((t) => !!t.entryDate);
-  const totalProfit = dated.reduce((sum, t) => sum + t.pnl, 0);
+  const totalProfit = computeNetProfit(dated);
 
   const byDate = groupBy(dated, (t) => t.entryDate);
   let largestWinningDay = 0;
   for (const dayTrades of byDate.values()) {
-    const dayPnL = dayTrades.reduce((sum, t) => sum + t.pnl, 0);
+    const dayPnL = computeNetProfit(dayTrades);
     if (dayPnL > largestWinningDay) largestWinningDay = dayPnL;
   }
 
@@ -347,4 +356,56 @@ export function getPropFirmConsistency(trades: Trade[]): PropFirmConsistency {
   }
 
   return { percentage: (largestWinningDay / totalProfit) * 100, largestWinningDay, totalProfit };
+}
+
+// ── Expectancy ───────────────────────────────────────────────────────────
+// Average profit generated per trade: Net Profit / Total Trades. Reuses
+// the same computeNetProfit() every other profitability KPI in this file
+// uses, so "net profit" is never calculated two different ways.
+
+export interface ExpectancyResult {
+  expectancy: number | null; // null when there are no trades to divide by
+  netProfit: number;
+  totalTrades: number;
+}
+
+export function getExpectancy(trades: Trade[]): ExpectancyResult {
+  const dated = trades.filter((t) => !!t.entryDate);
+  const netProfit = computeNetProfit(dated);
+  const totalTrades = dated.length;
+
+  return {
+    expectancy: totalTrades > 0 ? netProfit / totalTrades : null,
+    netProfit,
+    totalTrades,
+  };
+}
+
+// ── Profit Factor ────────────────────────────────────────────────────────
+// Gross Profit / Gross Loss — how many dollars of profit a trader
+// generates for every dollar lost. Gross Loss is a magnitude (always
+// added as a positive number), never signed, so it can sit directly in a
+// denominator.
+
+export interface ProfitFactorResult {
+  profitFactor: number | null; // null when grossLoss is 0 ("∞" in the UI)
+  grossProfit: number;
+  grossLoss: number;
+}
+
+export function getProfitFactor(trades: Trade[]): ProfitFactorResult {
+  const dated = trades.filter((t) => !!t.entryDate);
+
+  let grossProfit = 0;
+  let grossLoss = 0;
+  for (const t of dated) {
+    if (t.pnl > 0) grossProfit += t.pnl;
+    else if (t.pnl < 0) grossLoss += Math.abs(t.pnl);
+  }
+
+  return {
+    profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
+    grossProfit,
+    grossLoss,
+  };
 }

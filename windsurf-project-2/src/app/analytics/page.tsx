@@ -17,6 +17,8 @@ import {
   getPreferredSession,
   getPreferredInstrument,
   getTraderDNAStats,
+  getExpectancy,
+  getProfitFactor,
 } from "@/lib/analytics/traderDNA";
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { getTraderHabits } from "@/lib/analytics/traderHabits";
@@ -61,6 +63,8 @@ export default function GlobalAnalyticsPage() {
   const propFirmConsistency = useMemo(() => getPropFirmConsistency(filteredTrades), [filteredTrades]);
   const preferredSession = useMemo(() => getPreferredSession(filteredTrades), [filteredTrades]);
   const preferredInstrument = useMemo(() => getPreferredInstrument(filteredTrades), [filteredTrades]);
+  const expectancy = useMemo(() => getExpectancy(filteredTrades), [filteredTrades]);
+  const profitFactor = useMemo(() => getProfitFactor(filteredTrades), [filteredTrades]);
 
   // Trade counts behind the preferred session/instrument, for the "X of Y
   // trades" KPI subtitles — read-only lookup, doesn't affect the insights
@@ -208,6 +212,8 @@ export default function GlobalAnalyticsPage() {
           sessionTradeCount={sessionTradeCount}
           preferredInstrument={preferredInstrument}
           instrumentTradeCount={instrumentTradeCount}
+          expectancy={expectancy}
+          profitFactor={profitFactor}
         />
       </motion.div>
 
