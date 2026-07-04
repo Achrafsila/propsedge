@@ -81,6 +81,40 @@ function formatExpectancy(value: number): string {
   return `${sign}$${Math.abs(value).toFixed(2)} expectancy/trade`;
 }
 
+// Same "$X.XX/trade" shape as formatExpectancy, without the "expectancy"
+// word — used for the Loss Psychology insights below, which report a
+// plain average pnl per trade rather than a ranked group's expectancy.
+function formatPnlPerTrade(value: number): string {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}$${Math.abs(value).toFixed(2)}/trade`;
+}
+
+// Minutes between a trade's exit and the next trade's entry. Only
+// computable when both timestamps are present — same "exclude, don't
+// guess" policy traderHabits.ts/traderIdentity.ts use for holding-time,
+// applied here to re-entry delay instead.
+function toTimestamp(dateStr: string, timeStr?: string): number | null {
+  if (!dateStr || !timeStr || !/^\d{1,2}:\d{2}$/.test(timeStr)) return null;
+  const ts = new Date(`${dateStr}T${timeStr}:00`).getTime();
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function getReentryMinutes(exitedTrade: Trade, nextTrade: Trade): number | null {
+  const exitTs = toTimestamp(exitedTrade.exitDate, exitedTrade.exitTime);
+  const entryTs = toTimestamp(nextTrade.entryDate, nextTrade.entryTime);
+  if (exitTs === null || entryTs === null) return null;
+  const diffMinutes = (entryTs - exitTs) / 60_000;
+  return diffMinutes >= 0 ? diffMinutes : null;
+}
+
+function formatMinutes(minutes: number): string {
+  const rounded = Math.round(minutes);
+  if (rounded < 60) return `${rounded} min`;
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  return `${h}h ${m}m`;
+}
+
 // ── Insight & Metadata ───────────────────────────────────────────────────
 
 export interface RiskInsight {
@@ -351,6 +385,314 @@ function buildExecutiveSummary(riskConsistency: RiskInsight, afterLosses: RiskIn
   return [opener, middle, closing].filter(Boolean).join(" ");
 }
 
+// ============================================================
+// Loss Psychology (Trader DNA V3)
+// ============================================================
+// Answers one question: "How do I behave immediately after losing or
+// winning?" — this is the one place in Trader DNA that looks directly at
+// emotional/behavioral reactions to an outcome, still purely from
+// historical trades (no AI, no inference beyond arithmetic on pnl,
+// quantity, and timestamps already on Trade). Reuses this file's own
+// mean()/sortChronologically()/formatExpectancy() and the
+// computeSizeShiftAfterOutcome()/classifySizeShift() pair already built
+// for Position Size After Wins/Losses — Revenge Trading Score treats that
+// existing classification as one of its three inputs rather than
+// recomputing position-size behavior a second way.
+
+// Every insight below shares the same "not a coincidence" floor as the
+// rest of this file's expectancy-based groupings.
+const LOSS_PSYCHOLOGY_MIN_SAMPLE = MIN_GROUP_SAMPLE_SIZE;
+
+// ── 7 & 8. Performance After Loss / After Win ────────────────────────────
+// For every trade matching the trigger outcome, take the very next trade's
+// pnl. "Expectancy" and "Average PnL" are the same figure for this
+// subset (mean pnl) — Win Rate is computed too, but only feeds the
+// Revenge Trading Score below rather than getting its own display row,
+// since neither example in the spec shows it as a headline value.
+
+interface NextTradeOutcomes {
+  pnls: number[];
+  winRate: number;
+}
+
+function getNextTradeOutcomes(sorted: Trade[], isTrigger: (t: Trade) => boolean): NextTradeOutcomes {
+  const pnls: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (isTrigger(sorted[i])) pnls.push(sorted[i + 1].pnl);
+  }
+  const wins = pnls.filter((p) => p > 0).length;
+  return { pnls, winRate: pnls.length > 0 ? wins / pnls.length : 0 };
+}
+
+const PERFORMANCE_AFTER_LOSS_LABEL = "Performance After Loss";
+const PERFORMANCE_AFTER_WIN_LABEL = "Performance After Win";
+
+// After a loss, "recovery" is judged on absolute sign: did the very next
+// trade land back in profit, or compound the loss? A relative comparison
+// to the trader's own baseline isn't used here — recovering into profit
+// is recovering, regardless of how strong the trader's normal edge is.
+function classifyAfterLoss(avgPnl: number): string {
+  if (avgPnl > 0) return "Positive Recovery";
+  if (avgPnl < 0) return "Negative Recovery";
+  return "Neutral";
+}
+
+// After a win, "improving/declining" is inherently relative — it's only
+// meaningful compared against how the trader performs on average, not
+// against zero (a trader with a strong baseline could post a positive
+// pnl after a win and still be declining from their normal level).
+const PERFORMANCE_SHIFT_THRESHOLD = SIZE_SHIFT_THRESHOLD;
+
+function classifyAfterWin(avgPnl: number, overallExpectancy: number): string {
+  const scale = Math.max(Math.abs(overallExpectancy), 1);
+  const diff = avgPnl - overallExpectancy;
+  if (diff >= scale * PERFORMANCE_SHIFT_THRESHOLD) return "Improving";
+  if (diff <= -scale * PERFORMANCE_SHIFT_THRESHOLD) return "Declining";
+  return "Stable";
+}
+
+const AFTER_LOSS_PERFORMANCE_NARRATIVE: Record<string, string> = {
+  "Positive Recovery": "You generally bounce back with a profitable trade immediately after a loss.",
+  Neutral: "Your performance immediately after a losing trade is roughly break-even.",
+  "Negative Recovery": "You generally underperform immediately after a losing trade.",
+};
+
+const AFTER_WIN_PERFORMANCE_NARRATIVE: Record<string, string> = {
+  Improving: "You tend to build on momentum and perform even better after a winning trade.",
+  Stable: "You usually maintain strong execution after winning.",
+  Declining: "Your execution tends to drop off immediately after a winning trade.",
+};
+
+function buildPerformanceAfterLoss(outcomes: NextTradeOutcomes): RiskInsight {
+  if (outcomes.pnls.length < LOSS_PSYCHOLOGY_MIN_SAMPLE) return notEnoughDataInsight(PERFORMANCE_AFTER_LOSS_LABEL);
+  const avgPnl = mean(outcomes.pnls);
+  const classification = classifyAfterLoss(avgPnl);
+  return {
+    label: PERFORMANCE_AFTER_LOSS_LABEL,
+    value: classification,
+    metricLabel: formatPnlPerTrade(avgPnl),
+    narrative: AFTER_LOSS_PERFORMANCE_NARRATIVE[classification],
+    sampleSize: outcomes.pnls.length,
+  };
+}
+
+function buildPerformanceAfterWin(outcomes: NextTradeOutcomes, overallExpectancy: number): RiskInsight {
+  if (outcomes.pnls.length < LOSS_PSYCHOLOGY_MIN_SAMPLE) return notEnoughDataInsight(PERFORMANCE_AFTER_WIN_LABEL);
+  const avgPnl = mean(outcomes.pnls);
+  const classification = classifyAfterWin(avgPnl, overallExpectancy);
+  return {
+    label: PERFORMANCE_AFTER_WIN_LABEL,
+    value: classification,
+    metricLabel: formatPnlPerTrade(avgPnl),
+    narrative: AFTER_WIN_PERFORMANCE_NARRATIVE[classification],
+    sampleSize: outcomes.pnls.length,
+  };
+}
+
+// ── 9. Revenge Trading Risk ───────────────────────────────────────────────
+// Compares average re-entry delay after a loss to average re-entry delay
+// after a win. A much shorter delay after losing (re-entering fast to
+// "win it back") is the classic revenge-trading tell.
+
+const REVENGE_RISK_LABEL = "Revenge Trading Risk";
+const REVENGE_HIGH_RATIO = 0.5; // after-loss delay at or under half the after-win delay
+const REVENGE_MODERATE_RATIO = 0.75;
+
+function classifyRevengeRisk(afterLossDelay: number, afterWinDelay: number): string {
+  if (afterWinDelay <= 0) return "Low";
+  const ratio = afterLossDelay / afterWinDelay;
+  if (ratio <= REVENGE_HIGH_RATIO) return "High";
+  if (ratio <= REVENGE_MODERATE_RATIO) return "Moderate";
+  return "Low";
+}
+
+const REVENGE_RISK_NARRATIVE: Record<string, string> = {
+  High: "You tend to re-enter the market much faster after losing.",
+  Moderate: "You re-enter the market somewhat faster after losing trades.",
+  Low: "Your re-entry timing is similar whether you just won or lost.",
+};
+
+function getReentryDelays(sorted: Trade[], isTrigger: (t: Trade) => boolean): number[] {
+  const delays: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (!isTrigger(sorted[i])) continue;
+    const delay = getReentryMinutes(sorted[i], sorted[i + 1]);
+    if (delay !== null) delays.push(delay);
+  }
+  return delays;
+}
+
+function buildRevengeTradingRisk(afterLossDelays: number[], afterWinDelays: number[]): RiskInsight {
+  if (afterLossDelays.length < LOSS_PSYCHOLOGY_MIN_SAMPLE || afterWinDelays.length < LOSS_PSYCHOLOGY_MIN_SAMPLE) {
+    return notEnoughDataInsight(REVENGE_RISK_LABEL);
+  }
+  const afterLossDelay = mean(afterLossDelays);
+  const afterWinDelay = mean(afterWinDelays);
+  const classification = classifyRevengeRisk(afterLossDelay, afterWinDelay);
+  return {
+    label: REVENGE_RISK_LABEL,
+    value: classification,
+    metricLabel: `${formatMinutes(afterLossDelay)} after loss vs ${formatMinutes(afterWinDelay)} after win`,
+    narrative: REVENGE_RISK_NARRATIVE[classification],
+    sampleSize: Math.min(afterLossDelays.length, afterWinDelays.length),
+  };
+}
+
+// ── 10. Recovery Rate ─────────────────────────────────────────────────────
+// For every losing trade with at least 3 trades after it, checks whether
+// those 3 trades' combined pnl fully offsets the loss's magnitude.
+
+const RECOVERY_RATE_LABEL = "Recovery Rate";
+const RECOVERY_WINDOW = 3;
+
+function buildRecoveryRate(sorted: Trade[]): RiskInsight {
+  let evaluable = 0;
+  let recovered = 0;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const loss = sorted[i];
+    if (loss.pnl >= 0) continue;
+
+    const nextThree = sorted.slice(i + 1, i + 1 + RECOVERY_WINDOW);
+    if (nextThree.length < RECOVERY_WINDOW) continue;
+
+    evaluable += 1;
+    const recoveredAmount = nextThree.reduce((sum, t) => sum + t.pnl, 0);
+    if (recoveredAmount >= Math.abs(loss.pnl)) recovered += 1;
+  }
+
+  if (evaluable < LOSS_PSYCHOLOGY_MIN_SAMPLE) return notEnoughDataInsight(RECOVERY_RATE_LABEL);
+
+  const rate = Math.round((recovered / evaluable) * 100);
+  return {
+    label: RECOVERY_RATE_LABEL,
+    value: `${rate}%`,
+    metricLabel: `${recovered} of ${evaluable} losses recovered`,
+    narrative: `You recover your losses within three trades in ${rate}% of cases.`,
+    sampleSize: evaluable,
+  };
+}
+
+// ── 11. Revenge Trading Score ─────────────────────────────────────────────
+// A composite of three signals this file has already computed elsewhere:
+// position-size increase after a loss (positionSizeAfterLosses), reduced
+// re-entry delay after a loss (revengeTradingRisk), and weaker performance
+// after a loss (performanceAfterLoss). Each contributes 0-2 points toward
+// a 0-6 total, which maps to a single overall label.
+
+const REVENGE_SCORE_LABEL = "Revenge Trading Score";
+
+function scoreRevengeSignals(
+  positionSizeAfterLosses: RiskInsight,
+  revengeTradingRisk: RiskInsight,
+  performanceAfterLoss: RiskInsight
+): number {
+  let points = 0;
+  if (positionSizeAfterLosses.value === "Increasing Risk") points += 2;
+
+  if (revengeTradingRisk.value === "High") points += 2;
+  else if (revengeTradingRisk.value === "Moderate") points += 1;
+
+  if (performanceAfterLoss.value === "Negative Recovery") points += 2;
+  else if (performanceAfterLoss.value === "Neutral") points += 1;
+
+  return points;
+}
+
+function classifyRevengeScore(points: number): string {
+  if (points <= 0) return "Excellent";
+  if (points <= 1) return "Good";
+  if (points <= 3) return "Moderate";
+  if (points <= 4) return "Poor";
+  return "High Risk";
+}
+
+const REVENGE_SCORE_NARRATIVE: Record<string, string> = {
+  Excellent: "You stay composed after losses, with no signs of revenge trading.",
+  Good: "You mostly maintain discipline after losses, with only minor behavioural shifts.",
+  Moderate: "You show some emotional trading tendencies after losses.",
+  Poor: "You often show emotional trading tendencies after losses.",
+  "High Risk": "You frequently increase risk and re-enter quickly after losses, leading to weaker performance.",
+};
+
+function buildRevengeTradingScore(
+  positionSizeAfterLosses: RiskInsight,
+  revengeTradingRisk: RiskInsight,
+  performanceAfterLoss: RiskInsight
+): RiskInsight {
+  if (
+    positionSizeAfterLosses.value === NOT_ENOUGH_DATA ||
+    revengeTradingRisk.value === NOT_ENOUGH_DATA ||
+    performanceAfterLoss.value === NOT_ENOUGH_DATA
+  ) {
+    return notEnoughDataInsight(REVENGE_SCORE_LABEL);
+  }
+
+  const points = scoreRevengeSignals(positionSizeAfterLosses, revengeTradingRisk, performanceAfterLoss);
+  const classification = classifyRevengeScore(points);
+  return {
+    label: REVENGE_SCORE_LABEL,
+    value: classification,
+    metricLabel: `${points}/6 risk signals detected`,
+    narrative: REVENGE_SCORE_NARRATIVE[classification],
+    sampleSize: Math.min(
+      positionSizeAfterLosses.sampleSize,
+      revengeTradingRisk.sampleSize,
+      performanceAfterLoss.sampleSize
+    ),
+  };
+}
+
+// ── 12. Loss Psychology Executive Summary ────────────────────────────────
+// A second, dedicated summary (separate from Risk Management's own) built
+// only from this section's own insights and the existing lossShift
+// (before/after lot size around a loss) already computed for Position
+// Size After Losses.
+
+function buildLossPsychologySummary(
+  performanceAfterWin: RiskInsight,
+  positionSizeAfterLosses: RiskInsight,
+  lossShift: SizeShift | null,
+  revengeTradingRisk: RiskInsight,
+  revengeTradingScore: RiskInsight
+): string {
+  if (performanceAfterWin.value === NOT_ENOUGH_DATA && revengeTradingScore.value === NOT_ENOUGH_DATA) {
+    return "Not enough trade history yet to assess your behaviour around wins and losses.";
+  }
+
+  const winClause =
+    performanceAfterWin.value === NOT_ENOUGH_DATA
+      ? "Your win-side sample is still limited"
+      : performanceAfterWin.value === "Declining"
+        ? "Your execution quality drops even after winning trades"
+        : "You remain disciplined after winning trades";
+
+  const behaviorChangesAfterLoss =
+    revengeTradingScore.value === "High Risk" ||
+    revengeTradingScore.value === "Poor" ||
+    positionSizeAfterLosses.value === "Increasing Risk";
+
+  const lossClause = behaviorChangesAfterLoss
+    ? "but your behaviour changes noticeably after losses"
+    : "and your behaviour remains just as disciplined after losses";
+
+  const sentences: string[] = [`${winClause}, ${lossClause}.`];
+
+  const detailParts: string[] = [];
+  if (lossShift && lossShift.before > 0) {
+    const pctChange = Math.round(((lossShift.after - lossShift.before) / lossShift.before) * 100);
+    if (Math.abs(pctChange) >= 1) {
+      detailParts.push(`Position sizing ${pctChange > 0 ? "increases" : "decreases"} by ${Math.abs(pctChange)}%`);
+    }
+  }
+  if (revengeTradingRisk.value === "High") detailParts.push("re-entry time decreases significantly");
+  else if (revengeTradingRisk.value === "Moderate") detailParts.push("re-entry time decreases moderately");
+
+  if (detailParts.length > 0) sentences.push(`${detailParts.join(" and ")}.`);
+
+  return sentences.join(" ");
+}
+
 // ── TraderDiscipline ("Risk Management") ─────────────────────────────────
 
 export interface TraderDiscipline {
@@ -361,6 +703,13 @@ export interface TraderDiscipline {
   positionSizeAfterLosses: RiskInsight;
   lotSizeSweetSpot: InstrumentSweetSpot[];
   executiveSummary: string;
+  // Loss Psychology (Trader DNA V3)
+  performanceAfterLoss: RiskInsight;
+  performanceAfterWin: RiskInsight;
+  revengeTradingRisk: RiskInsight;
+  recoveryRate: RiskInsight;
+  revengeTradingScore: RiskInsight;
+  lossPsychologySummary: string;
   metadata: TraderDisciplineMetadata;
 }
 
@@ -395,6 +744,31 @@ export function getTraderDiscipline(trades: Trade[]): TraderDiscipline {
     narrative: `Your strongest statistical performance on ${s.symbol} currently occurs around ${s.lot.toFixed(2)} lot.`,
   }));
 
+  // ── Loss Psychology (Trader DNA V3) ──
+  const overallExpectancy = mean(sorted.map((t) => t.pnl));
+
+  const afterLossOutcomes = getNextTradeOutcomes(sorted, (t) => t.pnl < 0);
+  const performanceAfterLoss = buildPerformanceAfterLoss(afterLossOutcomes);
+
+  const afterWinOutcomes = getNextTradeOutcomes(sorted, (t) => t.pnl > 0);
+  const performanceAfterWin = buildPerformanceAfterWin(afterWinOutcomes, overallExpectancy);
+
+  const afterLossDelays = getReentryDelays(sorted, (t) => t.pnl < 0);
+  const afterWinDelays = getReentryDelays(sorted, (t) => t.pnl > 0);
+  const revengeTradingRisk = buildRevengeTradingRisk(afterLossDelays, afterWinDelays);
+
+  const recoveryRate = buildRecoveryRate(sorted);
+
+  const revengeTradingScore = buildRevengeTradingScore(positionSizeAfterLosses, revengeTradingRisk, performanceAfterLoss);
+
+  const lossPsychologySummary = buildLossPsychologySummary(
+    performanceAfterWin,
+    positionSizeAfterLosses,
+    lossShift,
+    revengeTradingRisk,
+    revengeTradingScore
+  );
+
   return {
     riskConsistency,
     averagePositionSize: topInstruments,
@@ -406,6 +780,12 @@ export function getTraderDiscipline(trades: Trade[]): TraderDiscipline {
     positionSizeAfterLosses,
     lotSizeSweetSpot,
     executiveSummary: buildExecutiveSummary(riskConsistency, positionSizeAfterLosses, sweetSpots),
+    performanceAfterLoss,
+    performanceAfterWin,
+    revengeTradingRisk,
+    recoveryRate,
+    revengeTradingScore,
+    lossPsychologySummary,
     metadata: {
       sampleSize,
       tradingDays,

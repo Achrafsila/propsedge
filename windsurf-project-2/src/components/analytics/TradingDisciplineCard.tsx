@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ShieldCheck } from "lucide-react";
+import { Brain, ShieldCheck } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { RiskInsight, TraderDiscipline } from "@/lib/analytics/traderDiscipline";
 
 const RISK_COLOR = "#D4AF37";
+const LOSS_PSYCHOLOGY_COLOR = "#EF4444";
 
-function InsightRow({ row }: { row: RiskInsight }) {
+function InsightRow({ row, color = RISK_COLOR }: { row: RiskInsight; color?: string }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-4">
@@ -19,7 +20,7 @@ function InsightRow({ row }: { row: RiskInsight }) {
         </span>
       </div>
       {row.metricLabel && (
-        <p className="mt-1 text-right" style={{ fontSize: typography.fontSize.xs, color: RISK_COLOR }}>
+        <p className="mt-1 text-right" style={{ fontSize: typography.fontSize.xs, color }}>
           {row.metricLabel}
         </p>
       )}
@@ -151,6 +152,43 @@ export function TradingDisciplineCard({ discipline }: { discipline: TraderDiscip
           }}
         >
           {discipline.executiveSummary}
+        </p>
+      </div>
+
+      <div className="pt-4 mt-4" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+        <div className="flex items-center gap-2 mb-1">
+          <Brain className="w-4 h-4" style={{ color: LOSS_PSYCHOLOGY_COLOR }} />
+          <h4 className="text-[#F8FAFC] font-bold" style={{ fontSize: typography.fontSize.sm }}>
+            Loss Psychology
+          </h4>
+        </div>
+        <p
+          className="text-[#94A3B8] mb-4"
+          style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+        >
+          How you behave immediately after losing or winning.
+        </p>
+
+        <div className="space-y-4 mb-4">
+          <InsightRow row={discipline.performanceAfterLoss} color={LOSS_PSYCHOLOGY_COLOR} />
+          <InsightRow row={discipline.performanceAfterWin} color={LOSS_PSYCHOLOGY_COLOR} />
+          <InsightRow row={discipline.revengeTradingRisk} color={LOSS_PSYCHOLOGY_COLOR} />
+          <InsightRow row={discipline.recoveryRate} color={LOSS_PSYCHOLOGY_COLOR} />
+          <InsightRow row={discipline.revengeTradingScore} color={LOSS_PSYCHOLOGY_COLOR} />
+        </div>
+
+        <h4 className="text-[#F8FAFC] font-semibold mb-1.5" style={{ fontSize: typography.fontSize.sm }}>
+          Behavioural Summary
+        </h4>
+        <p
+          className="text-[#94A3B8]"
+          style={{
+            fontSize: typography.fontSize.xs,
+            opacity: typography.opacity.tertiary,
+            lineHeight: typography.lineHeight.relaxed,
+          }}
+        >
+          {discipline.lossPsychologySummary}
         </p>
       </div>
     </motion.div>
