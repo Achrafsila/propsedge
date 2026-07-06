@@ -7,6 +7,7 @@ import { AccountsProvider } from "@/context/AccountsContext";
 import { AdminProvider } from "@/context/AdminContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { TradingModeProvider } from "@/context/TradingModeContext";
+import { PersonalPortfolioProvider } from "@/context/PersonalPortfolioContext";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -49,7 +50,9 @@ export default function RootLayout({
           <AccountsProvider>
             <AdminProvider>
               <TradingModeProvider>
-                <AppShell>{children}</AppShell>
+                <PersonalPortfolioProvider>
+                  <AppShell>{children}</AppShell>
+                </PersonalPortfolioProvider>
               </TradingModeProvider>
             </AdminProvider>
           </AccountsProvider>
