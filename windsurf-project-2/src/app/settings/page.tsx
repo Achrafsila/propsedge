@@ -3,15 +3,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Settings as SettingsIcon, User, Bell, Shield, Palette, Database } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Shield, Palette, Database, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientText } from "@/design-system";
 import { useAdmin } from "@/context/AdminContext";
 import { useAuth } from "@/context/AuthContext";
+import { useTradingMode } from "@/context/TradingModeContext";
 
 export default function Settings() {
   const { isAdmin, toggleAdmin } = useAdmin();
   const { user } = useAuth();
+  const { isPropFirmMode, isPersonalCapitalMode, setTradingMode } = useTradingMode();
 
   const displayName =
     user?.user_metadata?.full_name ??
@@ -654,6 +656,83 @@ export default function Settings() {
                   style={{ borderRadius: '9999px', padding: '0.5rem 1.5rem' }}
                 >
                   {isAdmin ? 'Enabled' : 'Disabled'}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+
+        {/* Trading Mode */}
+        <motion.div variants={itemVariants}>
+          <motion.div
+            variants={cardVariants}
+            whileHover="hover"
+            className="relative rounded-xl p-6 transition-all duration-300"
+            style={{
+              background: glassmorphism.card.background,
+              backdropFilter: glassmorphism.card.backdropBlur,
+              border: '1px solid',
+              borderColor: 'rgba(148, 163, 184, 0.08)',
+              borderRadius: borderRadius.xl,
+            }}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(16,185,129, 0.1)' }}
+              >
+                <Layers className="w-6 h-6 text-[#10B981]" />
+              </div>
+              <h3
+                className="text-[#F8FAFC]"
+                style={{
+                  fontSize: typography.fontSize.section,
+                  fontWeight: typography.fontWeight.bold,
+                  letterSpacing: typography.letterSpacing.section
+                }}
+              >
+                Trading Mode
+              </h3>
+            </div>
+            <div className="flex items-center justify-between p-4 rounded-xl"
+              style={{ background: 'rgba(11, 18, 32, 0.5)', border: '1px solid rgba(148, 163, 184, 0.08)' }}
+            >
+              <div>
+                <p
+                  className="text-[#F8FAFC]"
+                  style={{
+                    fontSize: typography.fontSize.base,
+                    fontWeight: typography.fontWeight.medium
+                  }}
+                >
+                  {isPropFirmMode ? "Prop Firm" : "Personal Capital"}
+                </p>
+                <p
+                  className="text-[#64748B]"
+                  style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
+                >
+                  Switch between prop firm challenges/funded accounts and personal capital tracking
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setTradingMode("prop-firm")}
+                  className={isPropFirmMode
+                    ? "bg-[rgba(41,141,255,0.2)] text-[#298DFF] border border-[rgba(41,141,255,0.4)] hover:bg-[rgba(41,141,255,0.3)]"
+                    : "bg-[rgba(148,163,184,0.2)] text-[#94A3B8] border border-[rgba(148,163,184,0.4)] hover:bg-[rgba(148,163,184,0.3)]"
+                  }
+                  style={{ borderRadius: '9999px', padding: '0.5rem 1.25rem' }}
+                >
+                  Prop Firm
+                </Button>
+                <Button
+                  onClick={() => setTradingMode("personal-capital")}
+                  className={isPersonalCapitalMode
+                    ? "bg-[rgba(16,185,129,0.2)] text-[#10B981] border border-[rgba(16,185,129,0.4)] hover:bg-[rgba(16,185,129,0.3)]"
+                    : "bg-[rgba(148,163,184,0.2)] text-[#94A3B8] border border-[rgba(148,163,184,0.4)] hover:bg-[rgba(148,163,184,0.3)]"
+                  }
+                  style={{ borderRadius: '9999px', padding: '0.5rem 1.25rem' }}
+                >
+                  Personal Capital
                 </Button>
               </div>
             </div>

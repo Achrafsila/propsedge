@@ -15,6 +15,8 @@ import {
   ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell,
 } from "recharts";
 import { useAccounts } from "@/context/AccountsContext";
+import { useTradingMode } from "@/context/TradingModeContext";
+import { PersonalCapitalDashboard } from "@/components/personal-capital/PersonalCapitalDashboard";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
@@ -195,6 +197,7 @@ function DashboardSkeleton() {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const router = useRouter();
+  const { isPersonalCapitalMode } = useTradingMode();
   const {
     challenges, challengesLoading,
     fundedAccounts, fundedAccountsLoading,
@@ -370,6 +373,12 @@ export default function Dashboard() {
   const cfg = METRIC_META[metric];
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Personal Capital gets its own dedicated placeholder dashboard — the
+  // Prop Firm rendering below (and every hook feeding it above) is
+  // untouched and keeps running exactly as before; only the final render
+  // branches.
+  if (isPersonalCapitalMode) return <PersonalCapitalDashboard />;
+
   if (isLoading) return <DashboardSkeleton />;
 
   return (

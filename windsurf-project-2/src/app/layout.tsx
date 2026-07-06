@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { AccountsProvider } from "@/context/AccountsContext";
 import { AdminProvider } from "@/context/AdminContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { TradingModeProvider } from "@/context/TradingModeContext";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -47,7 +48,9 @@ export default function RootLayout({
         <AuthProvider>
           <AccountsProvider>
             <AdminProvider>
-              <AppShell>{children}</AppShell>
+              <TradingModeProvider>
+                <AppShell>{children}</AppShell>
+              </TradingModeProvider>
             </AdminProvider>
           </AccountsProvider>
         </AuthProvider>

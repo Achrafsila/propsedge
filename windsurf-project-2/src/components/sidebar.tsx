@@ -10,11 +10,13 @@ import {
   BarChart3,
   DollarSign,
   Settings,
-  Shield
+  Shield,
+  LineChart
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
+import { useTradingMode } from "@/context/TradingModeContext";
 import { getRootChallenges } from "@/lib/challenges";
 import { borderRadius } from "@/design-system";
 import { Logo } from "@/components/common/Logo";
@@ -23,8 +25,10 @@ export function Sidebar() {
   const pathname = usePathname();
   const { challenges, fundedAccounts } = useAccounts();
   const { isAdmin } = useAdmin();
+  const { isPersonalCapitalMode } = useTradingMode();
 
-  const sidebarItems = [
+  // Prop Firm nav — unchanged from before Personal Capital mode existed.
+  const propFirmItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Challenges", href: "/challenges", icon: Trophy },
     { name: "Funded Accounts", href: "/funded", icon: Wallet },
@@ -34,6 +38,19 @@ export function Sidebar() {
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
+
+  // Personal Capital nav — hides Challenges/Funded Accounts/Payouts/Admin,
+  // adds Portfolio and Analytics (Trader DNA stays, it's not Prop-Firm-specific).
+  const personalCapitalItems = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Portfolio", href: "/portfolio", icon: Wallet },
+    { name: "Trade Journal", href: "/journal", icon: BookOpen },
+    { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
+    { name: "Analytics", href: "/portfolio-analytics", icon: LineChart },
+    { name: "Settings", href: "/settings", icon: Settings },
+  ];
+
+  const sidebarItems = isPersonalCapitalMode ? personalCapitalItems : propFirmItems;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
