@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BookOpen, Plus, TrendingUp, TrendingDown, Trash2, Upload } from "lucide-react";
 import { useAccounts } from "@/context/AccountsContext";
+import { useTradingMode } from "@/context/TradingModeContext";
+import { getTradesForTradingMode } from "@/lib/tradingMode";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
@@ -16,6 +18,7 @@ import { buildAccountIndex, filterGlobalTrades, GlobalFilters } from "@/lib/anal
 
 export default function Journal() {
   const { trades, tradesLoading, deleteTrade, deleteAllTrades, challenges, fundedAccounts } = useAccounts();
+  const { tradingMode } = useTradingMode();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
@@ -27,6 +30,15 @@ export default function Journal() {
 
   const selectableAccounts = selectedAccountType === "challenge" ? challenges : fundedAccounts;
   const hasSelectedAccount = selectedAccountId !== "";
+
+  // Journal must never mix Prop Firm and Personal Capital trades — Prop
+  // Firm mode is a no-op pass-through (identical to before Personal
+  // Capital existed); Personal Capital mode filters down to trades that
+  // are actually personal. See src/lib/tradingMode.ts. Challenge/Funded
+  // account selection above is still Prop-Firm-only (no personal accounts
+  // exist yet), so this is what keeps a Personal Capital view empty even
+  // if a challenge/funded account happens to be selected.
+  const modeTrades = useMemo(() => getTradesForTradingMode(trades, tradingMode), [trades, tradingMode]);
 
   // Same filtering engine Trader DNA / Analytics uses (filterGlobalTrades),
   // so "From"/"To" here behaves identically everywhere dates are filtered.
@@ -46,7 +58,7 @@ export default function Journal() {
     }),
     [selectedAccountType, selectedAccountId, dateFrom, dateTo]
   );
-  const accountTrades = hasSelectedAccount ? filterGlobalTrades(trades, journalFilters, accountIndex) : [];
+  const accountTrades = hasSelectedAccount ? filterGlobalTrades(modeTrades, journalFilters, accountIndex) : [];
 
   const handleDeleteAllTrades = async () => {
     setIsDeletingAll(true);
@@ -149,7 +161,7 @@ export default function Journal() {
             variant="outline"
             className="border-[rgba(239,68,68,0.3)] text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] hover:border-[#EF4444] rounded-xl transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
             onClick={() => setIsDeleteAllDialogOpen(true)}
-            disabled={trades.length === 0}
+            disabled={modeTrades.length === 0}
             type="button"
           >
             <Trash2 className="w-4 h-4 mr-2" />

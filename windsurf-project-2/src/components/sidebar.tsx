@@ -25,7 +25,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { challenges, fundedAccounts } = useAccounts();
   const { isAdmin } = useAdmin();
-  const { isPersonalCapitalMode } = useTradingMode();
+  const { isPropFirmMode, isPersonalCapitalMode, setTradingMode } = useTradingMode();
 
   // Prop Firm nav — unchanged from before Personal Capital mode existed.
   const propFirmItems = [
@@ -73,7 +73,41 @@ export function Sidebar() {
           <Logo size="medium" variant="full" src="/logo-sidebar.png" />
         </Link>
       </div>
-      
+
+      {/* Trading Mode — segmented control, global switch between Prop Firm
+          and Personal Capital. Prop Firm's selected state keeps the app's
+          existing brand blue; Personal Capital's selected state is the only
+          place this control uses the emerald accent. */}
+      <div className="px-4 py-3 border-b border-[rgba(148,163,184,0.1)]">
+        <div
+          className="flex items-center gap-1 p-1 rounded-full"
+          style={{ background: 'rgba(148,163,184,0.06)', border: '1px solid rgba(148,163,184,0.1)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setTradingMode("prop-firm")}
+            className="flex-1 text-xs font-semibold rounded-full py-1.5 transition-all duration-200"
+            style={{
+              background: isPropFirmMode ? 'rgba(41,141,255,0.18)' : 'transparent',
+              color: isPropFirmMode ? '#298DFF' : '#94A3B8',
+            }}
+          >
+            Prop Firm
+          </button>
+          <button
+            type="button"
+            onClick={() => setTradingMode("personal-capital")}
+            className="flex-1 text-xs font-semibold rounded-full py-1.5 transition-all duration-200"
+            style={{
+              background: isPersonalCapitalMode ? 'rgba(16,185,129,0.18)' : 'transparent',
+              color: isPersonalCapitalMode ? '#10B981' : '#94A3B8',
+            }}
+          >
+            Personal
+          </button>
+        </div>
+      </div>
+
       <nav className="flex-1 p-4 space-y-1">
         {sidebarItems.map((item) => {
           const Icon = item.icon;

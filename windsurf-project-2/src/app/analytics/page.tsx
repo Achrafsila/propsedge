@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
+import { useTradingMode } from "@/context/TradingModeContext";
+import { getTradesForTradingMode } from "@/lib/tradingMode";
 import { typography, gradientText } from "@/design-system";
 import {
   DEFAULT_GLOBAL_FILTERS,
@@ -40,6 +42,7 @@ const itemVariants = {
 
 export default function GlobalAnalyticsPage() {
   const { challenges, fundedAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
+  const { tradingMode } = useTradingMode();
   const [filters, setFilters] = useState<GlobalFilters>(DEFAULT_GLOBAL_FILTERS);
 
   const isLoading = challengesLoading || fundedAccountsLoading || tradesLoading;
@@ -48,14 +51,23 @@ export default function GlobalAnalyticsPage() {
   const resetFilters = () => setFilters(DEFAULT_GLOBAL_FILTERS);
   const isFiltered = JSON.stringify(filters) !== JSON.stringify(DEFAULT_GLOBAL_FILTERS);
 
+  // Trader DNA / Analytics must never mix Prop Firm and Personal Capital
+  // trades. Prop Firm mode is a no-op pass-through (identical to before
+  // Personal Capital existed); Personal Capital mode filters down to
+  // trades that are actually personal — see src/lib/tradingMode.ts. Every
+  // computation below reads modeTrades (directly or via filteredTrades),
+  // never the raw `trades` from AccountsContext.
+  const modeTrades = useMemo(() => getTradesForTradingMode(trades, tradingMode), [trades, tradingMode]);
+
   // Smart reset: once trades finish loading with zero rows (e.g. right
-  // after "Delete All Trades" in the Journal), snap filters back to
-  // default so this page reads exactly like a brand-new account instead
+  // after "Delete All Trades" in the Journal, or after switching into
+  // Personal Capital mode with no personal trades yet), snap filters back
+  // to default so this page reads exactly like a brand-new account instead
   // of showing a stale date range/account filter over no data. Adjusted
   // directly during render (React's recommended pattern for "reset state
   // when an external value changes") rather than in a useEffect, which
   // this project's lint config flags as a cascading-render risk.
-  const tradesEmpty = !tradesLoading && trades.length === 0;
+  const tradesEmpty = !tradesLoading && modeTrades.length === 0;
   const [wasTradesEmpty, setWasTradesEmpty] = useState(false);
   if (tradesEmpty !== wasTradesEmpty) {
     setWasTradesEmpty(tradesEmpty);
@@ -68,8 +80,8 @@ export default function GlobalAnalyticsPage() {
   const accountIndex = useMemo(() => buildAccountIndex(challenges, fundedAccounts), [challenges, fundedAccounts]);
 
   const filteredTrades = useMemo(
-    () => filterGlobalTrades(trades, filters, accountIndex),
-    [trades, filters, accountIndex]
+    () => filterGlobalTrades(modeTrades, filters, accountIndex),
+    [modeTrades, filters, accountIndex]
   );
 
   // ── Trader DNA: behavioural stats only, derived from the same filtered
@@ -173,8 +185,8 @@ export default function GlobalAnalyticsPage() {
   );
 
   const instrumentOptions = useMemo(
-    () => Array.from(new Set(trades.map((t) => t.symbol).filter(Boolean))).sort(),
-    [trades]
+    () => Array.from(new Set(modeTrades.map((t) => t.symbol).filter(Boolean))).sort(),
+    [modeTrades]
   );
 
   const sessionOptions = ["London", "New York", "Asian", "No Session"];
