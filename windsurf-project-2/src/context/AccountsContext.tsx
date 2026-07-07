@@ -234,6 +234,21 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     updateChallengeDb(id, updates).catch((err) =>
       console.error("Failed to update challenge:", err)
     );
+
+    // A Step 2 failure ends the whole challenge lifecycle — the parent
+    // Step 1 must stop reading as completed once its Step 2 has failed.
+    if (updates.status === "failed") {
+      const child = challenges.find((c) => c.id === id);
+      if (child?.parentChallengeId) {
+        const parentId = child.parentChallengeId;
+        setChallenges((prev) =>
+          prev.map((c) => (c.id === parentId ? { ...c, status: "failed" } : c))
+        );
+        updateChallengeDb(parentId, { status: "failed" }).catch((err) =>
+          console.error("Failed to update parent challenge:", err)
+        );
+      }
+    }
   };
 
   const deleteChallenge = (id: string) => {

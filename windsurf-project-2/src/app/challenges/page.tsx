@@ -872,7 +872,7 @@ export default function Challenges() {
                   <option value="failed">Failed</option>
                   <option value="refunded">Refunded</option>
                 </select>
-                {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status !== 'step1_completed' && !challenge.convertedToFunded && (
+                {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status === 'active' && !challenge.convertedToFunded && (
                   <Button
                     onClick={() => handleCompleteStep1(challenge)}
                     className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl text-sm"
@@ -991,7 +991,7 @@ export default function Challenges() {
                         >
                           <BarChart3 className="w-4 h-4" />
                         </Button>
-                        {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status !== 'step1_completed' && !challenge.convertedToFunded && (
+                        {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status === 'active' && !challenge.convertedToFunded && (
                           <Button
                             variant="ghost"
                             size="icon"
