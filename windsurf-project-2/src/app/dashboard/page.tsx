@@ -411,6 +411,17 @@ export default function Dashboard() {
         <KpiCard label="Active Challenges"     value={kpis.activeChallengeAccounts}format={(v) => String(Math.round(v))} icon={Target} iconColor="#3B82F6" iconBg="rgba(59,130,246,0.1)" dotColor="#3B82F6" sublabel="In progress" delay={0.40} />
         <KpiCard label="Active Funded"         value={kpis.activeFundedAccounts}   format={(v) => String(Math.round(v))} icon={Activity} iconColor="#10B981" iconBg="rgba(16,185,129,0.1)" dotColor="#10B981" sublabel="Currently trading" delay={0.45} />
         <KpiCard label="Breached Accounts"     value={kpis.breachedFundedAccounts} format={(v) => String(Math.round(v))} icon={AlertTriangle} iconColor="#EF4444" iconBg="rgba(239,68,68,0.1)" dotColor="#EF4444" sublabel="Drawdown breached" delay={0.50} />
+        <KpiCard
+          label="Average Time to Funded"
+          value={kpis.averageTimeToFundedDays ?? 0}
+          format={(v) => (kpis.averageTimeToFundedDays === null ? "—" : `${Math.round(v)} days`)}
+          icon={Clock}
+          iconColor="#F59E0B"
+          iconBg="rgba(245,158,11,0.1)"
+          dotColor="#F59E0B"
+          sublabel={kpis.timeToFundedSampleSize > 0 ? `Across ${kpis.timeToFundedSampleSize} funded challenge${kpis.timeToFundedSampleSize === 1 ? "" : "s"}` : "No funded challenges yet"}
+          delay={0.55}
+        />
       </div>
 
       {/* ── SECTION 2 — Performance Chart ── */}

@@ -46,8 +46,11 @@ export interface Challenge {
   deadline?: string;
   status: ChallengeStatus;
   convertedToFunded?: boolean;
+  convertedToFundedAt?: string; // Timestamp the challenge became funded (funding date for KPI math)
   fundedAccountId?: string;
   parentChallengeId?: string;
+  createdAt?: string; // DB row creation timestamp — lifecycle-start fallback when purchaseDate is missing
+  updatedAt?: string; // DB row update timestamp — funded-date fallback for legacy rows
   // Additional rule fields from presets
   presetId?: string;
   drawdownMode?: 'EOD' | 'Daily' | 'Trailing';
@@ -138,4 +141,6 @@ export interface DashboardKPIs {
   activeFundedAccounts: number;
   breachedFundedAccounts: number;
   activeChallengeAccounts: number;
+  averageTimeToFundedDays: number | null;
+  timeToFundedSampleSize: number;
 }

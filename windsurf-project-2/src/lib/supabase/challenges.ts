@@ -22,6 +22,7 @@ interface ChallengeRow {
   deadline: string | null;
   status: string;
   converted_to_funded: boolean;
+  converted_to_funded_at: string | null;
   funded_account_id: string | null;
   parent_challenge_id: string | null;
   preset_id: string | null;
@@ -61,8 +62,11 @@ function rowToChallenge(row: ChallengeRow): Challenge {
     deadline:           row.deadline ?? undefined,
     status:             row.status as ChallengeStatus,
     convertedToFunded:  row.converted_to_funded,
+    convertedToFundedAt: row.converted_to_funded_at ?? undefined,
     fundedAccountId:    row.funded_account_id ?? undefined,
     parentChallengeId:  row.parent_challenge_id ?? undefined,
+    createdAt:          row.created_at,
+    updatedAt:          row.updated_at,
     presetId:           row.preset_id ?? undefined,
     drawdownMode:       (row.drawdown_mode as Challenge["drawdownMode"]) ?? undefined,
     dailyDrawdown:      row.daily_drawdown,
@@ -137,6 +141,7 @@ function challengeToUpdateRow(updates: Partial<Challenge>): Record<string, unkno
   if (updates.deadline          !== undefined) row.deadline             = updates.deadline ?? null;
   if (updates.status            !== undefined) row.status               = updates.status;
   if (updates.convertedToFunded !== undefined) row.converted_to_funded  = updates.convertedToFunded;
+  if (updates.convertedToFundedAt !== undefined) row.converted_to_funded_at = updates.convertedToFundedAt ?? null;
   if (updates.fundedAccountId   !== undefined) row.funded_account_id    = updates.fundedAccountId ?? null;
   if (updates.parentChallengeId !== undefined) row.parent_challenge_id  = updates.parentChallengeId ?? null;
   if (updates.presetId          !== undefined) row.preset_id            = updates.presetId ?? null;

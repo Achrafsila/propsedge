@@ -202,6 +202,16 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
               className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="challengeStartDate" className="text-[#8B97A8]">Challenge Start Date (Optional)</Label>
+            <Input
+              id="challengeStartDate"
+              type="date"
+              value={formData.purchaseDate}
+              onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
+              className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="accountSize" className="text-[#8B97A8]">Account Size ($)</Label>

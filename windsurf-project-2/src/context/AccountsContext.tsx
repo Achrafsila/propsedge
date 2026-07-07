@@ -15,7 +15,7 @@ import {
   PayoutStatus,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
-import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
+import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded, getEffectiveStartDate, getEffectiveFundedDate } from "@/lib/challenges";
 import { buildAccountIndex, getOrphanedTrades } from "@/lib/analytics/globalAnalytics";
 import {
   fetchChallenges,
@@ -564,6 +564,19 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
           convertedToFunded: true,
           fundedAccountId: saved.id,
         });
+
+        // convertedToFundedAt is a separate, best-effort write: it depends on
+        // migration 008 (converted_to_funded_at column) having been applied.
+        // Kept out of the update above so a DB rejection here can never
+        // block or roll back the conversion itself — only the Average Time
+        // to Funded KPI falls back to `updated_at` until the column exists.
+        const convertedToFundedAt = new Date().toISOString();
+        setChallenges((prev) =>
+          prev.map((c) => (c.id === challengeId ? { ...c, convertedToFundedAt } : c))
+        );
+        updateChallengeDb(challengeId, { convertedToFundedAt }).catch((err) =>
+          console.error("Failed to persist convertedToFundedAt (has migration 008 been applied?):", err)
+        );
       })
       .catch((err) => {
         console.error("Failed to convert challenge to funded:", err);
@@ -650,6 +663,23 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     ).length;
     const activeChallengeAccounts = fundingStats.activeChallenges;
 
+    // Average Time to Funded — root challenges only, Step 2's outcome (if
+    // any) providing the funded date, but the *root's* own dates always
+    // providing the lifecycle start (see getEffectiveStartDate).
+    const fundedDurationsDays = getRootChallenges(challenges)
+      .map((root) => {
+        const fundedDate = getEffectiveFundedDate(root, challenges);
+        const startDate = getEffectiveStartDate(root, trades);
+        if (!fundedDate || !startDate) return null;
+        const days = (new Date(fundedDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
+        return days >= 0 ? days : null;
+      })
+      .filter((d): d is number => d !== null);
+    const averageTimeToFundedDays =
+      fundedDurationsDays.length > 0
+        ? fundedDurationsDays.reduce((sum, d) => sum + d, 0) / fundedDurationsDays.length
+        : null;
+
     return {
       totalChallengeCosts: roiStats.totalChallengeCosts,
       totalPayoutsReceived: roiStats.totalPayoutsReceived,
@@ -660,6 +690,8 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       activeFundedAccounts,
       breachedFundedAccounts,
       activeChallengeAccounts,
+      averageTimeToFundedDays,
+      timeToFundedSampleSize: fundedDurationsDays.length,
     };
   };
 
