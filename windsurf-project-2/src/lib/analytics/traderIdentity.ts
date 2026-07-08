@@ -43,13 +43,6 @@ function getHoldingMinutes(trade: Trade): number | null {
   return diff >= 0 ? diff : null;
 }
 
-// Overnight/same-day only needs the two dates (not times), so it's
-// computable for every trade regardless of whether entryTime/exitTime were
-// ever recorded.
-function isOvernight(trade: Trade): boolean {
-  return !!trade.entryDate && !!trade.exitDate && trade.entryDate !== trade.exitDate;
-}
-
 function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -83,85 +76,53 @@ function topEntry<K extends string>(counts: Partial<Record<K, number>>): { key: 
 }
 
 // ── 1. Trading Style ─────────────────────────────────────────────────────
-// Classified from holding-time habits only — never pnl. Median is the
-// primary signal (robust to a handful of outlier holds); overnight ratio
-// corroborates it, and average holding time acts as an independent
-// override so a trader whose median looks short but who regularly carries
-// a few very long holds (dragging the average way up) still reads as
-// something other than a pure scalper/intraday trader.
+// Classified from a single statistic — median holding time — and nothing
+// else. This is a strict duration ladder: every bucket boundary is a
+// holding-time threshold, checked in ascending order, so the result is
+// always consistent with the holding time this same engine reports
+// elsewhere (e.g. a 3-minute median can never land outside the Scalper
+// bucket). Earlier revisions additionally gated the short-duration tiers
+// on "overnight ratio" and let a separate average-holding-time figure
+// override the Position Trader check — that let a trader with a
+// low/short median still be classified as something other than a
+// duration-appropriate tier (e.g. "Intraday Trader" despite a 3-minute
+// median, if a handful of trades happened to carry overnight). Both of
+// those extra signals are removed; only medianHoldingMinutes decides the
+// bucket now.
 
 export type TradingStyle =
   | "Scalper"
   | "Momentum Scalper"
   | "Intraday Trader"
+  | "Swing Intraday"
   | "Swing Trader"
   | "Position Trader"
   | "Not enough data";
 
-// A scalper's typical hold is a handful of minutes and essentially never
-// crosses into the next day. A momentum scalper trades the same
-// same-day/no-overnight pattern but typically rides a position longer —
-// up to a quarter hour — rather than exiting within a couple of minutes.
-const SCALPER_MEDIAN_MAX_MINUTES = 5;
-const MOMENTUM_SCALPER_MEDIAN_MAX_MINUTES = 15;
-const SCALPER_MAX_OVERNIGHT_RATIO = 0.05;
+const SCALPER_MAX_MINUTES = 5;
+const MOMENTUM_SCALPER_MAX_MINUTES = 15;
+const INTRADAY_MAX_MINUTES = 4 * MINUTES_PER_HOUR;
+const SWING_INTRADAY_MAX_MINUTES = MINUTES_PER_DAY;
+const SWING_TRADER_MAX_MINUTES = 5 * MINUTES_PER_DAY;
 
-// An intraday trader's typical hold stays within the trading day (up to a
-// few hours) with only an occasional accidental overnight carry.
-const INTRADAY_MEDIAN_MAX_MINUTES = 6 * MINUTES_PER_HOUR;
-const INTRADAY_MAX_OVERNIGHT_RATIO = 0.2;
-
-// Position trading is defined by hold *duration* running multiple days —
-// either the typical (median) hold does, or a handful of very long holds
-// pull the average up into multi-day territory even if the median doesn't.
-// Overnight ratio deliberately plays no part in this check: a swing trader
-// who reliably holds for two days is "overnight" on essentially 100% of
-// trades too, so a high overnight ratio alone can't distinguish a 2-day
-// swing hold from a 2-month position hold — only duration can.
-const POSITION_MEDIAN_MIN_MINUTES = 3 * MINUTES_PER_DAY;
-const POSITION_AVERAGE_MIN_MINUTES = 3 * MINUTES_PER_DAY;
-
-// sameDayCloseRatio is computed alongside overnightRatio (they're
-// complements whenever a trade has both dates) purely so callers/tests can
-// read intent directly off "same-day ratio is high" without recomputing
-// 1 - overnightRatio themselves.
-function classifyTradingStyle(
-  averageHoldingMinutes: number,
-  medianHoldingMinutes: number,
-  overnightRatio: number,
-  sameDayCloseRatio: number
-): TradingStyle {
-  if (medianHoldingMinutes < SCALPER_MEDIAN_MAX_MINUTES && overnightRatio <= SCALPER_MAX_OVERNIGHT_RATIO) {
-    return "Scalper";
-  }
-
-  if (medianHoldingMinutes < MOMENTUM_SCALPER_MEDIAN_MAX_MINUTES && overnightRatio <= SCALPER_MAX_OVERNIGHT_RATIO) {
-    return "Momentum Scalper";
-  }
-
-  if (medianHoldingMinutes >= POSITION_MEDIAN_MIN_MINUTES || averageHoldingMinutes >= POSITION_AVERAGE_MIN_MINUTES) {
-    return "Position Trader";
-  }
-
-  if (
-    medianHoldingMinutes < INTRADAY_MEDIAN_MAX_MINUTES &&
-    overnightRatio <= INTRADAY_MAX_OVERNIGHT_RATIO &&
-    sameDayCloseRatio >= 1 - INTRADAY_MAX_OVERNIGHT_RATIO
-  ) {
-    return "Intraday Trader";
-  }
-
-  return "Swing Trader";
+function classifyTradingStyle(medianHoldingMinutes: number): TradingStyle {
+  if (medianHoldingMinutes < SCALPER_MAX_MINUTES) return "Scalper";
+  if (medianHoldingMinutes < MOMENTUM_SCALPER_MAX_MINUTES) return "Momentum Scalper";
+  if (medianHoldingMinutes < INTRADAY_MAX_MINUTES) return "Intraday Trader";
+  if (medianHoldingMinutes < SWING_INTRADAY_MAX_MINUTES) return "Swing Intraday";
+  if (medianHoldingMinutes < SWING_TRADER_MAX_MINUTES) return "Swing Trader";
+  return "Position Trader";
 }
 
 // A short, deterministic sentence describing the median hold in plain
-// language, reusing the exact averageHoldingMinutes/medianHoldingMinutes
-// this engine already computes for classifyTradingStyle() — no new timing
-// calculation, just a human-readable rendering of the median.
+// language, reusing the exact medianHoldingMinutes this engine already
+// computes for classifyTradingStyle() — no new timing calculation, just a
+// human-readable rendering of the same number the bucket was chosen from.
 const STYLE_CATEGORY_LABEL: Record<Exclude<TradingStyle, "Not enough data">, string> = {
   Scalper: "scalping",
   "Momentum Scalper": "momentum scalping",
   "Intraday Trader": "intraday trading",
+  "Swing Intraday": "swing-intraday trading",
   "Swing Trader": "swing trading",
   "Position Trader": "position trading",
 };
@@ -338,6 +299,7 @@ const STYLE_NOUN_WITH_ARTICLE: Record<Exclude<TradingStyle, "Not enough data">, 
   Scalper: "a scalper",
   "Momentum Scalper": "a momentum scalper",
   "Intraday Trader": "an intraday trader",
+  "Swing Intraday": "a swing-intraday trader",
   "Swing Trader": "a swing trader",
   "Position Trader": "a position trader",
 };
@@ -400,15 +362,8 @@ export function getTraderIdentity(trades: Trade[]): TraderIdentity {
     tradingStyle = "Not enough data";
   } else {
     const holdingTimes = sorted.map(getHoldingMinutes).filter((m): m is number => m !== null);
-    const averageHoldingMinutes =
-      holdingTimes.length > 0 ? holdingTimes.reduce((s, m) => s + m, 0) / holdingTimes.length : 0;
     medianHoldingMinutes = median(holdingTimes);
-
-    const overnightCount = sorted.filter(isOvernight).length;
-    const overnightRatio = overnightCount / sampleSize;
-    const sameDayCloseRatio = 1 - overnightRatio;
-
-    tradingStyle = classifyTradingStyle(averageHoldingMinutes, medianHoldingMinutes, overnightRatio, sameDayCloseRatio);
+    tradingStyle = classifyTradingStyle(medianHoldingMinutes);
   }
 
   const marketSpecialization = determineMarketSpecialization(sorted);
