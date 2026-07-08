@@ -17,7 +17,7 @@ import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
 import { useTradingMode } from "@/context/TradingModeContext";
-import { getRootChallenges } from "@/lib/challenges";
+import { getCapitalEligibleChallenges } from "@/lib/challenges";
 import { borderRadius } from "@/design-system";
 import { Logo } from "@/components/common/Logo";
 
@@ -62,8 +62,11 @@ export function Sidebar() {
   };
 
   // Step 2 rows are a continuation of their root challenge, not a separate
-  // purchased account, so only root challenges count toward capital.
-  const totalCapital = getRootChallenges(challenges).reduce((sum, c) => sum + c.accountSize, 0) +
+  // purchased account, so only root challenges count toward capital — and
+  // only lifecycles still actively at risk (active/step1_completed/passed,
+  // not yet converted). Failed and refunded lifecycles contribute $0;
+  // converted ones have already moved into the funded sum below.
+  const totalCapital = getCapitalEligibleChallenges(challenges).reduce((sum, c) => sum + c.accountSize, 0) +
                        fundedAccounts.reduce((sum, a) => sum + a.accountSize, 0);
 
   return (
