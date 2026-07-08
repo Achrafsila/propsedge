@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { Award, BadgeCheck, Radar, Sprout, TrendingUp } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { DataConfidence, DataConfidenceLevel } from "@/lib/analytics/dataConfidence";
+import { RadialGauge } from "@/components/analytics/visualizations/RadialGauge";
+import { CountUpNumber } from "@/components/analytics/visualizations/CountUpNumber";
 
 const LEVEL_VISUALS: Record<DataConfidenceLevel, { icon: React.ElementType; color: string }> = {
   getting_started: { icon: Sprout, color: "#64748B" },
@@ -59,22 +61,13 @@ export function DataConfidenceCard({ confidence }: { confidence: DataConfidence 
           </div>
 
           <div className="flex items-center gap-6 text-right">
-            <div>
-              <p className="font-extrabold" style={{ color, fontSize: typography.fontSize.xl }}>
-                {confidence.score}%
-              </p>
-              <p
-                className="uppercase"
-                style={{
-                  color: "#64748B",
-                  fontSize: typography.fontSize.xs,
-                  opacity: typography.opacity.muted,
-                  letterSpacing: typography.letterSpacing.label,
-                }}
-              >
-                Confidence
-              </p>
-            </div>
+            <RadialGauge
+              percent={confidence.score}
+              color={color}
+              size={64}
+              centerValue={<CountUpNumber value={confidence.score} format={(v) => `${Math.round(v)}%`} />}
+              caption="Confidence"
+            />
             <div>
               <p className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.sm }}>
                 {confidence.totalTrades}

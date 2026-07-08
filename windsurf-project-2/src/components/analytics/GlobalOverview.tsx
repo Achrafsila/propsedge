@@ -11,6 +11,7 @@ import {
   PropFirmConsistency,
   SessionKey,
 } from "@/lib/analytics/traderDNA";
+import { CountUpNumber } from "@/components/analytics/visualizations/CountUpNumber";
 
 const cardVariants = { hover: { y: -4, transition: { duration: 0.3 } } };
 
@@ -18,12 +19,16 @@ function KpiCard({
   icon: Icon,
   label,
   value,
+  numericValue,
+  format,
   color,
   sub,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
+  numericValue?: number | null;
+  format?: (v: number) => string;
   color: string;
   sub: string;
 }) {
@@ -67,7 +72,7 @@ function KpiCard({
             lineHeight: typography.lineHeight.kpi,
           }}
         >
-          {value}
+          {numericValue != null && format ? <CountUpNumber value={numericValue} format={format} /> : value}
         </p>
         <p className="text-[#64748B] mt-2" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}>
           {sub}
@@ -127,6 +132,8 @@ export function GlobalOverview({
         icon={Activity}
         label="Trading Frequency"
         value={hasNoTrades ? "No trades yet" : `${tradingFrequency.value.toFixed(1)}/day`}
+        numericValue={hasNoTrades ? null : tradingFrequency.value}
+        format={(v) => `${v.toFixed(1)}/day`}
         color="#298DFF"
         sub={
           hasNoTrades
@@ -138,6 +145,8 @@ export function GlobalOverview({
         icon={Repeat}
         label="Profit Consistency"
         value={consistencyPct !== null ? `${consistencyPct}%` : "N/A"}
+        numericValue={consistencyPct}
+        format={(v) => `${Math.round(v)}%`}
         color="#8B5CF6"
         sub={
           consistencyPct !== null
@@ -165,6 +174,8 @@ export function GlobalOverview({
         icon={DollarSign}
         label="Expectancy"
         value={expectancyValue}
+        numericValue={expectancy.expectancy}
+        format={(v) => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)} / trade`}
         color="#F97316"
         sub={expectancy.expectancy !== null ? "Average profit generated per executed trade." : ""}
       />
@@ -172,6 +183,8 @@ export function GlobalOverview({
         icon={Scale}
         label="Profit Factor"
         value={profitFactorValue}
+        numericValue={profitFactor.totalTrades > 0 ? profitFactor.profitFactor : null}
+        format={(v) => v.toFixed(2)}
         color="#06B6D4"
         sub={profitFactorSub}
       />

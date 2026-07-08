@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { EyeOff } from "lucide-react";
+import { EyeOff, TrendingDown } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { TraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 
@@ -13,7 +13,9 @@ const BLIND_SPOTS_COLOR = "#EF4444";
 // single flagship insight (Biggest Leak) instead of a list of per-dimension
 // rankings. Worst Session/Instrument/Weekday and Performance After Trade
 // Number are still computed by the engine for the AI Coach; they just
-// aren't rendered here.
+// aren't rendered here. Unlike Your Edge's bestSetup, biggestLeak has no
+// `detail` field — it's a genuine single-dimension insight, not a 3-part
+// combo — so this card deliberately doesn't force a matching badge row.
 export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindSpots }) {
   const { biggestLeak } = blindSpots;
 
@@ -50,7 +52,10 @@ export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindS
         Where you lose your edge — contexts that quietly work against you, not a judgment on you.
       </p>
 
-      <div className="mb-5">
+      <div
+        className="rounded-xl p-5 mb-5"
+        style={{ background: `${BLIND_SPOTS_COLOR}0D`, border: `1px solid ${BLIND_SPOTS_COLOR}33` }}
+      >
         <p
           className="uppercase mb-2"
           style={{
@@ -69,17 +74,28 @@ export function TradingBlindSpotsCard({ blindSpots }: { blindSpots: TraderBlindS
         >
           {biggestLeak.value}
         </p>
+
         {biggestLeak.metricLabel && (
-          <p className="mt-2 font-semibold" style={{ color: BLIND_SPOTS_COLOR, fontSize: typography.fontSize.base }}>
-            {biggestLeak.metricLabel}
-          </p>
+          <div className="flex items-center gap-1.5 mt-3">
+            <TrendingDown className="w-4 h-4" style={{ color: BLIND_SPOTS_COLOR }} />
+            <span className="font-bold" style={{ color: BLIND_SPOTS_COLOR, fontSize: typography.fontSize.lg }}>
+              {biggestLeak.metricLabel}
+            </span>
+          </div>
         )}
+
         {biggestLeak.narrative && (
           <p
-            className="mt-2"
+            className="mt-3"
             style={{ color: "#94A3B8", fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
           >
             {biggestLeak.narrative}
+          </p>
+        )}
+
+        {biggestLeak.sampleSize > 0 && (
+          <p className="mt-2" style={{ color: "#64748B", fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
+            Based on {biggestLeak.sampleSize} trades
           </p>
         )}
       </div>

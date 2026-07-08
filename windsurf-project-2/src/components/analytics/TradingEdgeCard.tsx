@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Sparkles, TrendingUp } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { TraderEdge } from "@/lib/analytics/traderEdge";
 
@@ -15,6 +15,9 @@ const EDGE_COLOR = "#10B981";
 // computed by the engine for the AI Coach; they just aren't rendered here.
 export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
   const { bestSetup } = edge;
+  // bestSetup.detail is always "session · direction" when present — split
+  // into two small badges rather than one line of plain text.
+  const detailParts = bestSetup.detail ? bestSetup.detail.split("·").map((p) => p.trim()).filter(Boolean) : [];
 
   return (
     <motion.div
@@ -49,7 +52,10 @@ export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
         Where you statistically perform best — ranked by expectancy, not total P&amp;L.
       </p>
 
-      <div className="mb-5">
+      <div
+        className="rounded-xl p-5 mb-5"
+        style={{ background: `${EDGE_COLOR}0D`, border: `1px solid ${EDGE_COLOR}33` }}
+      >
         <p
           className="uppercase mb-2"
           style={{
@@ -68,22 +74,47 @@ export function TradingEdgeCard({ edge }: { edge: TraderEdge }) {
         >
           {bestSetup.value}
         </p>
-        {bestSetup.detail && (
-          <p className="mt-1" style={{ color: "#94A3B8", fontSize: typography.fontSize.sm }}>
-            {bestSetup.detail}
-          </p>
+
+        {detailParts.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {detailParts.map((part) => (
+              <span
+                key={part}
+                className="px-2.5 py-1 rounded-full font-semibold"
+                style={{
+                  fontSize: typography.fontSize.xs,
+                  color: EDGE_COLOR,
+                  background: `${EDGE_COLOR}1A`,
+                  border: `1px solid ${EDGE_COLOR}40`,
+                }}
+              >
+                {part}
+              </span>
+            ))}
+          </div>
         )}
+
         {bestSetup.metricLabel && (
-          <p className="mt-2 font-semibold" style={{ color: EDGE_COLOR, fontSize: typography.fontSize.base }}>
-            {bestSetup.metricLabel}
-          </p>
+          <div className="flex items-center gap-1.5 mt-3">
+            <TrendingUp className="w-4 h-4" style={{ color: EDGE_COLOR }} />
+            <span className="font-bold" style={{ color: EDGE_COLOR, fontSize: typography.fontSize.lg }}>
+              {bestSetup.metricLabel}
+            </span>
+          </div>
         )}
+
         {bestSetup.narrative && (
           <p
-            className="mt-2"
+            className="mt-3"
             style={{ color: "#94A3B8", fontSize: typography.fontSize.xs, opacity: typography.opacity.tertiary }}
           >
             {bestSetup.narrative}
+          </p>
+        )}
+
+        {bestSetup.sampleSize > 0 && (
+          <p className="mt-2" style={{ color: "#64748B", fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
+            Based on {bestSetup.sampleSize} trades
           </p>
         )}
       </div>

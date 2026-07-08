@@ -34,6 +34,8 @@ import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
 import { DataConfidenceCard } from "@/components/analytics/DataConfidenceCard";
+import { RadialGauge } from "@/components/analytics/visualizations/RadialGauge";
+import { CountUpNumber } from "@/components/analytics/visualizations/CountUpNumber";
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -212,24 +214,67 @@ export default function GlobalAnalyticsPage() {
         isFiltered={isFiltered}
       />
 
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-        <h1
-          style={{
-            fontSize: typography.fontSize.display,
-            fontWeight: typography.fontWeight.extraBold,
-            letterSpacing: typography.letterSpacing.display,
-            lineHeight: typography.lineHeight.display,
-            background: gradientText.premium,
-            backgroundClip: "text",
-            WebkitBackgroundClip: "text",
-            color: "transparent",
-          }}
-        >
-          Trader DNA
-        </h1>
-        <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>
-          Understand how you trade, not just what you earn.
-        </p>
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="relative rounded-2xl p-8 overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6"
+        style={{
+          background: "rgba(16,24,40,0.5)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(148,163,184,0.08)",
+        }}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ background: "radial-gradient(90% 120% at 15% 0%, rgba(41,141,255,0.20) 0%, rgba(41,141,255,0) 60%)" }}
+        />
+        <div className="relative">
+          <p
+            className="uppercase mb-2"
+            style={{
+              color: "#298DFF",
+              fontSize: typography.fontSize.xs,
+              fontWeight: typography.fontWeight.bold,
+              letterSpacing: "0.2em",
+            }}
+          >
+            Behavioral Trading Intelligence
+          </p>
+          <h1
+            style={{
+              fontSize: typography.fontSize.display,
+              fontWeight: typography.fontWeight.extraBold,
+              letterSpacing: typography.letterSpacing.display,
+              lineHeight: typography.lineHeight.display,
+              background: gradientText.premium,
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              color: "transparent",
+            }}
+          >
+            Trader DNA
+          </h1>
+          <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>
+            Understand how you trade, not just what you earn.
+          </p>
+          {identity.metadata.lastTrade && (
+            <p className="text-[#64748B] mt-3" style={{ fontSize: typography.fontSize.xs, opacity: typography.opacity.muted }}>
+              Last updated {identity.metadata.lastTrade}
+            </p>
+          )}
+        </div>
+
+        <div className="relative flex-shrink-0">
+          <RadialGauge
+            percent={dataConfidence.score}
+            color="#298DFF"
+            size={104}
+            centerValue={<CountUpNumber value={dataConfidence.score} format={(v) => `${Math.round(v)}%`} />}
+            caption={dataConfidence.label}
+          />
+        </div>
       </motion.div>
 
       <DataConfidenceCard confidence={dataConfidence} />
@@ -261,6 +306,8 @@ export default function GlobalAnalyticsPage() {
           blindSpots={blindSpots}
           discipline={discipline}
           evolution={evolution}
+          tradesByDirection={dnaStats.tradesByDirection}
+          tradesByInstrument={dnaStats.tradesByInstrument}
         />
       </motion.div>
     </div>
