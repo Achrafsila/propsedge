@@ -26,3 +26,28 @@ export function getUniquePropFirmOptions(
   }
   return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
+
+// Shared aggregation for any "by firm" analytics widget (counts, capital
+// sums, etc.) — groups by normalized firm name so free-text variants of the
+// same firm (extra whitespace, different casing) merge into one bucket
+// instead of appearing as separate entries, while keeping the first
+// original spelling encountered as the display label.
+export function groupByNormalizedFirm<T>(
+  items: T[],
+  getFirmName: (item: T) => string,
+  getValue: (item: T) => number
+): { name: string; value: number }[] {
+  const totals = new Map<string, { label: string; value: number }>();
+  for (const item of items) {
+    const firmName = getFirmName(item);
+    if (!firmName) continue;
+    const key = normalizeFirmName(firmName);
+    const existing = totals.get(key);
+    if (existing) {
+      existing.value += getValue(item);
+    } else {
+      totals.set(key, { label: firmName, value: getValue(item) });
+    }
+  }
+  return Array.from(totals.values()).map(({ label, value }) => ({ name: label, value }));
+}

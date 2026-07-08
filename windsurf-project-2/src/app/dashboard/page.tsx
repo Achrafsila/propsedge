@@ -19,6 +19,7 @@ import { useTradingMode } from "@/context/TradingModeContext";
 import { PersonalCapitalDashboard } from "@/components/personal-capital/PersonalCapitalDashboard";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
+import { groupByNormalizedFirm } from "@/lib/propFirms";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
@@ -318,23 +319,24 @@ export default function Dashboard() {
   }, [fundedAccounts]);
 
   // ── Portfolio breakdown ────────────────────────────────────────────────────
-  const byFirmChallenge = useMemo(() => {
-    const m: Record<string, number> = {};
-    getRootChallenges(challenges).forEach((c) => { m[c.propFirmName] = (m[c.propFirmName] || 0) + 1; });
-    return Object.entries(m).map(([name, value]) => ({ name, value }));
-  }, [challenges]);
+  // Prop firm names are free text, so the same firm can be saved under
+  // slightly different strings across accounts (see propFirms.ts) — group by
+  // normalized name so those variants merge into one entry instead of
+  // splitting the breakdown across duplicates.
+  const byFirmChallenge = useMemo(
+    () => groupByNormalizedFirm(getRootChallenges(challenges), (c) => c.propFirmName, () => 1),
+    [challenges]
+  );
 
-  const byFirmFunded = useMemo(() => {
-    const m: Record<string, number> = {};
-    fundedAccounts.forEach((a) => { m[a.propFirmName] = (m[a.propFirmName] || 0) + 1; });
-    return Object.entries(m).map(([name, value]) => ({ name, value }));
-  }, [fundedAccounts]);
+  const byFirmFunded = useMemo(
+    () => groupByNormalizedFirm(fundedAccounts, (a) => a.propFirmName, () => 1),
+    [fundedAccounts]
+  );
 
-  const capitalAlloc = useMemo(() => {
-    const m: Record<string, number> = {};
-    fundedAccounts.forEach((a) => { m[a.propFirmName] = (m[a.propFirmName] || 0) + a.initialBalance; });
-    return Object.entries(m).map(([name, value]) => ({ name, value }));
-  }, [fundedAccounts]);
+  const capitalAlloc = useMemo(
+    () => groupByNormalizedFirm(fundedAccounts, (a) => a.propFirmName, (a) => a.initialBalance),
+    [fundedAccounts]
+  );
 
   const payoutDist = useMemo(() => [
     { name: "Paid",     value: payouts.filter((p) => p.status === "paid").reduce((s, p) => s + p.receivedPayoutAmount, 0)  },
