@@ -16,7 +16,7 @@ import {
 import { Trophy, Plus, TrendingUp, AlertCircle, DollarSign, ArrowRight, Trash2, BarChart3, LayoutGrid, List } from "lucide-react";
 import { useAccounts } from "@/context/AccountsContext";
 import { ChallengeStatus, Challenge } from "@/types";
-import { AddChallengeDialog } from "@/components/AddChallengeDialog";
+import { AddChallengeMarketDialog } from "@/components/AddChallengeMarketDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart,
@@ -55,7 +55,7 @@ export default function Challenges() {
   const router = useRouter();
   const { challenges, challengesLoading, trades, getFundingRateStats, addChallenge, updateChallenge, convertChallengeToFunded, deleteChallenge } = useAccounts();
   const stats = getFundingRateStats();
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isAddMarketDialogOpen, setIsAddMarketDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
@@ -298,13 +298,13 @@ export default function Challenges() {
           </h1>
           <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>Manage your evaluation challenges</p>
         </div>
-        <Button 
+        <Button
           className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl pointer-events-auto"
-          onClick={() => setIsAddDialogOpen(true)}
+          onClick={() => setIsAddMarketDialogOpen(true)}
           type="button"
         >
           <Plus className="w-4 h-4 mr-2" />
-          New Challenge
+          Add Challenge
         </Button>
       </motion.div>
 
@@ -1034,7 +1034,7 @@ export default function Challenges() {
         </motion.div>
       )}
 
-      <AddChallengeDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
+      <AddChallengeMarketDialog open={isAddMarketDialogOpen} onOpenChange={setIsAddMarketDialogOpen} />
     </div>
   );
 }
