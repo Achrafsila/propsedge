@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
 import { motion } from "framer-motion";
+import { getUniquePropFirmOptions, normalizeFirmName } from "@/lib/propFirms";
 
 interface AddChallengeDialogProps {
   open: boolean;
@@ -41,20 +42,21 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
   });
 
   // Helper functions using AdminContext challengeTypes
-  const getPropFirms = () => {
-    const firms = [...new Set(challengeTypes.map(p => p.propFirmName))];
-    return firms.sort();
-  };
+  // Prop firm names are free text (see the Admin form), so the same firm
+  // can be stored under slightly different strings across plans — dedupe
+  // by normalized name (see src/lib/propFirms.ts) rather than exact match,
+  // and filter plans the same way so every plan for the firm still shows
+  // up regardless of which spelling/casing variant it was saved under.
+  const firms = getUniquePropFirmOptions(challengeTypes);
 
-  const getPlansByFirm = (firmName: string) => {
-    return challengeTypes.filter(p => p.propFirmName === firmName);
+  const getPlansByFirm = (firmKey: string) => {
+    return challengeTypes.filter(p => normalizeFirmName(p.propFirmName) === firmKey);
   };
 
   const getPresetById = (id: string) => {
     return challengeTypes.find(p => p.id === id);
   };
 
-  const firms = getPropFirms();
   const plans = selectedFirm ? getPlansByFirm(selectedFirm) : [];
 
   const handlePresetChange = (presetId: string) => {
@@ -146,7 +148,7 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
               >
                 <option value="">Select a firm</option>
                 {firms.map((firm) => (
-                  <option key={firm} value={firm}>{firm}</option>
+                  <option key={firm.key} value={firm.key}>{firm.label}</option>
                 ))}
               </select>
             </div>
