@@ -1,0 +1,810 @@
+import { Trade, Challenge, FundedAccount, Payout, DashboardKPIs } from "@/types";
+import { computeDrawdown, resolveDrawdownDollars } from "@/lib/drawdown";
+import { TraderIdentity } from "./traderIdentity";
+import { TraderHabits } from "./traderHabits";
+import { TraderEdge } from "./traderEdge";
+import { TraderBlindSpots } from "./traderBlindSpots";
+import { TraderDiscipline } from "./traderDiscipline";
+import { TraderEvolution } from "./traderEvolution";
+import { DataConfidence } from "./dataConfidence";
+
+// ============================================================
+// PropEdge — AI Coach engine (V1, deterministic)
+// ============================================================
+// Answers exactly one question every time it runs: "What should I do
+// today to protect my account, respect prop firm rules, and maximize
+// payout probability?" — entirely from data already stored in Supabase
+// (trades, challenges, funded accounts, payouts) plus the Trader DNA
+// engines already computed elsewhere in this app.
+//
+// V1 is 100% rule-based arithmetic — no OpenAI/external AI call, no API
+// key, no network request. Every number in every message is traced back
+// to a stored field or a deterministic formula below; every threshold is
+// a named constant. This keeps the coach auditable (a user can verify any
+// recommendation by hand) and free to run on every render. A V2 could
+// swap the narrative-building step for an LLM call while keeping this
+// file's guardrail math (buffers, expectancy, consistency ratios) as the
+// factual grounding the model is constrained to — see the bottom of this
+// file for that seam.
+//
+// Self-contained by design, same convention as the rest of
+// src/lib/analytics/*: no imports from traderDNA.ts/globalAnalytics.ts,
+// only the finished engine outputs (TraderIdentity, TraderHabits, etc.)
+// already computed by the caller. Small helpers (mean, money formatting)
+// are duplicated rather than imported, matching every other file here.
+
+// ── Output shape ─────────────────────────────────────────────────────────
+
+export type CoachSeverity = "positive" | "neutral" | "warning" | "critical";
+export type CoachRiskLevel = "low" | "moderate" | "high" | "critical";
+
+export interface CoachItem {
+  title: string;
+  severity: CoachSeverity;
+  message: string;
+  evidence: string;
+  action: string;
+}
+
+export interface RecommendedRisk {
+  amount: number | null;
+  currency?: string;
+  rationale: string;
+}
+
+export interface AICoachOutput {
+  riskLevel: CoachRiskLevel;
+  mainPriority: string;
+  nextBestAction: string;
+  accountAlerts: CoachItem[];
+  propRuleAlerts: CoachItem[];
+  behaviouralInsights: CoachItem[];
+  payoutReadiness: CoachItem[];
+  recommendedRisk: RecommendedRisk;
+  summary: string;
+}
+
+export interface AICoachInput {
+  trades: Trade[];
+  challenges: Challenge[];
+  fundedAccounts: FundedAccount[];
+  payouts?: Payout[];
+  dashboardKPIs?: DashboardKPIs;
+  traderIdentity: TraderIdentity;
+  traderHabits: TraderHabits;
+  traderEdge: TraderEdge;
+  traderBlindSpots: TraderBlindSpots;
+  traderDiscipline: TraderDiscipline;
+  traderEvolution: TraderEvolution;
+  dataConfidence: DataConfidence;
+}
+
+// ── Shared helpers ───────────────────────────────────────────────────────
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+function fmtMoney(value: number): string {
+  const sign = value < 0 ? "-" : "";
+  return `${sign}$${Math.round(Math.abs(value)).toLocaleString("en-US")}`;
+}
+
+function fmtMoneyPerTrade(value: number): string {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}$${Math.abs(value).toFixed(2)}/trade`;
+}
+
+// "YYYY-MM-DD" in the trader's local time zone, matching Trade.entryDate's
+// stored format exactly (see src/types/index.ts) — used to isolate today's
+// trades for the Daily Loss Guardrail and the Consistency Rule's
+// "is this today's profit" framing.
+function todayDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Same "not a coincidence" floor Your Edge/Blind Spots/Discipline use for
+// their own expectancy-based groupings — an expectancy figure below this
+// sample size is a projection, not a verified edge.
+const MIN_SAMPLE_FOR_EXPECTANCY = 10;
+
+function severityRank(s: CoachSeverity): number {
+  return { critical: 3, warning: 2, neutral: 1, positive: 0 }[s];
+}
+
+// ── Unified active-account view ──────────────────────────────────────────
+// Challenge and FundedAccount are different tables with different fields
+// (see src/types/index.ts) — this is the minimal shape every guardrail
+// rule below actually needs, built once per account so the daily/max loss
+// math never has to branch on account type.
+
+interface AccountRef {
+  id: string;
+  type: "challenge" | "funded";
+  name: string;
+  accountSize: number;
+  currentProfit: number;
+  maxDrawdown: number;
+  // FundedAccount carries no dailyDrawdown field in the schema (only
+  // Challenge does — see src/types/index.ts) and V1 cannot add one
+  // (no Supabase schema changes). The Daily Loss Guardrail therefore only
+  // ever fires for challenge accounts; this is a known data-model gap,
+  // not an oversight.
+  dailyDrawdown: number | null;
+}
+
+function buildActiveAccountRefs(challenges: Challenge[], fundedAccounts: FundedAccount[]): AccountRef[] {
+  const activeChallenges = challenges.filter((c) => c.status === "active");
+  const activeFunded = fundedAccounts.filter((a) => a.status === "active");
+  return [
+    ...activeChallenges.map((c): AccountRef => ({
+      id: c.id,
+      type: "challenge",
+      name: `${c.propFirmName} — ${c.accountName}`,
+      accountSize: c.accountSize,
+      currentProfit: c.currentProfit,
+      maxDrawdown: c.maxDrawdown,
+      dailyDrawdown: c.dailyDrawdown ?? null,
+    })),
+    ...activeFunded.map((a): AccountRef => ({
+      id: a.id,
+      type: "funded",
+      name: `${a.propFirmName} — ${a.accountName}`,
+      accountSize: a.accountSize,
+      currentProfit: a.currentProfit,
+      maxDrawdown: a.maxDrawdown,
+      dailyDrawdown: null,
+    })),
+  ];
+}
+
+function getTodayPnL(trades: Trade[], account: AccountRef, today: string): number {
+  return trades
+    .filter((t) => t.accountId === account.id && t.accountType === account.type && t.entryDate === today)
+    .reduce((s, t) => s + t.pnl, 0);
+}
+
+// A buffer at or above this share of the limit is untouched enough to
+// trade normally; below it the guardrail starts speaking up.
+const BUFFER_NEUTRAL_RATIO = 0.5;
+// Rule 1 & 2 thresholds, exactly as specified: under 25% remaining is
+// "high risk", under 10% is "critical".
+const BUFFER_WARNING_RATIO = 0.25;
+const BUFFER_CRITICAL_RATIO = 0.1;
+
+function severityFromBufferRatio(ratio: number): CoachSeverity {
+  if (ratio < BUFFER_CRITICAL_RATIO) return "critical";
+  if (ratio < BUFFER_WARNING_RATIO) return "warning";
+  if (ratio < BUFFER_NEUTRAL_RATIO) return "neutral";
+  return "positive";
+}
+
+// Deterministic "how much can I still risk" suggestion, rounded down to
+// the nearest $5 for a clean, sizeable-looking number. `factor` controls
+// how aggressively the buffer is eaten into — the daily buffer resets
+// tomorrow so it can afford a larger slice than the max-loss buffer, which
+// never resets for the life of the account.
+function suggestedRiskFromBuffer(buffer: number, factor: number): number {
+  return Math.max(0, Math.floor((buffer * factor) / 5) * 5);
+}
+
+const DAILY_RISK_FACTOR = 0.08;
+const MAX_LOSS_RISK_FACTOR = 0.05;
+
+interface AccountRiskState {
+  account: AccountRef;
+  dailyLimit: number | null;
+  dailyBuffer: number | null;
+  maxLimit: number;
+  maxBuffer: number;
+}
+
+function computeAccountRiskState(account: AccountRef, trades: Trade[], today: string): AccountRiskState {
+  let dailyLimit: number | null = null;
+  let dailyBuffer: number | null = null;
+  if (account.dailyDrawdown != null) {
+    dailyLimit = resolveDrawdownDollars(account.dailyDrawdown, account.accountSize);
+    const todayPnl = getTodayPnL(trades, account, today);
+    const usedToday = todayPnl < 0 ? Math.abs(todayPnl) : 0;
+    dailyBuffer = Math.max(0, dailyLimit - usedToday);
+  }
+
+  // Drawdown only ever grows from realized losses — same convention
+  // src/lib/drawdown.ts documents and every other page already relies on.
+  // Trailing-mode accounts are approximated the same way (no peak-equity
+  // history is stored anywhere in the schema to trail against precisely),
+  // matching how challenges/page.tsx and funded/page.tsx already treat
+  // drawdownMode as informational rather than branching the formula.
+  const dd = computeDrawdown(account.maxDrawdown, account.accountSize, account.currentProfit);
+
+  return {
+    account,
+    dailyLimit,
+    dailyBuffer,
+    maxLimit: dd.maxDrawdownDollars,
+    maxBuffer: dd.remainingDrawdownDollars,
+  };
+}
+
+// ── Rule 1: Daily Loss Guardrail ─────────────────────────────────────────
+
+function buildDailyLossItem(state: AccountRiskState): CoachItem | null {
+  if (state.dailyLimit === null || state.dailyBuffer === null || state.dailyLimit <= 0) return null;
+
+  const { account, dailyLimit, dailyBuffer } = state;
+  const ratio = dailyBuffer / dailyLimit;
+  const severity = severityFromBufferRatio(ratio);
+  const suggested = suggestedRiskFromBuffer(dailyBuffer, DAILY_RISK_FACTOR);
+
+  const action =
+    severity === "critical"
+      ? "Stop trading on this account for the rest of the day."
+      : severity === "warning"
+        ? `Reduce next trade risk to ${fmtMoney(suggested)} max or stop trading today.`
+        : severity === "neutral"
+          ? `Keep sizing conservative — ${fmtMoney(dailyBuffer)} of today's loss buffer remains.`
+          : "No daily loss pressure right now — trade your plan normally.";
+
+  return {
+    title: `Daily Loss Guardrail — ${account.name}`,
+    severity,
+    message: `You are currently ${fmtMoney(dailyBuffer)} away from the daily loss limit on ${account.name}.`,
+    evidence: `Daily loss limit ${fmtMoney(dailyLimit)} · Remaining today ${fmtMoney(dailyBuffer)} (${Math.round(ratio * 100)}%)`,
+    action,
+  };
+}
+
+// ── Rule 2: Max Loss Guardrail ───────────────────────────────────────────
+
+function buildMaxLossItem(state: AccountRiskState): CoachItem {
+  const { account, maxLimit, maxBuffer } = state;
+  const ratio = maxLimit > 0 ? maxBuffer / maxLimit : 1;
+  const severity = severityFromBufferRatio(ratio);
+  const suggested = suggestedRiskFromBuffer(maxBuffer, MAX_LOSS_RISK_FACTOR);
+
+  const action =
+    severity === "critical"
+      ? "Stop trading on this account — one more losing trade risks a full breach."
+      : severity === "warning"
+        ? `Cut position size — keep total risk under ${fmtMoney(suggested)} per trade until this buffer rebuilds.`
+        : severity === "neutral"
+          ? `Trade normally but avoid oversized positions — ${fmtMoney(maxBuffer)} of max drawdown buffer remains.`
+          : "Your max loss buffer is healthy.";
+
+  return {
+    title: `Max Loss Guardrail — ${account.name}`,
+    severity,
+    message: `You have ${fmtMoney(maxBuffer)} of max drawdown buffer left on ${account.name} (${Math.round(ratio * 100)}% remaining).`,
+    evidence: `Max drawdown allowance ${fmtMoney(maxLimit)} · Remaining ${fmtMoney(maxBuffer)}`,
+    action,
+  };
+}
+
+// ── Rule 3: Profit Target Plan ───────────────────────────────────────────
+
+function buildProfitTargetItem(challenge: Challenge, trades: Trade[]): CoachItem | null {
+  if (!challenge.profitTarget || challenge.profitTarget <= 0) return null;
+
+  const name = `${challenge.propFirmName} — ${challenge.accountName}`;
+  const remaining = challenge.profitTarget - challenge.currentProfit;
+
+  if (remaining <= 0) {
+    return {
+      title: `Profit Target Plan — ${name}`,
+      severity: "positive",
+      message: `You have already reached the profit target on ${name}.`,
+      evidence: `Target ${fmtMoney(challenge.profitTarget)} · Current profit ${fmtMoney(challenge.currentProfit)}`,
+      action: "Review this account for a pass/payout request rather than continuing to add risk.",
+    };
+  }
+
+  const accountTrades = trades.filter((t) => t.accountId === challenge.id && t.accountType === "challenge");
+  const expectancy = accountTrades.length > 0 ? mean(accountTrades.map((t) => t.pnl)) : 0;
+  const reliable = accountTrades.length >= MIN_SAMPLE_FOR_EXPECTANCY && expectancy > 0;
+
+  if (!reliable) {
+    return {
+      title: `Profit Target Plan — ${name}`,
+      severity: "neutral",
+      message: `You are ${fmtMoney(remaining)} away from the profit target on ${name}.`,
+      evidence:
+        accountTrades.length === 0
+          ? "No trades logged on this account yet."
+          : `Current expectancy ${fmtMoneyPerTrade(expectancy)} across ${accountTrades.length} trades — not enough history for a reliable projection yet.`,
+      action: "Trade your plan and log every trade — the projection will firm up once expectancy is reliably positive.",
+    };
+  }
+
+  const tradesNeeded = Math.ceil(remaining / expectancy);
+  return {
+    title: `Profit Target Plan — ${name}`,
+    severity: "neutral",
+    message: `You are ${fmtMoney(remaining)} away from target on ${name}. At your current expectancy of ${fmtMoneyPerTrade(expectancy)}, this requires around ${tradesNeeded} quality trade${tradesNeeded === 1 ? "" : "s"}.`,
+    evidence: `Target ${fmtMoney(challenge.profitTarget)} · Current profit ${fmtMoney(challenge.currentProfit)} · Expectancy ${fmtMoneyPerTrade(expectancy)} (${accountTrades.length} trades)`,
+    action: `Focus on your highest-quality setups — roughly ${tradesNeeded} trade${tradesNeeded === 1 ? "" : "s"} at current expectancy closes the gap.`,
+  };
+}
+
+// ── Rule 4: Consistency Rule ─────────────────────────────────────────────
+// consistencyRule is free text on Challenge (e.g. "40%", "evaluation 50%,
+// funded 30%") — the first percentage found is treated as the max share of
+// total profit a single day is allowed to represent.
+
+function parseConsistencyLimitPercent(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const match = text.match(/(\d{1,3})\s*%/);
+  return match ? Number(match[1]) : null;
+}
+
+function buildConsistencyItem(
+  name: string,
+  accountId: string,
+  accountType: "challenge" | "funded",
+  trades: Trade[],
+  totalProfit: number,
+  limitPercent: number | null,
+  today: string
+): CoachItem | null {
+  if (limitPercent === null || totalProfit <= 0) return null;
+
+  const accountTrades = trades.filter((t) => t.accountId === accountId && t.accountType === accountType);
+  const byDay = new Map<string, number>();
+  for (const t of accountTrades) byDay.set(t.entryDate, (byDay.get(t.entryDate) ?? 0) + t.pnl);
+
+  let bestDate: string | null = null;
+  let bestAmount = 0;
+  for (const [date, amount] of byDay) {
+    if (amount > bestAmount) {
+      bestAmount = amount;
+      bestDate = date;
+    }
+  }
+  if (bestDate === null || bestAmount <= 0) return null;
+
+  const concentrationPct = Math.round((bestAmount / totalProfit) * 100);
+  const isToday = bestDate === today;
+  const severity: CoachSeverity =
+    concentrationPct >= limitPercent ? "critical" : concentrationPct >= limitPercent * 0.8 ? "warning" : "positive";
+
+  const dayPhrase = isToday ? "Today's profit" : `Your best trading day (${bestDate})`;
+
+  return {
+    title: `Consistency Rule — ${name}`,
+    severity,
+    message: `${dayPhrase} already represents ${concentrationPct}% of total profit on ${name}, against a ${limitPercent}% consistency limit.`,
+    evidence: `Best single-day profit ${fmtMoney(bestAmount)} on ${bestDate} · Total profit ${fmtMoney(totalProfit)} · Limit ${limitPercent}%`,
+    action:
+      severity === "positive"
+        ? "No concentration risk right now — keep spreading profitable trades across multiple days."
+        : "Avoid increasing size on your best-performing day; spread profitable trades across more days to protect payout eligibility.",
+  };
+}
+
+// ── Rule 5: Payout Readiness ─────────────────────────────────────────────
+// FundedAccount itself carries no rule metadata (minTradingDays,
+// consistencyRule, minPayout, ... all live on Challenge — see
+// src/types/index.ts). Readiness therefore resolves the funded account's
+// originating Challenge row via sourceChallengeId to read those rules;
+// an account with no traceable source challenge just skips the checks it
+// has no rule data for.
+
+interface PayoutReadinessResult {
+  items: CoachItem[];
+  isNear: boolean;
+}
+
+function buildPayoutReadinessItems(
+  account: FundedAccount,
+  challenges: Challenge[],
+  trades: Trade[],
+  payouts: Payout[],
+  today: string
+): PayoutReadinessResult {
+  const name = `${account.propFirmName} — ${account.accountName}`;
+  const sourceChallenge = account.sourceChallengeId
+    ? challenges.find((c) => c.id === account.sourceChallengeId)
+    : undefined;
+
+  const items: CoachItem[] = [];
+
+  const accountTrades = trades.filter((t) => t.accountId === account.id && t.accountType === "funded");
+  const byDay = new Map<string, number>();
+  for (const t of accountTrades) byDay.set(t.entryDate, (byDay.get(t.entryDate) ?? 0) + t.pnl);
+  const profitableDays = [...byDay.values()].filter((v) => v > 0).length;
+
+  const minTradingDays = sourceChallenge?.minTradingDays ?? null;
+  let minDaysOk = true;
+  if (minTradingDays != null) {
+    minDaysOk = profitableDays >= minTradingDays;
+    const missing = minTradingDays - profitableDays;
+    items.push({
+      title: `Minimum Trading Days — ${name}`,
+      severity: minDaysOk ? "positive" : "warning",
+      message: minDaysOk
+        ? `You have met the minimum trading days requirement on ${name} (${profitableDays}/${minTradingDays} profitable days).`
+        : `You still need ${missing} more profitable trading day${missing === 1 ? "" : "s"} on ${name} before this account is payout-eligible.`,
+      evidence: `Profitable trading days ${profitableDays} of required ${minTradingDays}`,
+      action: minDaysOk ? "Requirement satisfied." : "Prioritize consistent, quality setups to bank more profitable days.",
+    });
+  }
+
+  const alreadyClaimed = payouts
+    .filter((p) => p.fundedAccountId === account.id && (p.status === "paid" || p.status === "pending"))
+    .reduce((s, p) => s + (p.status === "paid" ? p.receivedPayoutAmount : p.requestedPayoutAmount), 0);
+  const profitAvailable = Math.max(0, account.currentProfit - alreadyClaimed);
+
+  items.push({
+    title: `Profit Available — ${name}`,
+    severity: profitAvailable > 0 ? "positive" : "neutral",
+    message:
+      profitAvailable > 0
+        ? `${fmtMoney(profitAvailable)} of unclaimed profit is available for payout on ${name}.`
+        : `No unclaimed profit is currently available for payout on ${name}.`,
+    evidence: `Current profit ${fmtMoney(account.currentProfit)} · Already claimed (paid + pending) ${fmtMoney(alreadyClaimed)}`,
+    action: profitAvailable > 0 ? "Confirm the other payout conditions before requesting." : "Keep trading to build claimable profit.",
+  });
+
+  const minPayout = sourceChallenge?.minPayout ?? null;
+  let minPayoutOk = true;
+  if (minPayout != null) {
+    minPayoutOk = profitAvailable >= minPayout;
+    items.push({
+      title: `Minimum Payout Threshold — ${name}`,
+      severity: minPayoutOk ? "positive" : "warning",
+      message: minPayoutOk
+        ? `Available profit meets the ${fmtMoney(minPayout)} minimum payout threshold on ${name}.`
+        : `You need ${fmtMoney(minPayout - profitAvailable)} more available profit on ${name} to clear the ${fmtMoney(minPayout)} minimum payout threshold.`,
+      evidence: `Available ${fmtMoney(profitAvailable)} · Minimum required ${fmtMoney(minPayout)}`,
+      action: minPayoutOk ? "Requirement satisfied." : "Continue trading toward the minimum payout threshold before filing a request.",
+    });
+  }
+
+  const limitPercent = parseConsistencyLimitPercent(sourceChallenge?.consistencyRule ?? null);
+  const consistencyItem = buildConsistencyItem(name, account.id, "funded", trades, account.currentProfit, limitPercent, today);
+  if (consistencyItem) {
+    items.push({ ...consistencyItem, title: `Consistency Rule (Payout) — ${name}` });
+  }
+
+  const isNear = minDaysOk && minPayoutOk && profitAvailable > 0;
+  return { items, isNear };
+}
+
+// ── Rule 7: Behavioural Overlay ──────────────────────────────────────────
+
+function buildBehaviouralInsights(discipline: TraderDiscipline, edge: TraderEdge): CoachItem[] {
+  const items: CoachItem[] = [];
+
+  if (discipline.performanceAfterLoss.value === "Negative Recovery") {
+    items.push({
+      title: "Biggest Behavioural Leak — Trading After Losses",
+      severity: "warning",
+      message: "Your biggest behavioural leak is how you trade immediately after a loss.",
+      evidence: `${discipline.performanceAfterLoss.narrative} (${discipline.performanceAfterLoss.metricLabel}, ${discipline.performanceAfterLoss.sampleSize} trades)`,
+      action: "After any loss today, pause and take a fixed cooldown before your next entry — especially after a losing streak.",
+    });
+  }
+
+  if (discipline.riskConsistency.value === "Variable" || discipline.riskConsistency.value === "Highly Variable") {
+    items.push({
+      title: "Position Sizing Inconsistency",
+      severity: discipline.riskConsistency.value === "Highly Variable" ? "critical" : "warning",
+      message: `Your position sizing is currently ${discipline.riskConsistency.value.toLowerCase()}.`,
+      evidence: `${discipline.riskConsistency.narrative} (median ${discipline.riskConsistency.metricLabel})`,
+      action: "Pick one lot size for today's setups and stick to it instead of adjusting size trade-to-trade.",
+    });
+  }
+
+  if (discipline.positionSizeAfterLosses.value === "Increasing Risk") {
+    items.push({
+      title: "Revenge Sizing Detected",
+      severity: "critical",
+      message: "You tend to increase your position size right after a losing trade.",
+      evidence: `${discipline.positionSizeAfterLosses.narrative} (${discipline.positionSizeAfterLosses.metricLabel})`,
+      action: "Cap your position size at today's planned risk regardless of the previous trade's outcome.",
+    });
+  }
+
+  if (edge.bestSetup.sampleSize >= MIN_SAMPLE_FOR_EXPECTANCY) {
+    items.push({
+      title: "Best Setup Focus",
+      severity: "positive",
+      message: `Your strongest statistical edge is ${edge.bestSetup.value}${edge.bestSetup.detail ? ` (${edge.bestSetup.detail})` : ""}.`,
+      evidence: `${edge.bestSetup.metricLabel} across ${edge.bestSetup.sampleSize} trades`,
+      action: "Prioritize this setup today and treat everything else as lower conviction.",
+    });
+  }
+
+  return items;
+}
+
+// ── Rule 6: Recommended Risk ─────────────────────────────────────────────
+
+function parseLossDisciplineScore(discipline: TraderDiscipline): number | null {
+  const match = discipline.lossDisciplineScore.metricLabel.match(/^(\d+)\/100$/);
+  return match ? Number(match[1]) : null;
+}
+
+function hasRevengeSignal(discipline: TraderDiscipline): boolean {
+  return (
+    discipline.positionSizeAfterLosses.value === "Increasing Risk" ||
+    discipline.revengeTradingRisk.value === "High" ||
+    discipline.revengeTradingScore.value === "Poor" ||
+    discipline.revengeTradingScore.value === "High Risk"
+  );
+}
+
+const RISK_LEVEL_HARD_CAP_RATIO = 0.01; // never recommend more than 1% of account size per trade
+
+function buildRecommendedRisk(
+  primaryState: AccountRiskState | null,
+  discipline: TraderDiscipline,
+  nearPayout: boolean
+): RecommendedRisk {
+  if (primaryState === null) {
+    return { amount: null, currency: "USD", rationale: "No active accounts to size risk for." };
+  }
+
+  const { account, dailyBuffer, maxBuffer } = primaryState;
+
+  const candidates: { amount: number; label: string }[] = [];
+  if (dailyBuffer !== null) candidates.push({ amount: dailyBuffer * DAILY_RISK_FACTOR, label: "today's daily loss buffer" });
+  candidates.push({ amount: maxBuffer * MAX_LOSS_RISK_FACTOR, label: "the max drawdown buffer" });
+  candidates.push({ amount: account.accountSize * RISK_LEVEL_HARD_CAP_RATIO, label: "a 1% of account size cap" });
+
+  const tightest = candidates.reduce((a, b) => (b.amount < a.amount ? b : a));
+  let amount = tightest.amount;
+  const reasons = [`capped by ${tightest.label}`];
+
+  // Rule 6: never recommend more than the available buffer allows, then
+  // scale down further for behavioural risk — each factor only ever
+  // reduces the number, never increases it.
+  const score = parseLossDisciplineScore(discipline);
+  if (score !== null && score < 50) {
+    amount *= 0.5;
+    reasons.push("halved for a below-average loss discipline score");
+  }
+
+  if (hasRevengeSignal(discipline)) {
+    amount *= 0.5;
+    reasons.push("reduced further for active revenge-trading signals");
+  }
+
+  if (nearPayout) {
+    amount *= 0.5;
+    reasons.push("payout protection mode active — this account is close to payout eligibility");
+  }
+
+  amount = Math.max(0, Math.floor(amount / 5) * 5);
+
+  return {
+    amount,
+    currency: "USD",
+    rationale: `Based on ${account.name}: ${reasons.join("; ")}.`,
+  };
+}
+
+// ── Recent expectancy (used only for Main Priority's negative-expectancy
+// check) ─────────────────────────────────────────────────────────────────
+// The last 30 chronological trades across every account passed in — a
+// simple, self-contained recency window rather than parsing any other
+// engine's formatted output.
+
+function computeRecentExpectancy(trades: Trade[]): { expectancy: number; sampleSize: number } {
+  const valid = trades.filter((t) => !!t.entryDate && Number.isFinite(t.pnl));
+  const sorted = [...valid].sort(
+    (a, b) => a.entryDate.localeCompare(b.entryDate) || (a.entryTime ?? "").localeCompare(b.entryTime ?? "")
+  );
+  const recent = sorted.slice(-30);
+  return { expectancy: recent.length > 0 ? mean(recent.map((t) => t.pnl)) : 0, sampleSize: recent.length };
+}
+
+// ── Rule 8: Main Priority Selection ──────────────────────────────────────
+// Walks the fixed priority order from the spec, returning the first
+// condition that actually applies. Every branch reuses an item/value this
+// file already computed — no new thresholds decided here.
+
+function selectMainPriority(
+  accountAlerts: CoachItem[],
+  propRuleAlerts: CoachItem[],
+  nearPayout: boolean,
+  nearPayoutAccountName: string | null,
+  recentExpectancy: number,
+  recentSampleSize: number,
+  discipline: TraderDiscipline,
+  edge: TraderEdge
+): { mainPriority: string; nextBestAction: string } {
+  const criticalDaily = accountAlerts.find((i) => i.title.startsWith("Daily Loss Guardrail") && i.severity === "critical");
+  if (criticalDaily) {
+    return {
+      mainPriority: `Protect against a daily loss breach — ${criticalDaily.title.replace("Daily Loss Guardrail — ", "")}`,
+      nextBestAction: criticalDaily.action,
+    };
+  }
+
+  const criticalMax = accountAlerts.find((i) => i.title.startsWith("Max Loss Guardrail") && i.severity === "critical");
+  if (criticalMax) {
+    return {
+      mainPriority: `Protect against a max drawdown breach — ${criticalMax.title.replace("Max Loss Guardrail — ", "")}`,
+      nextBestAction: criticalMax.action,
+    };
+  }
+
+  if (nearPayout && nearPayoutAccountName) {
+    return {
+      mainPriority: `Protect your upcoming payout on ${nearPayoutAccountName}`,
+      nextBestAction: "Switch to payout protection mode — trade smaller size and avoid unnecessary risk until the payout is requested.",
+    };
+  }
+
+  if (recentSampleSize >= MIN_SAMPLE_FOR_EXPECTANCY && recentExpectancy <= 0) {
+    return {
+      mainPriority: "Your recent expectancy is flat or negative",
+      nextBestAction: "Pause and review your last losing trades before sizing up again — trade only your highest-conviction setup.",
+    };
+  }
+
+  const score = parseLossDisciplineScore(discipline);
+  if (score !== null && score < 50) {
+    return {
+      mainPriority: "Improve your loss discipline",
+      nextBestAction: discipline.lossDisciplineScore.narrative || "Reduce risk after losses and give yourself a cooldown before re-entering.",
+    };
+  }
+
+  if (discipline.riskConsistency.value === "Highly Variable" || discipline.riskConsistency.value === "Variable") {
+    return {
+      mainPriority: "Tighten your position-sizing consistency",
+      nextBestAction: "Pick one lot size for today's setups and stick to it.",
+    };
+  }
+
+  const openProfitTargetItem = propRuleAlerts.find((i) => i.title.startsWith("Profit Target Plan") && i.severity !== "positive");
+  if (openProfitTargetItem) {
+    return {
+      mainPriority: openProfitTargetItem.title.replace("Profit Target Plan — ", "Work toward the profit target on "),
+      nextBestAction: openProfitTargetItem.action,
+    };
+  }
+
+  if (edge.bestSetup.sampleSize >= MIN_SAMPLE_FOR_EXPECTANCY) {
+    return {
+      mainPriority: `Focus on your best setup: ${edge.bestSetup.value}${edge.bestSetup.detail ? ` (${edge.bestSetup.detail})` : ""}`,
+      nextBestAction: "Prioritize this setup today and size normally within your existing buffers.",
+    };
+  }
+
+  return {
+    mainPriority: "No urgent risk today — trade your plan",
+    nextBestAction: "Keep executing your normal process; no guardrail or behavioural flag needs attention right now.",
+  };
+}
+
+// ── Overall Risk Level ────────────────────────────────────────────────────
+
+function computeOverallRiskLevel(items: CoachItem[]): CoachRiskLevel {
+  if (items.some((i) => i.severity === "critical")) return "critical";
+  const warnings = items.filter((i) => i.severity === "warning").length;
+  if (warnings >= 2) return "high";
+  if (warnings === 1) return "moderate";
+  return "low";
+}
+
+// ── Summary ────────────────────────────────────────────────────────────────
+
+function buildSummary(
+  riskLevel: CoachRiskLevel,
+  mainPriority: string,
+  recommendedRisk: RecommendedRisk,
+  dashboardKPIs: DashboardKPIs | undefined
+): string {
+  const riskAmountPhrase =
+    recommendedRisk.amount !== null ? ` Recommended max risk per trade today: ${fmtMoney(recommendedRisk.amount)}.` : "";
+  const breachNote =
+    dashboardKPIs && dashboardKPIs.breachedFundedAccounts > 0
+      ? ` You currently have ${dashboardKPIs.breachedFundedAccounts} breached account${dashboardKPIs.breachedFundedAccounts === 1 ? "" : "s"} — review what went wrong there before sizing up elsewhere.`
+      : "";
+  return `Your overall risk level today is ${riskLevel}. ${mainPriority}.${riskAmountPhrase}${breachNote}`;
+}
+
+// ── Entry point ────────────────────────────────────────────────────────────
+
+export function getAICoachRecommendation(input: AICoachInput): AICoachOutput {
+  const { trades, challenges, fundedAccounts, payouts = [], dashboardKPIs, traderDiscipline, traderEdge } = input;
+  const today = todayDateString();
+
+  const activeAccounts = buildActiveAccountRefs(challenges, fundedAccounts);
+  const riskStates = activeAccounts.map((account) => computeAccountRiskState(account, trades, today));
+
+  const accountAlerts: CoachItem[] = [];
+  for (const state of riskStates) {
+    const daily = buildDailyLossItem(state);
+    if (daily) accountAlerts.push(daily);
+    accountAlerts.push(buildMaxLossItem(state));
+  }
+
+  const propRuleAlerts: CoachItem[] = [];
+  for (const c of challenges.filter((c) => c.status === "active")) {
+    const profitTargetItem = buildProfitTargetItem(c, trades);
+    if (profitTargetItem) propRuleAlerts.push(profitTargetItem);
+
+    const limitPercent = parseConsistencyLimitPercent(c.consistencyRule);
+    const consistencyItem = buildConsistencyItem(
+      `${c.propFirmName} — ${c.accountName}`,
+      c.id,
+      "challenge",
+      trades,
+      c.currentProfit,
+      limitPercent,
+      today
+    );
+    if (consistencyItem) propRuleAlerts.push(consistencyItem);
+  }
+
+  const payoutReadiness: CoachItem[] = [];
+  let nearPayout = false;
+  let nearPayoutAccountName: string | null = null;
+  for (const a of fundedAccounts.filter((a) => a.status === "active")) {
+    const { items, isNear } = buildPayoutReadinessItems(a, challenges, trades, payouts, today);
+    payoutReadiness.push(...items);
+    if (isNear && !nearPayout) {
+      nearPayout = true;
+      nearPayoutAccountName = `${a.propFirmName} — ${a.accountName}`;
+    }
+  }
+
+  const behaviouralInsights = buildBehaviouralInsights(traderDiscipline, traderEdge);
+
+  // The account driving the worst active guardrail also drives the
+  // Recommended Risk figure — sizing advice should track whichever
+  // account most urgently needs protection today, not an arbitrary one.
+  const worstAlert = [...accountAlerts].sort((a, b) => severityRank(b.severity) - severityRank(a.severity))[0];
+  const primaryState =
+    (worstAlert
+      ? riskStates.find((s) => worstAlert.title.endsWith(`— ${s.account.name}`))
+      : undefined) ?? riskStates[0] ?? null;
+
+  const recommendedRisk = buildRecommendedRisk(primaryState, traderDiscipline, nearPayout);
+
+  const { expectancy: recentExpectancy, sampleSize: recentSampleSize } = computeRecentExpectancy(trades);
+
+  const { mainPriority, nextBestAction } = selectMainPriority(
+    accountAlerts,
+    propRuleAlerts,
+    nearPayout,
+    nearPayoutAccountName,
+    recentExpectancy,
+    recentSampleSize,
+    traderDiscipline,
+    traderEdge
+  );
+
+  const riskLevel = computeOverallRiskLevel([...accountAlerts, ...propRuleAlerts, ...behaviouralInsights]);
+  const summary = buildSummary(riskLevel, mainPriority, recommendedRisk, dashboardKPIs);
+
+  return {
+    riskLevel,
+    mainPriority,
+    nextBestAction,
+    accountAlerts,
+    propRuleAlerts,
+    behaviouralInsights,
+    payoutReadiness,
+    recommendedRisk,
+    summary,
+  };
+}
+
+// ── V2 seam ────────────────────────────────────────────────────────────────
+// A future LLM-backed coach can call getAICoachRecommendation() first to
+// get every guardrail number/severity already computed and verified above,
+// then pass that structured object (not raw trades/account rows) as
+// grounding context to an LLM purely for narrative rewriting — the model
+// would never compute a buffer, expectancy, or consistency ratio itself,
+// only rephrase numbers this file already derived. That keeps V2's output
+// as auditable as V1's: any claim it makes must trace back to a field on
+// this same AICoachOutput.

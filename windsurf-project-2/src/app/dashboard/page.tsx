@@ -25,6 +25,15 @@ import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { AddFundedAccountDialog } from "@/components/AddFundedAccountDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
+import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
+import { getTraderHabits } from "@/lib/analytics/traderHabits";
+import { getTraderEdge } from "@/lib/analytics/traderEdge";
+import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
+import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
+import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
+import { getDataConfidence } from "@/lib/analytics/dataConfidence";
+import { getAICoachRecommendation } from "@/lib/analytics/aiCoach";
+import { AICoachPanel } from "@/components/analytics/AICoachPanel";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 const fmt$ = (v: number) =>
@@ -372,6 +381,40 @@ export default function Dashboard() {
     [payouts]
   );
 
+  // ── AI Coach (deterministic, V1) ────────────────────────────────────────
+  // See src/lib/analytics/aiCoach.ts. Reuses the same Trader DNA engines as
+  // /analytics, computed here from the full (unfiltered) trade set — the
+  // dashboard has no date/account filter bar, and by this point in the
+  // component isPersonalCapitalMode is already known to be false for the
+  // render path below (the early return a few lines down only short-
+  // circuits *before* this point on the next render once state settles),
+  // so `trades` is effectively prop-firm scope already.
+  const identity = useMemo(() => getTraderIdentity(trades), [trades]);
+  const habits = useMemo(() => getTraderHabits(trades), [trades]);
+  const edge = useMemo(() => getTraderEdge(trades), [trades]);
+  const blindSpots = useMemo(() => getTraderBlindSpots(trades), [trades]);
+  const discipline = useMemo(() => getTraderDiscipline(trades), [trades]);
+  const evolution = useMemo(() => getTraderEvolution(trades), [trades]);
+  const dataConfidence = useMemo(() => getDataConfidence(trades), [trades]);
+  const coach = useMemo(
+    () =>
+      getAICoachRecommendation({
+        trades,
+        challenges,
+        fundedAccounts,
+        payouts,
+        dashboardKPIs: kpis,
+        traderIdentity: identity,
+        traderHabits: habits,
+        traderEdge: edge,
+        traderBlindSpots: blindSpots,
+        traderDiscipline: discipline,
+        traderEvolution: evolution,
+        dataConfidence,
+      }),
+    [trades, challenges, fundedAccounts, payouts, kpis, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
+  );
+
   const cfg = METRIC_META[metric];
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -400,6 +443,9 @@ export default function Dashboard() {
           </motion.p>
         </div>
       </div>
+
+      {/* ── AI Coach ── */}
+      <AICoachPanel coach={coach} />
 
       {/* ── SECTION 1 — 10 KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
