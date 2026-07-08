@@ -21,6 +21,7 @@ import {
   getTraderDNAStats,
   getExpectancy,
   getProfitFactor,
+  getDirectionWinRates,
 } from "@/lib/analytics/traderDNA";
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
 import { getTraderHabits } from "@/lib/analytics/traderHabits";
@@ -100,6 +101,7 @@ export default function GlobalAnalyticsPage() {
   // trades" KPI subtitles — read-only lookup, doesn't affect the insights
   // above (getPreferredSession/getPreferredInstrument are unchanged).
   const dnaStats = useMemo(() => getTraderDNAStats(filteredTrades), [filteredTrades]);
+  const directionWinRates = useMemo(() => getDirectionWinRates(filteredTrades), [filteredTrades]);
   const sessionTradeCount = preferredSession.value ? dnaStats.tradesBySession[preferredSession.value] ?? 0 : 0;
   const instrumentTradeCount = preferredInstrument.value
     ? dnaStats.tradesByInstrument[preferredInstrument.value] ?? 0
@@ -306,7 +308,7 @@ export default function GlobalAnalyticsPage() {
           blindSpots={blindSpots}
           discipline={discipline}
           evolution={evolution}
-          tradesByDirection={dnaStats.tradesByDirection}
+          directionWinRates={directionWinRates}
           tradesByInstrument={dnaStats.tradesByInstrument}
         />
       </motion.div>

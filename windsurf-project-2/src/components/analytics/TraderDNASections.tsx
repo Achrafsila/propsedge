@@ -1,6 +1,7 @@
 "use client";
 
 import { TraderIdentity } from "@/lib/analytics/traderIdentity";
+import { DirectionWinRates } from "@/lib/analytics/traderDNA";
 import { TraderHabits } from "@/lib/analytics/traderHabits";
 import { TraderEdge } from "@/lib/analytics/traderEdge";
 import { TraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
@@ -18,8 +19,8 @@ import { TradingEvolutionCard } from "@/components/analytics/TradingEvolutionCar
 // ── Trader DNA — final page structure ─────────────────────────────────────
 // All sections are real, fully computed engines — no thresholds or
 // fallback values live in this component, it only renders each engine's
-// output (plus tradesByDirection/tradesByInstrument, already computed on
-// the page from TraderDNAStats and threaded down here, never recomputed):
+// output (plus directionWinRates/tradesByInstrument, already computed on
+// the page from traderDNA.ts and threaded down here, never recomputed):
 // - Trading Identity      (src/lib/analytics/traderIdentity.ts)
 // - Session Performance   (src/lib/analytics/traderIdentity.ts — sessionDistribution)
 // - Instrument Breakdown  (src/lib/analytics/traderIdentity.ts — topInstruments)
@@ -35,7 +36,7 @@ export function TraderDNASections({
   blindSpots,
   discipline,
   evolution,
-  tradesByDirection,
+  directionWinRates,
   tradesByInstrument,
 }: {
   identity: TraderIdentity;
@@ -44,14 +45,14 @@ export function TraderDNASections({
   blindSpots: TraderBlindSpots;
   discipline: TraderDiscipline;
   evolution: TraderEvolution;
-  tradesByDirection: { long: number; short: number };
+  directionWinRates: DirectionWinRates;
   tradesByInstrument: Record<string, number>;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <TradingIdentityCard
         identity={identity}
-        tradesByDirection={tradesByDirection}
+        directionWinRates={directionWinRates}
         averageHoldingTime={habits.averageHoldingTime}
         averageHoldingTimeExplanation={habits.averageHoldingTimeExplanation}
       />

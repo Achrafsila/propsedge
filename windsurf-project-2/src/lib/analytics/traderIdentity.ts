@@ -90,11 +90,20 @@ function topEntry<K extends string>(counts: Partial<Record<K, number>>): { key: 
 // a few very long holds (dragging the average way up) still reads as
 // something other than a pure scalper/intraday trader.
 
-export type TradingStyle = "Scalper" | "Intraday Trader" | "Swing Trader" | "Position Trader" | "Not enough data";
+export type TradingStyle =
+  | "Scalper"
+  | "Momentum Scalper"
+  | "Intraday Trader"
+  | "Swing Trader"
+  | "Position Trader"
+  | "Not enough data";
 
-// A scalper's typical hold is well under half an hour and essentially
-// never crosses into the next day.
-const SCALPER_MEDIAN_MAX_MINUTES = 15;
+// A scalper's typical hold is a handful of minutes and essentially never
+// crosses into the next day. A momentum scalper trades the same
+// same-day/no-overnight pattern but typically rides a position longer —
+// up to a quarter hour — rather than exiting within a couple of minutes.
+const SCALPER_MEDIAN_MAX_MINUTES = 5;
+const MOMENTUM_SCALPER_MEDIAN_MAX_MINUTES = 15;
 const SCALPER_MAX_OVERNIGHT_RATIO = 0.05;
 
 // An intraday trader's typical hold stays within the trading day (up to a
@@ -126,6 +135,10 @@ function classifyTradingStyle(
     return "Scalper";
   }
 
+  if (medianHoldingMinutes < MOMENTUM_SCALPER_MEDIAN_MAX_MINUTES && overnightRatio <= SCALPER_MAX_OVERNIGHT_RATIO) {
+    return "Momentum Scalper";
+  }
+
   if (medianHoldingMinutes >= POSITION_MEDIAN_MIN_MINUTES || averageHoldingMinutes >= POSITION_AVERAGE_MIN_MINUTES) {
     return "Position Trader";
   }
@@ -147,6 +160,7 @@ function classifyTradingStyle(
 // calculation, just a human-readable rendering of the median.
 const STYLE_CATEGORY_LABEL: Record<Exclude<TradingStyle, "Not enough data">, string> = {
   Scalper: "scalping",
+  "Momentum Scalper": "momentum scalping",
   "Intraday Trader": "intraday trading",
   "Swing Trader": "swing trading",
   "Position Trader": "position trading",
@@ -226,21 +240,31 @@ function classifyMarket(symbol: string): MarketCategory {
 }
 
 const SPECIALIZATION_MIN_TRADES = 30;
-const SPECIALIZATION_MIN_SHARE = 0.6;
-const MULTI_MARKET_TRADER = "Multi-Market Trader";
-const MULTI_SESSION_TRADER = "Multi-Session Trader";
+// Market Focus reads per-instrument dominance (e.g. XAUUSD alone > 60% of
+// trades), not aggregated asset-class share — a trader split evenly across
+// several forex pairs is a Multi-Asset Trader even if "Forex" as a class
+// would clear 60% in aggregate.
+const MARKET_MIN_SHARE = 0.6;
+// Session Profile only needs a simple majority — one session doesn't have
+// to be nearly exclusive to count as the dominant one.
+const SESSION_MIN_SHARE = 0.5;
+const MULTI_ASSET_TRADER = "Multi-Asset Trader";
+const BALANCED_SESSIONS = "Balanced Sessions";
 
 function determineMarketSpecialization(trades: Trade[]): string {
-  if (trades.length < SPECIALIZATION_MIN_TRADES) return MULTI_MARKET_TRADER;
+  if (trades.length < SPECIALIZATION_MIN_TRADES) return MULTI_ASSET_TRADER;
 
-  const counts = countBy(trades, (t) => classifyMarket(t.symbol));
+  const counts = countBy(trades, (t) => t.symbol || "Unknown");
   const { key, count } = topEntry(counts);
-  // "Other" has no clean specialist label, so it never produces one even
-  // if it happens to be the largest bucket.
-  if (key && key !== "Other" && count / trades.length >= SPECIALIZATION_MIN_SHARE) {
-    return `${key} Specialist`;
+  if (!key || key === "Unknown" || count / trades.length < MARKET_MIN_SHARE) {
+    return MULTI_ASSET_TRADER;
   }
-  return MULTI_MARKET_TRADER;
+
+  // "Other" has no clean specialist label, so it never produces one even
+  // if the dominant instrument happens to fall in that category.
+  const category = classifyMarket(key);
+  if (category === "Other") return MULTI_ASSET_TRADER;
+  return `${category} Specialist`;
 }
 
 // Per-instrument share of trades (e.g. "XAUUSD" -> 52%), for the Market
@@ -276,13 +300,13 @@ function getSessionCounts(trades: Trade[]): Partial<Record<string, number>> {
 }
 
 function determineSessionProfile(trades: Trade[], counts: Partial<Record<string, number>>): string {
-  if (trades.length < SPECIALIZATION_MIN_TRADES) return MULTI_SESSION_TRADER;
+  if (trades.length < SPECIALIZATION_MIN_TRADES) return BALANCED_SESSIONS;
 
   const { key, count } = topEntry(counts);
-  if (key && key !== "Unknown" && count / trades.length >= SPECIALIZATION_MIN_SHARE) {
-    return `${key} Specialist`;
+  if (key && key !== "Unknown" && count / trades.length >= SESSION_MIN_SHARE) {
+    return key;
   }
-  return MULTI_SESSION_TRADER;
+  return BALANCED_SESSIONS;
 }
 
 // Real session distribution for display, reusing the exact counts
@@ -312,19 +336,20 @@ function getSessionDistribution(trades: Trade[], counts: Partial<Record<string, 
 
 const STYLE_NOUN_WITH_ARTICLE: Record<Exclude<TradingStyle, "Not enough data">, string> = {
   Scalper: "a scalper",
+  "Momentum Scalper": "a momentum scalper",
   "Intraday Trader": "an intraday trader",
   "Swing Trader": "a swing trader",
   "Position Trader": "a position trader",
 };
 
 function marketFocusPhrase(marketSpecialization: string): string {
-  if (marketSpecialization === MULTI_MARKET_TRADER) return "no strong market specialization";
+  if (marketSpecialization === MULTI_ASSET_TRADER) return "no strong market specialization";
   return `a clear ${marketSpecialization.replace(" Specialist", "")} market focus`;
 }
 
 function sessionProfilePhrase(sessionProfile: string): string {
-  if (sessionProfile === MULTI_SESSION_TRADER) return "no dominant session preference";
-  return `a clear ${sessionProfile.replace(" Specialist", "")} session preference`;
+  if (sessionProfile === BALANCED_SESSIONS) return "no dominant session preference";
+  return `a clear ${sessionProfile} session preference`;
 }
 
 function buildExecutiveSummary(

@@ -412,6 +412,39 @@ export function getProfitFactor(trades: Trade[]): ProfitFactorResult {
   };
 }
 
+// ── Direction Win Rate ───────────────────────────────────────────────────
+// Win rate per direction is one of the few places in this engine that
+// legitimately blends a behavioural split (long vs short) with a
+// performance outcome (win/loss) — kept here, not in traderIdentity.ts,
+// which is pnl-free by design. Win rate = trades with status "win" divided
+// by all trades in that direction, matching the exact win-rate convention
+// already used elsewhere in the app (e.g. the Trade Journal page), not
+// wins / (wins + losses).
+
+export interface DirectionWinRate {
+  winRate: number | null; // 0-100, null when there are no trades in this direction
+  count: number;
+}
+
+export interface DirectionWinRates {
+  long: DirectionWinRate;
+  short: DirectionWinRate;
+}
+
+function computeDirectionWinRate(directionTrades: Trade[]): DirectionWinRate {
+  if (directionTrades.length === 0) return { winRate: null, count: 0 };
+  const wins = directionTrades.filter((t) => t.status === "win").length;
+  return { winRate: (wins / directionTrades.length) * 100, count: directionTrades.length };
+}
+
+export function getDirectionWinRates(trades: Trade[]): DirectionWinRates {
+  const dated = trades.filter((t) => !!t.entryDate);
+  return {
+    long: computeDirectionWinRate(dated.filter((t) => t.direction === "long")),
+    short: computeDirectionWinRate(dated.filter((t) => t.direction === "short")),
+  };
+}
+
 // ── Progressive data confidence wording ──────────────────────────────────
 // Trader DNA never blocks an insight for having "too few" trades — every
 // KPI always shows its current, mathematically valid value. This only

@@ -4,10 +4,12 @@ import { motion } from "framer-motion";
 import { Fingerprint } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { TraderIdentity } from "@/lib/analytics/traderIdentity";
+import { DirectionWinRates } from "@/lib/analytics/traderDNA";
 import { AnimatedBar } from "@/components/analytics/visualizations/AnimatedBar";
 
 const IDENTITY_COLOR = "#298DFF";
 const LONG_COLOR = "#10B981";
+const SHORT_COLOR = "#F59E0B";
 
 interface ProfileTile {
   label: string;
@@ -16,19 +18,19 @@ interface ProfileTile {
 }
 
 // Renders whatever src/lib/analytics/traderIdentity.ts (+ the already-computed
-// TraderDNAStats.tradesByDirection and TraderHabits.averageHoldingTime, both
+// traderDNA.ts DirectionWinRates and TraderHabits.averageHoldingTime, both
 // passed in as props, neither recomputed here) determines — no thresholds,
 // category names, or fallback labels are decided in this component. Session/
 // instrument distributions moved to their own cards (SessionPerformanceCard,
 // InstrumentBreakdownCard) so they're shown once, not duplicated here.
 export function TradingIdentityCard({
   identity,
-  tradesByDirection,
+  directionWinRates,
   averageHoldingTime,
   averageHoldingTimeExplanation,
 }: {
   identity: TraderIdentity;
-  tradesByDirection: { long: number; short: number };
+  directionWinRates: DirectionWinRates;
   averageHoldingTime: string;
   averageHoldingTimeExplanation: string;
 }) {
@@ -37,10 +39,6 @@ export function TradingIdentityCard({
     { label: "Market Focus", value: identity.marketSpecialization },
     { label: "Session Profile", value: identity.sessionProfile },
   ];
-
-  const totalDirectional = tradesByDirection.long + tradesByDirection.short;
-  const longPct = totalDirectional > 0 ? Math.round((tradesByDirection.long / totalDirectional) * 100) : 0;
-  const shortPct = totalDirectional > 0 ? 100 - longPct : 0;
 
   return (
     <motion.div
@@ -104,13 +102,35 @@ export function TradingIdentityCard({
         ))}
       </div>
 
-      {/* Long vs Short bias — real tradesByDirection split, not a new metric */}
-      <div className="mb-5">
+      {/* Direction Win Rate — real per-direction win rate from traderDNA.ts,
+          not a trade-count split (a trader can be long-heavy by volume but
+          still perform better short, which a count-based split would hide) */}
+      <div className="mb-5 space-y-3">
+        <p
+          className="text-[#94A3B8] uppercase"
+          style={{ fontSize: typography.fontSize.xs, letterSpacing: typography.letterSpacing.label, opacity: typography.opacity.secondary }}
+        >
+          Direction Win Rate
+        </p>
         <AnimatedBar
-          label="Long vs Short Bias"
-          percentage={longPct}
+          label="Long"
+          percentage={directionWinRates.long.winRate ?? 0}
           color={LONG_COLOR}
-          valueLabel={totalDirectional > 0 ? `${longPct}% Long · ${shortPct}% Short` : "No directional data yet"}
+          valueLabel={
+            directionWinRates.long.winRate !== null
+              ? `${Math.round(directionWinRates.long.winRate)}% (${directionWinRates.long.count} trades)`
+              : "No long trades yet"
+          }
+        />
+        <AnimatedBar
+          label="Short"
+          percentage={directionWinRates.short.winRate ?? 0}
+          color={SHORT_COLOR}
+          valueLabel={
+            directionWinRates.short.winRate !== null
+              ? `${Math.round(directionWinRates.short.winRate)}% (${directionWinRates.short.count} trades)`
+              : "No short trades yet"
+          }
         />
       </div>
 
