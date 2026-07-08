@@ -14,6 +14,12 @@ import { useAccounts } from "@/context/AccountsContext";
 import { toast } from "sonner";
 import { UploadCloud, FileSpreadsheet, X } from "lucide-react";
 import { parseTradeFile, ParsedTrade, SkippedRow } from "@/lib/importTrades";
+import {
+  ACCOUNT_STATUS_BADGE_COLOR,
+  getAccountOptionLabel,
+  getAccountStartDateLabel,
+  getAccountStatusLabel,
+} from "@/lib/accountLabels";
 
 interface ImportTradesDialogProps {
   open: boolean;
@@ -48,8 +54,12 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     }
   }
 
+  // Trade history is still valid data even after a challenge fails — a
+  // trader backfilling/auditing a failed lifecycle needs to be able to
+  // import into it too, not just active accounts. Funded accounts have no
+  // "failed" status (active/breached/closed), so that side is unchanged.
   const availableAccounts = accountType === "challenge"
-    ? challenges.filter((c) => c.status === "active")
+    ? challenges.filter((c) => c.status === "active" || c.status === "failed")
     : fundedAccounts.filter((a) => a.status === "active");
 
   // accountId alone isn't enough — it can be a stale id (e.g. an account
@@ -163,7 +173,8 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
         return `${dates[0]} → ${dates[dates.length - 1]}`;
       })()
     : "—";
-  const selectedAccountName = availableAccounts.find((a) => a.id === accountId)?.accountName;
+  const selectedAccount = availableAccounts.find((a) => a.id === accountId);
+  const selectedAccountName = selectedAccount?.accountName;
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -208,10 +219,28 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                 <option value="">Select an account</option>
                 {availableAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.accountName}
+                    {getAccountOptionLabel(account, accountType === "challenge")}
                   </option>
                 ))}
               </select>
+              {isDestinationValid && selectedAccount && (() => {
+                const isChallenge = accountType === "challenge";
+                const status = getAccountStatusLabel(selectedAccount, isChallenge);
+                const color = ACCOUNT_STATUS_BADGE_COLOR[status] ?? "#94A3B8";
+                return (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span
+                      className="px-2 py-0.5 rounded-full text-xs font-medium"
+                      style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}
+                    >
+                      {status}
+                    </span>
+                    <span className="text-[#64748B] text-xs">
+                      Start: {getAccountStartDateLabel(selectedAccount, isChallenge)}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
