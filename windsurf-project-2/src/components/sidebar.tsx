@@ -49,6 +49,7 @@ export function Sidebar() {
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Analytics", href: "/portfolio-analytics", icon: LineChart },
+    { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 

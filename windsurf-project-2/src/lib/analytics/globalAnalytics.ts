@@ -1,4 +1,4 @@
-import { Challenge, FundedAccount, Trade } from "@/types";
+import { Challenge, FundedAccount, PersonalAccount, Trade } from "@/types";
 
 // ============================================================
 // PropEdge — Global Trade Analytics engine (Operational View)
@@ -16,7 +16,7 @@ import { Challenge, FundedAccount, Trade } from "@/types";
 // slices of the same trade set (challenge vs funded, session vs session,
 // account vs account, etc.) without re-implementing filtering logic.
 
-export type AnalysisScope = "all" | "challenge" | "funded";
+export type AnalysisScope = "all" | "challenge" | "funded" | "personal";
 export type SessionKey = "London" | "New York" | "Asian" | "No Session";
 
 export interface GlobalFilters {
@@ -46,20 +46,21 @@ export const DEFAULT_GLOBAL_FILTERS: GlobalFilters = {
 
 export interface AccountIndexEntry {
   accountId: string;
-  accountType: "challenge" | "funded";
+  accountType: "challenge" | "funded" | "personal";
   accountName: string;
-  propFirmName: string;
+  propFirmName: string; // "" for personal accounts — no prop firm
 }
 
 export type AccountIndex = Map<string, AccountIndexEntry>;
 
-function accountKey(accountType: "challenge" | "funded", accountId: string): string {
+function accountKey(accountType: "challenge" | "funded" | "personal", accountId: string): string {
   return `${accountType}:${accountId}`;
 }
 
 export function buildAccountIndex(
   challenges: Challenge[],
-  fundedAccounts: FundedAccount[]
+  fundedAccounts: FundedAccount[],
+  personalAccounts: PersonalAccount[] = []
 ): AccountIndex {
   const index: AccountIndex = new Map();
   for (const c of challenges) {
@@ -76,6 +77,14 @@ export function buildAccountIndex(
       accountType: "funded",
       accountName: a.accountName,
       propFirmName: a.propFirmName,
+    });
+  }
+  for (const p of personalAccounts) {
+    index.set(accountKey("personal", p.id), {
+      accountId: p.id,
+      accountType: "personal",
+      accountName: p.accountName,
+      propFirmName: "",
     });
   }
   return index;

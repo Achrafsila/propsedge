@@ -2,6 +2,7 @@ export type ChallengeStatus = "active" | "failed" | "passed" | "refunded" | "ste
 export type FundedAccountStatus = "active" | "breached" | "closed";
 export type PayoutStatus = "pending" | "paid" | "rejected";
 export type TradeStatus = "win" | "loss" | "breakeven";
+export type PersonalAccountStatus = "active" | "inactive" | "archived";
 
 export interface ChallengeType {
   id: string;
@@ -82,6 +83,32 @@ export interface FundedAccount {
   status: FundedAccountStatus;
 }
 
+// A bring-your-own-capital account with NO prop firm rules — no challenge
+// phase, profit target, payout eligibility, min trading days, or mandatory
+// consistency rule. Every guardrail (daily loss, max drawdown, risk per
+// trade, consistency) is OPTIONAL and only ever enforced if the user
+// explicitly defines it. Persisted client-side only (see
+// PersonalAccountsContext) — no Supabase table backs this today, by
+// explicit product decision.
+// TODO(migration): this is a temporary shape until Personal Accounts move
+// to Supabase (see the TODO block atop PersonalAccountsContext.tsx) — at
+// that point this becomes a first-class DB-backed entity like Challenge/
+// FundedAccount, syncing across devices instead of living in localStorage.
+export interface PersonalAccount {
+  id: string;
+  accountName: string;
+  broker?: string;
+  initialCapital: number;
+  currentEquity: number;
+  currency: string;
+  createdAt: string;
+  dailyLossLimit?: number | null; // percent of initialCapital; null/undefined = no rule
+  maxDrawdownLimit?: number | null; // percent of initialCapital; null/undefined = no rule
+  riskPerTradePercent?: number | null; // percent of initialCapital per trade; null/undefined = no rule
+  personalObjective?: string | null;
+  status: PersonalAccountStatus;
+}
+
 export interface Payout {
   id: string;
   fundedAccountId: string;
@@ -97,7 +124,7 @@ export interface Payout {
 export interface Trade {
   id: string;
   accountId: string;
-  accountType: "challenge" | "funded";
+  accountType: "challenge" | "funded" | "personal";
   entryDate: string;
   exitDate: string;
   entryTime?: string;

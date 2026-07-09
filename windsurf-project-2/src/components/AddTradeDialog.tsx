@@ -14,20 +14,21 @@ import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
 import { motion } from "framer-motion";
 import { Upload, Clock } from "lucide-react";
-import { getAccountOptionLabel } from "@/lib/accountLabels";
+import { AccountKind, getAccountOptionLabel } from "@/lib/accountLabels";
+import { Challenge, FundedAccount, PersonalAccount } from "@/types";
 
 interface AddTradeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultAccountType?: "challenge" | "funded";
+  defaultAccountType?: AccountKind;
   defaultAccountId?: string;
 }
 
 export function AddTradeDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: AddTradeDialogProps) {
-  const { addTrade, challenges, fundedAccounts } = useAccounts();
+  const { addTrade, challenges, fundedAccounts, personalAccounts } = useAccounts();
   const [formData, setFormData] = useState({
     accountId: "",
-    accountType: "challenge" as "challenge" | "funded",
+    accountType: "challenge" as AccountKind,
     entryDate: new Date().toISOString().split('T')[0],
     entryTime: "",
     exitTime: "",
@@ -95,7 +96,7 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
     onOpenChange(false);
     setFormData({
       accountId: "",
-      accountType: "challenge",
+      accountType: "challenge" as AccountKind,
       entryDate: new Date().toISOString().split('T')[0],
       entryTime: "",
       exitTime: "",
@@ -107,9 +108,12 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
     });
   };
 
-  const availableAccounts = formData.accountType === "challenge" 
-    ? challenges.filter(c => c.status === "active")
-    : fundedAccounts.filter(a => a.status === "active");
+  const availableAccounts: (Challenge | FundedAccount | PersonalAccount)[] =
+    formData.accountType === "challenge"
+      ? challenges.filter((c) => c.status === "active")
+      : formData.accountType === "funded"
+        ? fundedAccounts.filter((a) => a.status === "active")
+        : personalAccounts.filter((p) => p.status === "active");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -123,11 +127,12 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
             <select
               id="accountType"
               value={formData.accountType}
-              onChange={(e) => setFormData({ ...formData, accountType: e.target.value as "challenge" | "funded", accountId: "" })}
+              onChange={(e) => setFormData({ ...formData, accountType: e.target.value as AccountKind, accountId: "" })}
               className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             >
               <option value="challenge">Challenge</option>
               <option value="funded">Funded Account</option>
+              <option value="personal">Personal Account</option>
             </select>
           </div>
           <div className="space-y-2">
@@ -142,7 +147,7 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
               <option value="">Select an account</option>
               {availableAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {getAccountOptionLabel(account, formData.accountType === "challenge")}
+                  {getAccountOptionLabel(account, formData.accountType)}
                 </option>
               ))}
             </select>

@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { AccountsProvider } from "@/context/AccountsContext";
+import { PersonalAccountsProvider } from "@/context/PersonalAccountsContext";
 import { AdminProvider } from "@/context/AdminContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { TradingModeProvider } from "@/context/TradingModeContext";
@@ -48,17 +49,19 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-black text-white">
         <AuthProvider>
-          <AccountsProvider>
-            <AdminProvider>
-              <TradingModeProvider>
-                <TodayObjectiveProvider>
-                  <PersonalPortfolioProvider>
-                    <AppShell>{children}</AppShell>
-                  </PersonalPortfolioProvider>
-                </TodayObjectiveProvider>
-              </TradingModeProvider>
-            </AdminProvider>
-          </AccountsProvider>
+          <PersonalAccountsProvider>
+            <AccountsProvider>
+              <AdminProvider>
+                <TradingModeProvider>
+                  <TodayObjectiveProvider>
+                    <PersonalPortfolioProvider>
+                      <AppShell>{children}</AppShell>
+                    </PersonalPortfolioProvider>
+                  </TodayObjectiveProvider>
+                </TradingModeProvider>
+              </AdminProvider>
+            </AccountsProvider>
+          </PersonalAccountsProvider>
         </AuthProvider>
         <Toaster theme="dark" position="bottom-right" richColors />
       </body>

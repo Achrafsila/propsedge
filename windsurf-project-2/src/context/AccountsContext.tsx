@@ -1,12 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Challenge,
   FundedAccount,
   Payout,
   Trade,
+  PersonalAccount,
   FundingRateStats,
   ROIStats,
   DashboardKPIs,
@@ -15,6 +16,7 @@ import {
   PayoutStatus,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { usePersonalAccounts } from "@/context/PersonalAccountsContext";
 import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded, getEffectiveStartDate, getEffectiveFundedDate } from "@/lib/challenges";
 import { buildAccountIndex, getOrphanedTrades } from "@/lib/analytics/globalAnalytics";
 import {
@@ -67,20 +69,25 @@ interface AccountsContextType {
   payoutsLoading: boolean;
   trades: Trade[];
   tradesLoading: boolean;
+  personalAccounts: PersonalAccount[];
+  personalAccountsLoading: boolean;
   addChallenge: (challenge: Omit<Challenge, "id">) => void;
   updateChallenge: (id: string, challenge: Partial<Challenge>) => void;
   deleteChallenge: (id: string) => void;
   addFundedAccount: (account: Omit<FundedAccount, "id">) => void;
   updateFundedAccount: (id: string, account: Partial<FundedAccount>) => void;
   deleteFundedAccount: (id: string) => void;
+  addPersonalAccount: (account: Omit<PersonalAccount, "id" | "currentEquity">) => PersonalAccount;
+  updatePersonalAccount: (id: string, account: Partial<PersonalAccount>) => void;
+  deletePersonalAccount: (id: string) => void;
   addPayout: (payout: Omit<Payout, "id">) => void;
   updatePayout: (id: string, payout: Partial<Payout>) => void;
   deletePayout: (id: string) => void;
   addTrade: (trade: Omit<Trade, "id">) => Promise<Trade | null>;
   addTradesBatch: (trades: Omit<Trade, "id">[]) => Promise<TradeImportResult>;
   deleteTrade: (id: string) => void;
-  deleteTradesForAccount: (accountId: string, accountType: "challenge" | "funded") => Promise<void>;
-  getAccountPnL: (accountId: string, accountType: "challenge" | "funded") => number;
+  deleteTradesForAccount: (accountId: string, accountType: "challenge" | "funded" | "personal") => Promise<void>;
+  getAccountPnL: (accountId: string, accountType: "challenge" | "funded" | "personal") => number;
   convertChallengeToFunded: (challengeId: string, fundedAccount: Omit<FundedAccount, "id">) => void;
   getFundingRateStats: () => FundingRateStats;
   getROIStats: () => ROIStats;
@@ -91,14 +98,39 @@ const AccountsContext = createContext<AccountsContextType | undefined>(undefined
 
 export function AccountsProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
+  // TODO(migration): PersonalAccountsContext is a temporary localStorage-only
+  // storage layer (see its file header) — personalAccounts/personalTrades
+  // don't sync across devices and aren't queryable server-side yet. Once
+  // that context moves to Supabase, everything below this line (the merged
+  // `trades`, the addTrade/addTradesBatch/deleteTradesForAccount delegation
+  // by accountType) should need no changes — only usePersonalAccounts()'s
+  // internals change.
+  const {
+    personalAccounts,
+    personalTrades,
+    personalAccountsLoading,
+    addPersonalAccount,
+    updatePersonalAccount,
+    deletePersonalAccount,
+    addPersonalTrade,
+    addPersonalTradesBatch,
+    deletePersonalTrade,
+    deleteTradesForPersonalAccount,
+  } = usePersonalAccounts();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [challengesLoading, setChallengesLoading] = useState(true);
   const [fundedAccounts, setFundedAccounts] = useState<FundedAccount[]>([]);
   const [fundedAccountsLoading, setFundedAccountsLoading] = useState(true);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [payoutsLoading, setPayoutsLoading] = useState(true);
-  const [trades, setTrades] = useState<Trade[]>([]);
+  // Supabase-backed trades only (challenge/funded) — the context's exposed
+  // `trades` below is this merged with personalTrades (localStorage-backed,
+  // see PersonalAccountsContext), so every existing consumer of
+  // useAccounts().trades transparently sees personal trades too without
+  // any changes on their end.
+  const [dbTrades, setDbTrades] = useState<Trade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(true);
+  const trades = useMemo(() => [...dbTrades, ...personalTrades], [dbTrades, personalTrades]);
 
   // ── Load challenges from Supabase whenever the authenticated user changes ──
   // authLoading: stay in loading state until Supabase session is resolved so we
@@ -142,13 +174,13 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setTrades([]);
+      setDbTrades([]);
       setTradesLoading(false);
       return;
     }
     setTradesLoading(true);
     fetchTrades(user.id)
-      .then(setTrades)
+      .then(setDbTrades)
       .catch((err) => {
         console.error("Failed to load trades:", err);
         toast.error(`Load trades: ${err?.message ?? String(err)}`);
@@ -188,14 +220,17 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     if (orphanCleanupRanForUserRef.current === user.id) return;
     orphanCleanupRanForUserRef.current = user.id;
 
+    // Only ever inspects dbTrades (Supabase-backed challenge/funded trades)
+    // — personal trades never have a DB row to be "orphaned" from, so they
+    // structurally can't appear here and must never be scanned by this effect.
     const accountIndex = buildAccountIndex(challenges, fundedAccounts);
-    const orphans = getOrphanedTrades(trades, accountIndex);
+    const orphans = getOrphanedTrades(dbTrades, accountIndex);
     if (orphans.length === 0) return;
 
     const orphanIds = orphans.map((t) => t.id);
     deleteTradesByIdsDb(orphanIds)
       .then(() => {
-        setTrades((prev) => prev.filter((t) => !orphanIds.includes(t.id)));
+        setDbTrades((prev) => prev.filter((t) => !orphanIds.includes(t.id)));
         console.warn(
           `[AccountsContext] Auto-cleaned ${orphanIds.length} orphaned trade(s) linked to deleted accounts.`
         );
@@ -205,7 +240,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         // Allow a retry on the next load instead of silently giving up.
         orphanCleanupRanForUserRef.current = null;
       });
-  }, [user, authLoading, challengesLoading, fundedAccountsLoading, tradesLoading, challenges, fundedAccounts, trades]);
+  }, [user, authLoading, challengesLoading, fundedAccountsLoading, tradesLoading, challenges, fundedAccounts, dbTrades]);
 
   // ── Challenge CRUD (Supabase-backed) ──────────────────────────────────────
 
@@ -251,7 +286,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteChallenge = (id: string) => {
-    const linkedTradeIds = trades
+    const linkedTradeIds = dbTrades
       .filter((t) => t.accountId === id && t.accountType === "challenge")
       .map((t) => t.id);
 
@@ -260,7 +295,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     // straight from this context, so clearing both here refreshes them
     // immediately with no separate refetch needed.
     if (linkedTradeIds.length > 0) {
-      setTrades((prev) => prev.filter((t) => !linkedTradeIds.includes(t.id)));
+      setDbTrades((prev) => prev.filter((t) => !linkedTradeIds.includes(t.id)));
     }
     setChallenges((prev) => prev.filter((c) => c.id !== id));
 
@@ -301,14 +336,14 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteFundedAccount = (id: string) => {
-    const linkedTradeIds = trades
+    const linkedTradeIds = dbTrades
       .filter((t) => t.accountId === id && t.accountType === "funded")
       .map((t) => t.id);
 
     // Optimistic local removal — trades first, then the account (see
     // deleteChallenge above for why).
     if (linkedTradeIds.length > 0) {
-      setTrades((prev) => prev.filter((t) => !linkedTradeIds.includes(t.id)));
+      setDbTrades((prev) => prev.filter((t) => !linkedTradeIds.includes(t.id)));
     }
     setFundedAccounts((prev) => prev.filter((a) => a.id !== id));
 
@@ -342,13 +377,19 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
   // ── Trade Engine helpers ──────────────────────────────────────────────────
 
-  // Recomputes an account's P&L fields from a given trade list and persists
-  // the result to Supabase. Called after every addTrade / deleteTrade.
+  // Recomputes a Supabase-backed account's P&L fields from a given trade
+  // list and persists the result. Called after every addTrade / deleteTrade
+  // for challenge/funded accounts only — personal accounts recalculate
+  // their own equity inside PersonalAccountsContext instead, so this never
+  // actually runs for accountType "personal" (the type param stays 3-way
+  // only because callers resolve it from a Trade's accountType, which is
+  // 3-way at the type level).
   const recalcAccount = (
     accountId: string,
-    accountType: "challenge" | "funded",
+    accountType: "challenge" | "funded" | "personal",
     allTrades: Trade[]
   ) => {
+    if (accountType === "personal") return;
     const accountTrades = allTrades.filter(
       (t) => t.accountId === accountId && t.accountType === accountType
     );
@@ -415,11 +456,16 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   // recalcAccount() writes, which exhausted Supabase's connection pool
   // after roughly the first 100 and silently failed the rest.
   const addTrade = (trade: Omit<Trade, "id">): Promise<Trade | null> => {
+    // Personal accounts are client-side only (see PersonalAccountsContext)
+    // — no Supabase insert, no network round-trip.
+    if (trade.accountType === "personal") {
+      return Promise.resolve(addPersonalTrade(trade));
+    }
     if (!user) return Promise.resolve(null);
     return insertTrade(user.id, trade)
       .then((saved) => {
         let newTrades: Trade[] = [];
-        setTrades((prev) => {
+        setDbTrades((prev) => {
           newTrades = [...prev, saved];
           return newTrades;
         });
@@ -447,7 +493,20 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   // Local state is updated once at the end (not per row), and each
   // affected account is recalculated once (not once per inserted trade).
   const addTradesBatch = async (newTrades: Omit<Trade, "id">[]): Promise<TradeImportResult> => {
-    if (!user || newTrades.length === 0) {
+    if (newTrades.length === 0) {
+      return { imported: [], failed: 0, errors: [] };
+    }
+
+    // Import Trades always operates on one selected account (and therefore
+    // one account type) per run — checking the first row is unambiguous.
+    // Personal accounts are client-side only, so the whole batch is
+    // delegated to PersonalAccountsContext, no Supabase round-trip at all.
+    if (newTrades[0].accountType === "personal") {
+      const result = addPersonalTradesBatch(newTrades);
+      return { imported: result.imported, failed: result.failed, errors: [] };
+    }
+
+    if (!user) {
       return { imported: [], failed: newTrades.length, errors: [] };
     }
 
@@ -470,13 +529,14 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
     if (imported.length > 0) {
       let updatedTrades: Trade[] = [];
-      setTrades((prev) => {
+      setDbTrades((prev) => {
         updatedTrades = [...prev, ...imported];
         return updatedTrades;
       });
 
       const affectedAccounts = new Map<string, { accountId: string; accountType: "challenge" | "funded" }>();
       for (const t of imported) {
+        if (t.accountType === "personal") continue;
         affectedAccounts.set(`${t.accountType}:${t.accountId}`, { accountId: t.accountId, accountType: t.accountType });
       }
       affectedAccounts.forEach(({ accountId, accountType }) => recalcAccount(accountId, accountType, updatedTrades));
@@ -492,15 +552,21 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   const deleteTrade = (id: string) => {
     const tradeToDelete = trades.find((t) => t.id === id);
     if (!tradeToDelete) return;
-    const newTrades = trades.filter((t) => t.id !== id);
-    setTrades(newTrades); // optimistic removal
+
+    if (tradeToDelete.accountType === "personal") {
+      deletePersonalTrade(id);
+      return;
+    }
+
+    const newTrades = dbTrades.filter((t) => t.id !== id);
+    setDbTrades(newTrades); // optimistic removal
     deleteTradeDb(id)
       .then(() => {
         recalcAccount(tradeToDelete.accountId, tradeToDelete.accountType, newTrades);
       })
       .catch((err) => {
         console.error("Failed to delete trade:", err);
-        setTrades(trades); // rollback
+        setDbTrades(dbTrades); // rollback
       });
   };
 
@@ -514,14 +580,19 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   // run once instead of looping over every account.
   const deleteTradesForAccount = (
     accountId: string,
-    accountType: "challenge" | "funded"
+    accountType: "challenge" | "funded" | "personal"
   ): Promise<void> => {
-    const previousTrades = trades;
-    const newTrades = trades.filter(
+    if (accountType === "personal") {
+      deleteTradesForPersonalAccount(accountId);
+      return Promise.resolve();
+    }
+
+    const previousTrades = dbTrades;
+    const newTrades = dbTrades.filter(
       (t) => !(t.accountId === accountId && t.accountType === accountType)
     );
 
-    setTrades(newTrades); // optimistic clear
+    setDbTrades(newTrades); // optimistic clear
 
     return deleteTradesByAccountDb(accountId, accountType)
       .then(() => {
@@ -530,7 +601,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         console.error("Failed to delete account trades:", err);
-        setTrades(previousTrades); // rollback
+        setDbTrades(previousTrades); // rollback
         toast.error(`Failed to delete account trades: ${err?.message ?? String(err)}`);
         throw err;
       });
@@ -538,7 +609,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
   // Returns 0 — account fields are the canonical source of truth after M4.
   // UI formulas like `challenge.currentProfit + getAccountPnL()` stay correct.
-  const getAccountPnL = (_accountId: string, _accountType: "challenge" | "funded") => {
+  const getAccountPnL = (_accountId: string, _accountType: "challenge" | "funded" | "personal") => {
     return 0;
   };
 
@@ -704,12 +775,17 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         payoutsLoading,
         trades,
         tradesLoading,
+        personalAccounts,
+        personalAccountsLoading,
         addChallenge,
         updateChallenge,
         deleteChallenge,
         addFundedAccount,
         updateFundedAccount,
         deleteFundedAccount,
+        addPersonalAccount,
+        updatePersonalAccount,
+        deletePersonalAccount,
         addPayout,
         updatePayout,
         deletePayout,

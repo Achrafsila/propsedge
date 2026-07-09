@@ -45,7 +45,7 @@ const itemVariants = {
 };
 
 export default function GlobalAnalyticsPage() {
-  const { challenges, fundedAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
+  const { challenges, fundedAccounts, personalAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
   const { tradingMode } = useTradingMode();
   const [filters, setFilters] = useState<GlobalFilters>(DEFAULT_GLOBAL_FILTERS);
 
@@ -81,7 +81,10 @@ export default function GlobalAnalyticsPage() {
   // ── Operational View: every trade counts, Step 1 and Step 2 are never
   // collapsed into one root — that collapsing only happens in the Business
   // Metrics engine (src/lib/challenges.ts) used by Dashboard/Challenges.
-  const accountIndex = useMemo(() => buildAccountIndex(challenges, fundedAccounts), [challenges, fundedAccounts]);
+  const accountIndex = useMemo(
+    () => buildAccountIndex(challenges, fundedAccounts, personalAccounts),
+    [challenges, fundedAccounts, personalAccounts]
+  );
 
   const filteredTrades = useMemo(
     () => filterGlobalTrades(modeTrades, filters, accountIndex),
@@ -168,12 +171,12 @@ export default function GlobalAnalyticsPage() {
     const list: { id: string; name: string; propFirmName: string; label: string }[] = [];
     if (filters.scope !== "funded") {
       challenges.forEach((c) =>
-        list.push({ id: c.id, name: c.accountName, propFirmName: c.propFirmName, label: getAccountOptionLabel(c, true) })
+        list.push({ id: c.id, name: c.accountName, propFirmName: c.propFirmName, label: getAccountOptionLabel(c, "challenge") })
       );
     }
     if (filters.scope !== "challenge") {
       fundedAccounts.forEach((a) =>
-        list.push({ id: a.id, name: a.accountName, propFirmName: a.propFirmName, label: getAccountOptionLabel(a, false) })
+        list.push({ id: a.id, name: a.accountName, propFirmName: a.propFirmName, label: getAccountOptionLabel(a, "funded") })
       );
     }
     return list;

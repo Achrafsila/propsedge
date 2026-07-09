@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Wallet, PiggyBank, ArrowDownToLine, TrendingUp, LineChart, Plus, Minus } from "lucide-react";
+import { Wallet, PiggyBank, ArrowDownToLine, TrendingUp, LineChart, Plus, Minus, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { usePersonalPortfolio } from "@/context/PersonalPortfolioContext";
+import { useAccounts } from "@/context/AccountsContext";
 import { AddCashTransactionDialog } from "@/components/personal-capital/AddCashTransactionDialog";
+import { AddPersonalAccountDialog } from "@/components/AddPersonalAccountDialog";
+import { computePersonalAccountStats } from "@/lib/analytics/personalAccountStats";
+import { PersonalAccount } from "@/types";
 
 const PERSONAL_CAPITAL_GRADIENT = "linear-gradient(90deg, #FFFFFF, #6EE7B7, #2DD4BF)";
 const EMERALD = "#10B981";
@@ -310,7 +314,148 @@ function PortfolioDashboard() {
   );
 }
 
+// ── Personal Accounts section — independent of the cash-ledger portfolio
+// above; a user can have Personal Accounts with no cash ledger at all, so
+// this must never be nested inside the portfolio ? ... : ... branch. ────
+
+function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="rounded-lg p-3" style={{ background: "rgba(148,163,184,0.04)", border: "1px solid rgba(148,163,184,0.08)" }}>
+      <p className="text-[#64748B] uppercase mb-1" style={{ fontSize: "0.625rem", letterSpacing: typography.letterSpacing.label }}>
+        {label}
+      </p>
+      <p className="font-bold text-sm" style={{ color: color ?? "#F8FAFC" }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PersonalAccountCard({ account, delay = 0 }: { account: PersonalAccount; delay?: number }) {
+  const { trades } = useAccounts();
+  const stats = computePersonalAccountStats(account, trades);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: account.currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay }}
+      className="rounded-xl p-5"
+      style={{
+        background: glassmorphism.card.background,
+        backdropFilter: glassmorphism.card.backdropBlur,
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: borderRadius.xl,
+      }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="min-w-0">
+          <p className="text-[#F8FAFC] font-semibold text-sm truncate">{account.accountName}</p>
+          <p className="text-[#64748B] text-xs">{account.broker || account.currency}</p>
+        </div>
+        <Badge className="bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.3)] capitalize">
+          {account.status}
+        </Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <MiniStat label="Initial Capital" value={formatCurrency(stats.initialCapital)} />
+        <MiniStat label="Current Equity" value={formatCurrency(stats.currentEquity)} />
+        <MiniStat label="Net PnL" value={formatCurrency(stats.netPnL)} color={stats.netPnL >= 0 ? EMERALD : "#EF4444"} />
+        <MiniStat
+          label="ROI"
+          value={`${stats.roiPercent >= 0 ? "+" : ""}${stats.roiPercent.toFixed(2)}%`}
+          color={stats.roiPercent >= 0 ? EMERALD : "#EF4444"}
+        />
+        <MiniStat label="Trades" value={String(stats.tradeStats.totalTrades)} />
+        <MiniStat label="Win Rate" value={`${stats.tradeStats.winRate.toFixed(1)}%`} />
+        <MiniStat label="Avg Win" value={formatCurrency(stats.tradeStats.avgWin)} color={EMERALD} />
+        <MiniStat label="Avg Loss" value={formatCurrency(stats.tradeStats.avgLoss)} color="#EF4444" />
+      </div>
+      {(stats.drawdown || stats.riskUsage) && (
+        <div className="flex flex-wrap gap-2 mt-3 pt-3" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+          {stats.drawdown && (
+            <Badge className="bg-[rgba(20,184,166,0.15)] text-[#14B8A6] border border-[rgba(20,184,166,0.3)]">
+              Drawdown: {formatCurrency(stats.drawdown.usedDrawdownDollars)} / {formatCurrency(stats.drawdown.maxDrawdownDollars)}
+            </Badge>
+          )}
+          {stats.riskUsage && (
+            <Badge className="bg-[rgba(20,184,166,0.15)] text-[#14B8A6] border border-[rgba(20,184,166,0.3)]">
+              {[
+                stats.riskUsage.riskPerTradePercent != null ? `Risk/trade: ${stats.riskUsage.riskPerTradePercent}%` : null,
+                stats.riskUsage.dailyLossLimitPercent != null ? `Daily limit: ${stats.riskUsage.dailyLossLimitPercent}%` : null,
+                stats.riskUsage.maxDrawdownLimitPercent != null ? `Max DD: ${stats.riskUsage.maxDrawdownLimitPercent}%` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Badge>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function PersonalAccountsSection() {
+  const { personalAccounts } = useAccounts();
+  const [addOpen, setAddOpen] = useState(false);
+  const visibleAccounts = personalAccounts.filter((a) => a.status !== "archived");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h3 className="text-[#F8FAFC] font-bold" style={{ fontSize: typography.fontSize.section }}>
+          Personal Accounts
+        </h3>
+        <Button type="button" onClick={() => setAddOpen(true)} className="bg-[#10B981] hover:bg-[#0EA271] text-white rounded-xl">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Personal Account
+        </Button>
+      </div>
+
+      {visibleAccounts.length === 0 ? (
+        <div
+          className="rounded-xl p-10 flex flex-col items-center justify-center text-center"
+          style={{
+            background: glassmorphism.card.background,
+            backdropFilter: glassmorphism.card.backdropBlur,
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: borderRadius.xl,
+          }}
+        >
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: `${EMERALD}1A` }}>
+            <Landmark className="w-6 h-6" style={{ color: EMERALD }} />
+          </div>
+          <p className="text-[#F8FAFC] font-semibold">No Personal Accounts yet</p>
+          <p className="text-[#64748B] text-sm mt-1 max-w-sm">
+            Add a bring-your-own-capital account to track its equity, trades, and risk — no prop firm rules required.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {visibleAccounts.map((a, i) => (
+            <PersonalAccountCard key={a.id} account={a} delay={i * 0.05} />
+          ))}
+        </div>
+      )}
+
+      <AddPersonalAccountDialog open={addOpen} onOpenChange={setAddOpen} />
+    </div>
+  );
+}
+
 export default function PortfolioPage() {
   const { portfolio } = usePersonalPortfolio();
-  return portfolio ? <PortfolioDashboard /> : <PortfolioSetup />;
+  return (
+    <div className="space-y-8">
+      {portfolio ? <PortfolioDashboard /> : <PortfolioSetup />}
+      <PersonalAccountsSection />
+    </div>
+  );
 }

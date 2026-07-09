@@ -142,6 +142,7 @@ export default function EdgePilotPage() {
   const {
     challenges,
     fundedAccounts,
+    personalAccounts,
     trades,
     payouts,
     getDashboardKPIs,
@@ -167,6 +168,7 @@ export default function EdgePilotPage() {
         trades,
         challenges,
         fundedAccounts,
+        personalAccounts,
         payouts,
         dashboardKPIs,
         traderIdentity: identity,
@@ -177,12 +179,12 @@ export default function EdgePilotPage() {
         traderEvolution: evolution,
         dataConfidence,
       }),
-    [trades, challenges, fundedAccounts, payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
+    [trades, challenges, fundedAccounts, personalAccounts, payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
   );
 
   const riskStates = useMemo(
-    () => getAccountRiskStates(challenges, fundedAccounts, trades),
-    [challenges, fundedAccounts, trades]
+    () => getAccountRiskStates(challenges, fundedAccounts, trades, personalAccounts),
+    [challenges, fundedAccounts, trades, personalAccounts]
   );
 
   // ── Today's Checklist: two rows read straight off already-computed
@@ -306,25 +308,29 @@ export default function EdgePilotPage() {
               const source =
                 state.account.type === "challenge"
                   ? challenges.find((c) => c.id === state.account.id)
-                  : fundedAccounts.find((a) => a.id === state.account.id);
+                  : state.account.type === "funded"
+                    ? fundedAccounts.find((a) => a.id === state.account.id)
+                    : personalAccounts.find((p) => p.id === state.account.id);
               const equity = state.account.accountSize + state.account.currentProfit;
               const targetLeft =
                 state.account.type === "challenge" && source && "profitTarget" in source && source.profitTarget
                   ? fmt$(Math.max(0, source.profitTarget - state.account.currentProfit))
                   : "—";
+              const accountTypeLabel =
+                state.account.type === "challenge" ? "Challenge" : state.account.type === "funded" ? "Funded Account" : "Personal Account";
               return (
                 <div key={`${state.account.type}-${state.account.id}`} className="rounded-xl p-5" style={CARD}>
                   <div className="flex items-center justify-between gap-2 mb-4">
                     <div className="min-w-0">
                       <p className="text-[#F8FAFC] font-semibold text-sm truncate">{state.account.name}</p>
-                      <p className="text-[#64748B] text-xs">{state.account.type === "challenge" ? "Challenge" : "Funded Account"}</p>
+                      <p className="text-[#64748B] text-xs">{accountTypeLabel}</p>
                     </div>
                     <Badge color={source?.status === "active" ? "#10B981" : "#94A3B8"}>{source?.status ?? "—"}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <StatTile label="Current Equity" value={fmt$(equity)} />
                     <StatTile label="Daily Loss Buffer" value={state.dailyBuffer !== null ? fmt$(state.dailyBuffer) : "—"} />
-                    <StatTile label="Max Loss Buffer" value={fmt$(state.maxBuffer)} />
+                    <StatTile label="Max Loss Buffer" value={state.maxBuffer !== null ? fmt$(state.maxBuffer) : "N/A"} />
                     <StatTile label="Target Left" value={targetLeft} />
                     <StatTile
                       label="Recommended Risk"
@@ -360,9 +366,13 @@ export default function EdgePilotPage() {
                 state.dailyLimit !== null && state.dailyBuffer !== null && state.dailyLimit > 0
                   ? ((state.dailyLimit - state.dailyBuffer) / state.dailyLimit) * 100
                   : null;
-              const maxUsedPct = state.maxLimit > 0 ? ((state.maxLimit - state.maxBuffer) / state.maxLimit) * 100 : 0;
+              const maxUsedPct =
+                state.maxLimit !== null && state.maxBuffer !== null && state.maxLimit > 0
+                  ? ((state.maxLimit - state.maxBuffer) / state.maxLimit) * 100
+                  : null;
+              const isPersonal = state.account.type === "personal";
               const targetPct =
-                !isFunded && ruleSource?.profitTarget
+                state.account.type === "challenge" && ruleSource?.profitTarget
                   ? Math.min(100, (state.account.currentProfit / ruleSource.profitTarget) * 100)
                   : null;
 
@@ -387,12 +397,19 @@ export default function EdgePilotPage() {
                     </div>
                   )}
 
-                  <AnimatedBar
-                    label="Max Loss"
-                    percentage={maxUsedPct}
-                    color={maxSeverity ? SEVERITY_COLOR[maxSeverity] : "#298DFF"}
-                    valueLabel={`${Math.round(maxUsedPct)}% used`}
-                  />
+                  {maxUsedPct !== null ? (
+                    <AnimatedBar
+                      label="Max Loss"
+                      percentage={maxUsedPct}
+                      color={maxSeverity ? SEVERITY_COLOR[maxSeverity] : "#298DFF"}
+                      valueLabel={`${Math.round(maxUsedPct)}% used`}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>Max Loss</span>
+                      <span className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs }}>N/A — no max drawdown limit</span>
+                    </div>
+                  )}
 
                   {targetPct !== null ? (
                     <AnimatedBar
@@ -404,20 +421,37 @@ export default function EdgePilotPage() {
                   ) : (
                     <div className="flex items-center justify-between">
                       <span className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.sm }}>Profit Target</span>
-                      <span className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs }}>{isFunded ? "N/A — funded stage" : "Not set"}</span>
+                      <span className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs }}>
+                        {isFunded ? "N/A — funded stage" : isPersonal ? "N/A — no challenge target" : "Not set"}
+                      </span>
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Badge color="#298DFF">Consistency: {ruleSource?.consistencyRule ?? "Not set"}</Badge>
-                    <Badge color="#298DFF">
-                      Min. Trading Days: {tradingDays}
-                      {minDays != null ? ` / ${minDays}` : ""}
-                    </Badge>
-                    <Badge color="#298DFF">
-                      Payout Rules: {isFunded ? formatPayoutRules(ruleSource) : "N/A — not yet funded"}
-                    </Badge>
-                  </div>
+                  {/* Personal Accounts get none of the prop firm rule badges below —
+                      no consistency rule, no min trading days, no payout rules. */}
+                  {isPersonal ? (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {state.account.riskPerTradePercent != null && (
+                        <Badge color="#298DFF">Risk Per Trade: {state.account.riskPerTradePercent}%</Badge>
+                      )}
+                      {state.account.dailyDrawdown == null &&
+                        state.account.maxDrawdown == null &&
+                        state.account.riskPerTradePercent == null && (
+                          <Badge color="#94A3B8">No optional rules configured</Badge>
+                        )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Badge color="#298DFF">Consistency: {ruleSource?.consistencyRule ?? "Not set"}</Badge>
+                      <Badge color="#298DFF">
+                        Min. Trading Days: {tradingDays}
+                        {minDays != null ? ` / ${minDays}` : ""}
+                      </Badge>
+                      <Badge color="#298DFF">
+                        Payout Rules: {isFunded ? formatPayoutRules(ruleSource) : "N/A — not yet funded"}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               );
             })}

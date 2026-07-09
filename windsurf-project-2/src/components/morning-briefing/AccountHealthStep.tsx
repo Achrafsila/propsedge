@@ -51,7 +51,9 @@ function HealthCard({ briefing, riskState }: { briefing: AccountBriefing; riskSt
           <p className="text-[#64748B] uppercase mb-0.5" style={{ fontSize: "0.625rem", letterSpacing: typography.letterSpacing.label }}>
             Remaining Max Buffer
           </p>
-          <p className="text-[#F8FAFC] font-bold text-sm">{riskState ? fmt$(riskState.maxBuffer) : "—"}</p>
+          <p className="text-[#F8FAFC] font-bold text-sm">
+            {riskState?.maxBuffer !== null && riskState?.maxBuffer !== undefined ? fmt$(riskState.maxBuffer) : "N/A"}
+          </p>
         </div>
       </div>
     </div>

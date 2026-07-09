@@ -1,4 +1,4 @@
-import { Trade, Challenge, FundedAccount, Payout, DashboardKPIs } from "@/types";
+import { Trade, Challenge, FundedAccount, Payout, DashboardKPIs, PersonalAccount } from "@/types";
 import { computeDrawdown, resolveDrawdownDollars } from "@/lib/drawdown";
 import { TraderIdentity } from "./traderIdentity";
 import { TraderHabits } from "./traderHabits";
@@ -77,6 +77,7 @@ export interface AICoachInput {
   trades: Trade[];
   challenges: Challenge[];
   fundedAccounts: FundedAccount[];
+  personalAccounts?: PersonalAccount[];
   payouts?: Payout[];
   dashboardKPIs?: DashboardKPIs;
   traderIdentity: TraderIdentity;
@@ -134,22 +135,34 @@ function severityRank(s: CoachSeverity): number {
 
 export interface AccountRef {
   id: string;
-  type: "challenge" | "funded";
+  type: "challenge" | "funded" | "personal";
   name: string;
   accountSize: number;
   currentProfit: number;
-  maxDrawdown: number;
+  // Non-null for challenge/funded (Supabase requires it). Personal accounts
+  // have NO mandatory max drawdown rule by design — null means "no rule
+  // configured", not "0% allowed".
+  maxDrawdown: number | null;
   // FundedAccount carries no dailyDrawdown field in the schema (only
   // Challenge does — see src/types/index.ts) and V1 cannot add one
   // (no Supabase schema changes). The Daily Loss Guardrail therefore only
   // ever fires for challenge accounts; this is a known data-model gap,
-  // not an oversight.
+  // not an oversight. Personal accounts: null unless the user configured
+  // dailyLossLimit.
   dailyDrawdown: number | null;
+  // Personal accounts only — percent of account size the user has chosen
+  // to risk per trade. null = no personal sizing rule configured.
+  riskPerTradePercent: number | null;
 }
 
-function buildActiveAccountRefs(challenges: Challenge[], fundedAccounts: FundedAccount[]): AccountRef[] {
+function buildActiveAccountRefs(
+  challenges: Challenge[],
+  fundedAccounts: FundedAccount[],
+  personalAccounts: PersonalAccount[] = []
+): AccountRef[] {
   const activeChallenges = challenges.filter((c) => c.status === "active");
   const activeFunded = fundedAccounts.filter((a) => a.status === "active");
+  const activePersonal = personalAccounts.filter((p) => p.status === "active");
   return [
     ...activeChallenges.map((c): AccountRef => ({
       id: c.id,
@@ -159,6 +172,7 @@ function buildActiveAccountRefs(challenges: Challenge[], fundedAccounts: FundedA
       currentProfit: c.currentProfit,
       maxDrawdown: c.maxDrawdown,
       dailyDrawdown: c.dailyDrawdown ?? null,
+      riskPerTradePercent: null,
     })),
     ...activeFunded.map((a): AccountRef => ({
       id: a.id,
@@ -168,6 +182,19 @@ function buildActiveAccountRefs(challenges: Challenge[], fundedAccounts: FundedA
       currentProfit: a.currentProfit,
       maxDrawdown: a.maxDrawdown,
       dailyDrawdown: null,
+      riskPerTradePercent: null,
+    })),
+    // No "PropFirm — " prefix — personal account names never collide with
+    // the challenge/funded naming convention, which always carries that prefix.
+    ...activePersonal.map((p): AccountRef => ({
+      id: p.id,
+      type: "personal",
+      name: p.accountName,
+      accountSize: p.initialCapital,
+      currentProfit: p.currentEquity - p.initialCapital,
+      maxDrawdown: p.maxDrawdownLimit ?? null,
+      dailyDrawdown: p.dailyLossLimit ?? null,
+      riskPerTradePercent: p.riskPerTradePercent ?? null,
     })),
   ];
 }
@@ -205,12 +232,50 @@ function suggestedRiskFromBuffer(buffer: number, factor: number): number {
 const DAILY_RISK_FACTOR = 0.08;
 const MAX_LOSS_RISK_FACTOR = 0.05;
 
+// Trailing window for a Personal Account's "how is equity trending" signal
+// (capital protection / growth mode + the Recommended Risk rationale).
+// No peak-equity history is stored anywhere in the schema, so this is
+// approximated from realized trade P&L over the window, same convention
+// computeAccountRiskState already uses for drawdown below.
+const RECENT_EQUITY_WINDOW_DAYS = 7;
+
+function addDaysToDateString(dateString: string, days: number): string {
+  const d = new Date(`${dateString}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Personal accounts only — % change in equity (realized P&L / account size)
+// over the trailing window, used to drive capital-protection/growth
+// classification and the Recommended Risk rationale. null for non-personal
+// accounts (they have no equivalent notion in V1).
+function computeRecentEquityChangePercent(account: AccountRef, trades: Trade[], today: string): number | null {
+  if (account.type !== "personal" || account.accountSize <= 0) return null;
+  const cutoff = addDaysToDateString(today, -RECENT_EQUITY_WINDOW_DAYS);
+  const windowPnl = trades
+    .filter(
+      (t) =>
+        t.accountId === account.id &&
+        t.accountType === account.type &&
+        t.entryDate >= cutoff &&
+        t.entryDate <= today
+    )
+    .reduce((s, t) => s + t.pnl, 0);
+  return (windowPnl / account.accountSize) * 100;
+}
+
 export interface AccountRiskState {
   account: AccountRef;
   dailyLimit: number | null;
   dailyBuffer: number | null;
-  maxLimit: number;
-  maxBuffer: number;
+  // null = no max drawdown rule configured for this account (only possible
+  // for Personal Accounts — challenge/funded always carry a max drawdown).
+  maxLimit: number | null;
+  maxBuffer: number | null;
+  recentEquityChangePercent: number | null;
 }
 
 function computeAccountRiskState(account: AccountRef, trades: Trade[], today: string): AccountRiskState {
@@ -229,14 +294,21 @@ function computeAccountRiskState(account: AccountRef, trades: Trade[], today: st
   // history is stored anywhere in the schema to trail against precisely),
   // matching how challenges/page.tsx and funded/page.tsx already treat
   // drawdownMode as informational rather than branching the formula.
-  const dd = computeDrawdown(account.maxDrawdown, account.accountSize, account.currentProfit);
+  let maxLimit: number | null = null;
+  let maxBuffer: number | null = null;
+  if (account.maxDrawdown !== null) {
+    const dd = computeDrawdown(account.maxDrawdown, account.accountSize, account.currentProfit);
+    maxLimit = dd.maxDrawdownDollars;
+    maxBuffer = dd.remainingDrawdownDollars;
+  }
 
   return {
     account,
     dailyLimit,
     dailyBuffer,
-    maxLimit: dd.maxDrawdownDollars,
-    maxBuffer: dd.remainingDrawdownDollars,
+    maxLimit,
+    maxBuffer,
+    recentEquityChangePercent: computeRecentEquityChangePercent(account, trades, today),
   };
 }
 
@@ -270,7 +342,8 @@ function buildDailyLossItem(state: AccountRiskState): CoachItem | null {
 
 // ── Rule 2: Max Loss Guardrail ───────────────────────────────────────────
 
-function buildMaxLossItem(state: AccountRiskState): CoachItem {
+function buildMaxLossItem(state: AccountRiskState): CoachItem | null {
+  if (state.maxLimit === null || state.maxBuffer === null) return null;
   const { account, maxLimit, maxBuffer } = state;
   const ratio = maxLimit > 0 ? maxBuffer / maxLimit : 1;
   const severity = severityFromBufferRatio(ratio);
@@ -548,6 +621,14 @@ function hasRevengeSignal(discipline: TraderDiscipline): boolean {
 }
 
 const RISK_LEVEL_HARD_CAP_RATIO = 0.01; // never recommend more than 1% of account size per trade
+// Personal Accounts with neither a daily nor max drawdown rule configured
+// fall back to this — tighter than the generic 1% hard cap since there's no
+// other guardrail backstopping the trader on that account.
+const PERSONAL_DEFAULT_RISK_RATIO = 0.005;
+// A trailing-week equity drop at or beyond this magnitude puts a Personal
+// Account into capital-protection mode (Recommended Risk rationale + Morning
+// Briefing mode) — the ticket's own example ("down 3.2%... reduce risk").
+const PERSONAL_PROTECTION_THRESHOLD_PCT = 2;
 
 function buildRecommendedRisk(
   primaryState: AccountRiskState | null,
@@ -558,12 +639,26 @@ function buildRecommendedRisk(
     return { amount: null, currency: "USD", rationale: "No active accounts to size risk for." };
   }
 
-  const { account, dailyBuffer, maxBuffer } = primaryState;
+  const { account, dailyBuffer, maxBuffer, recentEquityChangePercent } = primaryState;
 
   const candidates: { amount: number; label: string }[] = [];
   if (dailyBuffer !== null) candidates.push({ amount: dailyBuffer * DAILY_RISK_FACTOR, label: "today's daily loss buffer" });
-  candidates.push({ amount: maxBuffer * MAX_LOSS_RISK_FACTOR, label: "the max drawdown buffer" });
+  if (maxBuffer !== null) candidates.push({ amount: maxBuffer * MAX_LOSS_RISK_FACTOR, label: "the max drawdown buffer" });
   candidates.push({ amount: account.accountSize * RISK_LEVEL_HARD_CAP_RATIO, label: "a 1% of account size cap" });
+
+  if (account.type === "personal") {
+    if (account.riskPerTradePercent !== null) {
+      candidates.push({
+        amount: account.accountSize * (account.riskPerTradePercent / 100),
+        label: "your configured risk per trade",
+      });
+    } else if (dailyBuffer === null && maxBuffer === null) {
+      candidates.push({
+        amount: account.accountSize * PERSONAL_DEFAULT_RISK_RATIO,
+        label: "a conservative 0.5% of account size default (no risk rules configured)",
+      });
+    }
+  }
 
   const tightest = candidates.reduce((a, b) => (b.amount < a.amount ? b : a));
   let amount = tightest.amount;
@@ -589,6 +684,15 @@ function buildRecommendedRisk(
   }
 
   amount = Math.max(0, Math.floor(amount / 5) * 5);
+
+  if (account.type === "personal" && recentEquityChangePercent !== null && recentEquityChangePercent <= -PERSONAL_PROTECTION_THRESHOLD_PCT) {
+    const riskPct = account.accountSize > 0 ? (amount / account.accountSize) * 100 : 0;
+    return {
+      amount,
+      currency: "USD",
+      rationale: `${account.name} is down ${Math.abs(recentEquityChangePercent).toFixed(1)}% this week. Reduce risk to ${riskPct.toFixed(2)}% until equity recovers. (${reasons.join("; ")})`,
+    };
+  }
 
   return {
     amount,
@@ -727,10 +831,11 @@ function buildSummary(
 export function getAccountRiskStates(
   challenges: Challenge[],
   fundedAccounts: FundedAccount[],
-  trades: Trade[]
+  trades: Trade[],
+  personalAccounts: PersonalAccount[] = []
 ): AccountRiskState[] {
   const today = todayDateString();
-  return buildActiveAccountRefs(challenges, fundedAccounts).map((account) =>
+  return buildActiveAccountRefs(challenges, fundedAccounts, personalAccounts).map((account) =>
     computeAccountRiskState(account, trades, today)
   );
 }
@@ -812,10 +917,10 @@ function worstBufferRatio(state: AccountRiskState): { ratio: number; buffer: num
   if (state.dailyLimit !== null && state.dailyBuffer !== null && state.dailyLimit > 0) {
     candidates.push({ ratio: state.dailyBuffer / state.dailyLimit, buffer: state.dailyBuffer });
   }
-  if (state.maxLimit > 0) {
+  if (state.maxLimit !== null && state.maxBuffer !== null && state.maxLimit > 0) {
     candidates.push({ ratio: state.maxBuffer / state.maxLimit, buffer: state.maxBuffer });
   }
-  if (candidates.length === 0) return { ratio: 1, buffer: state.maxBuffer };
+  if (candidates.length === 0) return { ratio: 1, buffer: state.maxBuffer ?? 0 };
   return candidates.reduce((a, b) => (b.ratio < a.ratio ? b : a));
 }
 
@@ -868,6 +973,18 @@ function classifyBriefingMode(
       reliableExpectancy && tradesNeeded !== null && tradesNeeded <= AGGRESSIVE_ATTACK_MAX_TRADES_NEEDED
         ? "aggressive_attack"
         : "growth";
+  } else if (state.account.type === "personal") {
+    // No challenge target to attack toward — Personal Accounts classify
+    // purely off the trailing-week equity trend (capital protection vs
+    // growth vs steady), never off payout/challenge concepts.
+    const chg = state.recentEquityChangePercent;
+    if (chg !== null && chg <= -PERSONAL_PROTECTION_THRESHOLD_PCT) {
+      mode = "protection";
+    } else if (chg !== null && chg >= 0) {
+      mode = "growth";
+    } else {
+      mode = "normal";
+    }
   } else {
     mode = "normal";
   }
@@ -922,10 +1039,10 @@ function computeAccountHealthTier(
 }
 
 export function getAccountBriefings(input: AICoachInput, objective?: TodaysObjective): AccountBriefing[] {
-  const { trades, challenges, fundedAccounts, payouts = [] } = input;
+  const { trades, challenges, fundedAccounts, personalAccounts = [], payouts = [] } = input;
   const today = todayDateString();
 
-  const riskStates = buildActiveAccountRefs(challenges, fundedAccounts).map((account) =>
+  const riskStates = buildActiveAccountRefs(challenges, fundedAccounts, personalAccounts).map((account) =>
     computeAccountRiskState(account, trades, today)
   );
 
@@ -937,7 +1054,8 @@ export function getAccountBriefings(input: AICoachInput, objective?: TodaysObjec
   for (const state of riskStates) {
     const daily = buildDailyLossItem(state);
     if (daily) accountAlerts.push(daily);
-    accountAlerts.push(buildMaxLossItem(state));
+    const maxLoss = buildMaxLossItem(state);
+    if (maxLoss) accountAlerts.push(maxLoss);
   }
 
   const propRuleAlerts: CoachItem[] = [];
@@ -1019,17 +1137,18 @@ export function getAccountBriefings(input: AICoachInput, objective?: TodaysObjec
 // ── Entry point ────────────────────────────────────────────────────────────
 
 export function getAICoachRecommendation(input: AICoachInput): AICoachOutput {
-  const { trades, challenges, fundedAccounts, payouts = [], dashboardKPIs, traderDiscipline, traderEdge } = input;
+  const { trades, challenges, fundedAccounts, personalAccounts = [], payouts = [], dashboardKPIs, traderDiscipline, traderEdge } = input;
   const today = todayDateString();
 
-  const activeAccounts = buildActiveAccountRefs(challenges, fundedAccounts);
+  const activeAccounts = buildActiveAccountRefs(challenges, fundedAccounts, personalAccounts);
   const riskStates = activeAccounts.map((account) => computeAccountRiskState(account, trades, today));
 
   const accountAlerts: CoachItem[] = [];
   for (const state of riskStates) {
     const daily = buildDailyLossItem(state);
     if (daily) accountAlerts.push(daily);
-    accountAlerts.push(buildMaxLossItem(state));
+    const maxLoss = buildMaxLossItem(state);
+    if (maxLoss) accountAlerts.push(maxLoss);
   }
 
   const propRuleAlerts: CoachItem[] = [];

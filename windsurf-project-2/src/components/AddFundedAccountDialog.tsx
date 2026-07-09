@@ -99,7 +99,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
               <option value="">None (Manual Entry)</option>
               {challenges.map((challenge) => (
                 <option key={challenge.id} value={challenge.id}>
-                  {getAccountOptionLabel(challenge, true)}
+                  {getAccountOptionLabel(challenge, "challenge")}
                 </option>
               ))}
             </select>

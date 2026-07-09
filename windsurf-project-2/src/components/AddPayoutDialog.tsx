@@ -87,7 +87,7 @@ export function AddPayoutDialog({
               <option value="">Select an account</option>
               {fundedAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {getAccountOptionLabel(account, false)}
+                  {getAccountOptionLabel(account, "funded")}
                 </option>
               ))}
             </select>

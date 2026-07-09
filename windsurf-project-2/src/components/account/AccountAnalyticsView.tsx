@@ -808,7 +808,7 @@ function Header({
             >
               {allAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {getAccountOptionLabel(a, accountType === "challenge")}
+                  {getAccountOptionLabel(a, accountType)}
                 </option>
               ))}
             </select>

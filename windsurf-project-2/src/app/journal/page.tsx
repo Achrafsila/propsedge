@@ -16,34 +16,48 @@ import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
 import { buildAccountIndex, filterGlobalTrades, GlobalFilters } from "@/lib/analytics/globalAnalytics";
 import {
+  AccountKind,
   ACCOUNT_STATUS_BADGE_COLOR,
   getAccountOptionLabel,
   getAccountStartDateLabel,
   getAccountStatusLabel,
 } from "@/lib/accountLabels";
+import { Challenge, FundedAccount, PersonalAccount } from "@/types";
 
 export default function Journal() {
-  const { trades, tradesLoading, deleteTrade, deleteTradesForAccount, challenges, fundedAccounts } = useAccounts();
+  const { trades, tradesLoading, deleteTrade, deleteTradesForAccount, challenges, fundedAccounts, personalAccounts } = useAccounts();
   const { tradingMode } = useTradingMode();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [selectedAccountType, setSelectedAccountType] = useState<"challenge" | "funded">("challenge");
+  const [selectedAccountType, setSelectedAccountType] = useState<AccountKind>("challenge");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const selectableAccounts = selectedAccountType === "challenge" ? challenges : fundedAccounts;
+  // The account-type selector tracks Trading Mode — Prop Firm mode only
+  // ever offers Challenge/Funded, Personal Capital mode only ever offers
+  // Personal. Snapped directly during render (same "compare against last
+  // rendered value" pattern the "smart reset" below already uses) whenever
+  // the mode actually changes, rather than in a useEffect.
+  const [prevTradingMode, setPrevTradingMode] = useState(tradingMode);
+  if (tradingMode !== prevTradingMode) {
+    setPrevTradingMode(tradingMode);
+    setSelectedAccountType(tradingMode === "personal-capital" ? "personal" : "challenge");
+    setSelectedAccountId("");
+  }
+
+  const selectableAccounts: (Challenge | FundedAccount | PersonalAccount)[] =
+    selectedAccountType === "challenge" ? challenges : selectedAccountType === "funded" ? fundedAccounts : personalAccounts;
   const hasSelectedAccount = selectedAccountId !== "";
 
   // Journal must never mix Prop Firm and Personal Capital trades — Prop
   // Firm mode is a no-op pass-through (identical to before Personal
   // Capital existed); Personal Capital mode filters down to trades that
-  // are actually personal. See src/lib/tradingMode.ts. Challenge/Funded
-  // account selection above is still Prop-Firm-only (no personal accounts
-  // exist yet), so this is what keeps a Personal Capital view empty even
-  // if a challenge/funded account happens to be selected.
+  // are actually personal. See src/lib/tradingMode.ts. The account-type
+  // selector above is kept in lockstep with the mode so the two can never
+  // disagree (e.g. a Challenge selected while in Personal Capital mode).
   const modeTrades = useMemo(() => getTradesForTradingMode(trades, tradingMode), [trades, tradingMode]);
 
   // Same filtering engine Trader DNA / Analytics uses (filterGlobalTrades),
@@ -51,7 +65,10 @@ export default function Journal() {
   // scope/accountId narrow to the single account selected above; propFirm/
   // instrument/session are left unbounded since the Journal doesn't expose
   // those filters.
-  const accountIndex = useMemo(() => buildAccountIndex(challenges, fundedAccounts), [challenges, fundedAccounts]);
+  const accountIndex = useMemo(
+    () => buildAccountIndex(challenges, fundedAccounts, personalAccounts),
+    [challenges, fundedAccounts, personalAccounts]
+  );
   const journalFilters: GlobalFilters = useMemo(
     () => ({
       scope: selectedAccountType,
@@ -99,12 +116,15 @@ export default function Journal() {
   const totalPnL = accountTrades.reduce((sum, t) => sum + t.pnl, 0);
   const avgTrade = totalTrades > 0 ? totalPnL / totalTrades : 0;
 
-  const getAccountName = (accountId: string, accountType: "challenge" | "funded") => {
+  const getAccountName = (accountId: string, accountType: AccountKind) => {
     if (accountType === "challenge") {
       const challenge = challenges.find(c => c.id === accountId);
       return challenge?.accountName || "Unknown Account";
-    } else {
+    } else if (accountType === "funded") {
       const account = fundedAccounts.find(a => a.id === accountId);
+      return account?.accountName || "Unknown Account";
+    } else {
+      const account = personalAccounts.find(p => p.id === accountId);
       return account?.accountName || "Unknown Account";
     }
   };
@@ -215,13 +235,19 @@ export default function Journal() {
             <select
               value={selectedAccountType}
               onChange={(e) => {
-                setSelectedAccountType(e.target.value as "challenge" | "funded");
+                setSelectedAccountType(e.target.value as AccountKind);
                 setSelectedAccountId("");
               }}
               className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             >
-              <option value="challenge">Challenge</option>
-              <option value="funded">Funded</option>
+              {tradingMode === "prop-firm" ? (
+                <>
+                  <option value="challenge">Challenge</option>
+                  <option value="funded">Funded</option>
+                </>
+              ) : (
+                <option value="personal">Personal Account</option>
+              )}
             </select>
           </div>
           <div className="space-y-2">
@@ -234,15 +260,14 @@ export default function Journal() {
               <option value="">Select an account</option>
               {selectableAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {getAccountOptionLabel(account, selectedAccountType === "challenge")}
+                  {getAccountOptionLabel(account, selectedAccountType)}
                 </option>
               ))}
             </select>
             {hasSelectedAccount && (() => {
               const selectedAccount = selectableAccounts.find((a) => a.id === selectedAccountId);
               if (!selectedAccount) return null;
-              const isChallenge = selectedAccountType === "challenge";
-              const status = getAccountStatusLabel(selectedAccount, isChallenge);
+              const status = getAccountStatusLabel(selectedAccount, selectedAccountType);
               const color = ACCOUNT_STATUS_BADGE_COLOR[status] ?? "#94A3B8";
               return (
                 <div className="flex items-center gap-2 mt-1">
@@ -252,7 +277,7 @@ export default function Journal() {
                   >
                     {status}
                   </span>
-                  <span className="text-[#64748B] text-xs">Start: {getAccountStartDateLabel(selectedAccount, isChallenge)}</span>
+                  <span className="text-[#64748B] text-xs">Start: {getAccountStartDateLabel(selectedAccount, selectedAccountType)}</span>
                 </div>
               );
             })()}
