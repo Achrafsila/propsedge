@@ -11,14 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-interface DeleteAllTradesDialogProps {
+interface DeleteAccountTradesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isDeleting: boolean;
+  accountLabel: string;
 }
 
-export function DeleteAllTradesDialog({ open, onOpenChange, onConfirm, isDeleting }: DeleteAllTradesDialogProps) {
+export function DeleteAccountTradesDialog({ open, onOpenChange, onConfirm, isDeleting, accountLabel }: DeleteAccountTradesDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(next) => !isDeleting && onOpenChange(next)}>
       <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] max-w-md">
@@ -30,10 +31,11 @@ export function DeleteAllTradesDialog({ open, onOpenChange, onConfirm, isDeletin
             >
               <AlertTriangle className="w-5 h-5 text-[#EF4444]" />
             </div>
-            <DialogTitle className="text-[#F8FAFC]">Delete all trades?</DialogTitle>
+            <DialogTitle className="text-[#F8FAFC]">Delete all trades on this account?</DialogTitle>
           </div>
           <DialogDescription className="text-[#94A3B8]">
-            This action permanently deletes every imported trade. This action cannot be undone.
+            This permanently deletes every trade on <span className="text-[#F8FAFC] font-medium">{accountLabel}</span> only — trades on your
+            other accounts are not affected. This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -52,7 +54,7 @@ export function DeleteAllTradesDialog({ open, onOpenChange, onConfirm, isDeletin
             disabled={isDeleting}
             className="bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-xl disabled:opacity-50"
           >
-            {isDeleting ? "Deleting…" : "Delete Everything"}
+            {isDeleting ? "Deleting…" : "Delete Trades"}
           </Button>
         </DialogFooter>
       </DialogContent>

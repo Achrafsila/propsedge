@@ -36,7 +36,6 @@ import {
   deleteTradeDb,
   deleteTradesByAccountDb,
   deleteTradesByIdsDb,
-  deleteAllTradesDb,
 } from "@/lib/supabase/trades";
 import {
   fetchPayouts,
@@ -80,7 +79,7 @@ interface AccountsContextType {
   addTrade: (trade: Omit<Trade, "id">) => Promise<Trade | null>;
   addTradesBatch: (trades: Omit<Trade, "id">[]) => Promise<TradeImportResult>;
   deleteTrade: (id: string) => void;
-  deleteAllTrades: () => Promise<void>;
+  deleteTradesForAccount: (accountId: string, accountType: "challenge" | "funded") => Promise<void>;
   getAccountPnL: (accountId: string, accountType: "challenge" | "funded") => number;
   convertChallengeToFunded: (challengeId: string, fundedAccount: Omit<FundedAccount, "id">) => void;
   getFundingRateStats: () => FundingRateStats;
@@ -505,35 +504,34 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       });
   };
 
-  // Wipes every trade the current user owns — used by "Delete All Trades"
-  // in the Trade Journal. deleteAllTradesDb is explicitly scoped to
-  // user.id (see src/lib/supabase/trades.ts), so this can never touch
-  // another user's data. Every account's P&L/drawdown was derived from
-  // trades that no longer exist, so each one is recalculated against an
-  // empty trade list — the exact same recalcAccount() math a single
-  // deleteTrade() already uses, just run once per account instead of once
-  // for the one account a single deleted trade belonged to. Every context
-  // consumer (Dashboard, Trader DNA, Analytics, Journal) reads
-  // trades/challenges/fundedAccounts straight from this context, so
-  // clearing them here refreshes every page with no separate refetch.
-  const deleteAllTrades = (): Promise<void> => {
-    if (!user) return Promise.resolve();
+  // Wipes every trade on a single account — used by "Delete All Trades" in
+  // the Trade Journal, which is scoped to whichever account is currently
+  // selected there, never every account the user owns. Reuses
+  // deleteTradesByAccountDb(), the same cascade delete already used to
+  // clear an account's trades when the account itself is deleted. The
+  // account's P&L/drawdown is recalculated against an empty trade list for
+  // just that account — the same recalcAccount() math deleteTrade() uses,
+  // run once instead of looping over every account.
+  const deleteTradesForAccount = (
+    accountId: string,
+    accountType: "challenge" | "funded"
+  ): Promise<void> => {
     const previousTrades = trades;
-    const previousChallenges = challenges;
-    const previousFundedAccounts = fundedAccounts;
+    const newTrades = trades.filter(
+      (t) => !(t.accountId === accountId && t.accountType === accountType)
+    );
 
-    setTrades([]); // optimistic clear
+    setTrades(newTrades); // optimistic clear
 
-    return deleteAllTradesDb(user.id)
+    return deleteTradesByAccountDb(accountId, accountType)
       .then(() => {
-        previousChallenges.forEach((c) => recalcAccount(c.id, "challenge", []));
-        previousFundedAccounts.forEach((a) => recalcAccount(a.id, "funded", []));
-        toast.success("All trades deleted successfully.");
+        recalcAccount(accountId, accountType, newTrades);
+        toast.success("Account trades deleted successfully.");
       })
       .catch((err) => {
-        console.error("Failed to delete all trades:", err);
+        console.error("Failed to delete account trades:", err);
         setTrades(previousTrades); // rollback
-        toast.error(`Failed to delete all trades: ${err?.message ?? String(err)}`);
+        toast.error(`Failed to delete account trades: ${err?.message ?? String(err)}`);
         throw err;
       });
   };
@@ -718,7 +716,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         addTrade,
         addTradesBatch,
         deleteTrade,
-        deleteAllTrades,
+        deleteTradesForAccount,
         getAccountPnL,
         convertChallengeToFunded,
         getFundingRateStats,

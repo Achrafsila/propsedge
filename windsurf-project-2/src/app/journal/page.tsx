@@ -11,7 +11,7 @@ import { getTradesForTradingMode } from "@/lib/tradingMode";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { DeleteAllTradesDialog } from "@/components/DeleteAllTradesDialog";
+import { DeleteAccountTradesDialog } from "@/components/DeleteAccountTradesDialog";
 import { motion } from "framer-motion";
 import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
 import { buildAccountIndex, filterGlobalTrades, GlobalFilters } from "@/lib/analytics/globalAnalytics";
@@ -23,7 +23,7 @@ import {
 } from "@/lib/accountLabels";
 
 export default function Journal() {
-  const { trades, tradesLoading, deleteTrade, deleteAllTrades, challenges, fundedAccounts } = useAccounts();
+  const { trades, tradesLoading, deleteTrade, deleteTradesForAccount, challenges, fundedAccounts } = useAccounts();
   const { tradingMode } = useTradingMode();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -67,17 +67,17 @@ export default function Journal() {
   const accountTrades = hasSelectedAccount ? filterGlobalTrades(modeTrades, journalFilters, accountIndex) : [];
 
   const handleDeleteAllTrades = async () => {
+    if (!hasSelectedAccount) return;
     setIsDeletingAll(true);
     try {
-      await deleteAllTrades();
+      await deleteTradesForAccount(selectedAccountId, selectedAccountType);
       setIsDeleteAllDialogOpen(false);
-      // Smart reset — behave like a brand-new account: no account selected,
-      // no date range applied.
-      setSelectedAccountId("");
+      // Stay on the same account (now empty) — only the date range resets,
+      // matching the "brand-new account" reset every other page uses.
       setDateFrom("");
       setDateTo("");
     } catch {
-      // deleteAllTrades() already surfaces an error toast; nothing else to do.
+      // deleteTradesForAccount() already surfaces an error toast; nothing else to do.
     } finally {
       setIsDeletingAll(false);
     }
@@ -167,11 +167,11 @@ export default function Journal() {
             variant="outline"
             className="border-[rgba(239,68,68,0.3)] text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] hover:border-[#EF4444] rounded-xl transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
             onClick={() => setIsDeleteAllDialogOpen(true)}
-            disabled={modeTrades.length === 0}
+            disabled={!hasSelectedAccount || accountTrades.length === 0}
             type="button"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Delete All Trades
+            Delete Account Trades
           </Button>
           <Button
             variant="outline"
@@ -609,11 +609,12 @@ export default function Journal() {
         defaultAccountType={selectedAccountType}
         defaultAccountId={selectedAccountId}
       />
-      <DeleteAllTradesDialog
+      <DeleteAccountTradesDialog
         open={isDeleteAllDialogOpen}
         onOpenChange={setIsDeleteAllDialogOpen}
         onConfirm={handleDeleteAllTrades}
         isDeleting={isDeletingAll}
+        accountLabel={hasSelectedAccount ? getAccountName(selectedAccountId, selectedAccountType) : ""}
       />
     </div>
   );
