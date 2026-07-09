@@ -18,7 +18,7 @@ import { useAccounts } from "@/context/AccountsContext";
 import { useTradingMode } from "@/context/TradingModeContext";
 import { PersonalCapitalDashboard } from "@/components/personal-capital/PersonalCapitalDashboard";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded } from "@/lib/challenges";
+import { getRootChallenges } from "@/lib/challenges";
 import { groupByNormalizedFirm } from "@/lib/propFirms";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
@@ -154,13 +154,15 @@ function DonutChart({ title, data }: { title: string; data: { name: string; valu
 }
 
 // ─── Chart types ──────────────────────────────────────────────────────────────
-type ChartMetric = "equity" | "profit" | "payouts" | "roi";
+// Three business views only — no generic Equity/Cumulative Profit/ROI. Each
+// tracks the combined equity (or withdrawals) of a single account family, so
+// this reads as a portfolio dashboard rather than a trading analytics report.
+type ChartMetric = "challengeCapital" | "fundedCapital" | "payouts";
 
 const METRIC_META: Record<ChartMetric, { label: string; color: string; format: (v: number) => string }> = {
-  equity:  { label: "Portfolio Equity",   color: "#298DFF", format: fmt$    },
-  profit:  { label: "Cumulative Profit",  color: "#10B981", format: fmt$    },
-  payouts: { label: "Cumulative Payouts", color: "#F59E0B", format: fmt$    },
-  roi:     { label: "ROI",               color: "#A855F7", format: fmtPct  },
+  challengeCapital: { label: "Challenge Capital",   color: "#298DFF", format: fmt$ },
+  fundedCapital:    { label: "Funded Capital",       color: "#10B981", format: fmt$ },
+  payouts:          { label: "Cumulative Payouts",   color: "#F59E0B", format: fmt$ },
 };
 
 // ─── Activity event ───────────────────────────────────────────────────────────
@@ -207,7 +209,7 @@ export default function Dashboard() {
     getDashboardKPIs,
   } = useAccounts();
 
-  const [metric, setMetric] = useState<ChartMetric>("equity");
+  const [metric, setMetric] = useState<ChartMetric>("challengeCapital");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [openChallenge, setOpenChallenge] = useState(false);
@@ -225,31 +227,41 @@ export default function Dashboard() {
   );
 
   // ── Chart series ───────────────────────────────────────────────────────────
+  // Three independent equity/withdrawal walks, one per business view — each
+  // account family's trades feed only its own series, so Challenge Capital
+  // and Funded Capital never mix (unlike the old single "equity" line).
   const allChartData = useMemo(() => {
-    const pnlByDate: Record<string, number> = {};
-    trades.forEach((t) => { pnlByDate[t.entryDate] = (pnlByDate[t.entryDate] || 0) + t.pnl; });
+    const activeChallengeIds = new Set(challenges.filter((c) => c.status === "active").map((c) => c.id));
+
+    const challengePnlByDate: Record<string, number> = {};
+    const fundedPnlByDate: Record<string, number> = {};
+    trades.forEach((t) => {
+      if (t.accountType === "challenge" && activeChallengeIds.has(t.accountId)) {
+        challengePnlByDate[t.entryDate] = (challengePnlByDate[t.entryDate] || 0) + t.pnl;
+      } else if (t.accountType === "funded") {
+        fundedPnlByDate[t.entryDate] = (fundedPnlByDate[t.entryDate] || 0) + t.pnl;
+      }
+    });
 
     const paidByDate: Record<string, number> = {};
     payouts.filter((p) => p.status === "paid").forEach((p) => {
       paidByDate[p.payoutDate] = (paidByDate[p.payoutDate] || 0) + p.receivedPayoutAmount;
     });
 
-    const dates = [...new Set([...Object.keys(pnlByDate), ...Object.keys(paidByDate)])].sort();
-    const initBalance = fundedAccounts.reduce((s, a) => s + a.initialBalance, 0);
-    const totalCosts  = getRootChallenges(challenges).reduce((s, c) => s + c.purchaseCost, 0);
+    const dates = [...new Set([...Object.keys(challengePnlByDate), ...Object.keys(fundedPnlByDate), ...Object.keys(paidByDate)])].sort();
 
-    let equity = initBalance;
-    let cumProfit = 0;
+    const challengeBase = challenges.filter((c) => c.status === "active").reduce((s, c) => s + c.accountSize, 0);
+    const fundedBase = fundedAccounts.reduce((s, a) => s + a.initialBalance, 0);
+
+    let challengeCapital = challengeBase;
+    let fundedCapital = fundedBase;
     let cumPayouts = 0;
 
     return dates.map((date) => {
-      const pnl    = pnlByDate[date]  || 0;
-      const payout = paidByDate[date] || 0;
-      equity     += pnl;
-      cumProfit  += pnl;
-      cumPayouts += payout;
-      const roi = totalCosts > 0 ? ((cumPayouts - totalCosts) / totalCosts) * 100 : 0;
-      return { date, equity, profit: cumProfit, payouts: cumPayouts, roi };
+      challengeCapital += challengePnlByDate[date] || 0;
+      fundedCapital    += fundedPnlByDate[date] || 0;
+      cumPayouts       += paidByDate[date] || 0;
+      return { date, challengeCapital, fundedCapital, payouts: cumPayouts };
     });
   }, [trades, payouts, fundedAccounts, challenges]);
 
@@ -344,28 +356,6 @@ export default function Dashboard() {
     { name: "Rejected", value: payouts.filter((p) => p.status === "rejected").reduce((s, p) => s + p.requestedPayoutAmount, 0) },
   ].filter((d) => d.value > 0), [payouts]);
 
-  // ── Funding pipeline ───────────────────────────────────────────────────────
-  const pipeline = useMemo(() => {
-    // Step 2 rows are a continuation of their root challenge, not separate
-    // purchases — count roots only, using each root's Step 2 outcome (if any)
-    // as the source of truth for pass/convert.
-    const rootChallenges = getRootChallenges(challenges);
-    const total     = rootChallenges.length;
-    const passed    = rootChallenges.filter((c) => getEffectiveStatus(c, challenges) === "passed" || getEffectiveConvertedToFunded(c, challenges)).length;
-    const converted = rootChallenges.filter((c) => getEffectiveConvertedToFunded(c, challenges)).length;
-    const funded    = fundedAccounts.length;
-    const withPay   = fundedAccounts.filter((a) => payouts.some((p) => p.fundedAccountId === a.id)).length;
-    const totalPay  = payouts.length;
-    return [
-      { label: "Challenge",    count: total,    pct: 100 },
-      { label: "Passed",       count: passed,    pct: total   > 0 ? (passed    / total)   * 100 : 0 },
-      { label: "Converted",    count: converted, pct: total   > 0 ? (converted / total)   * 100 : 0 },
-      { label: "Funded",       count: funded,    pct: total   > 0 ? (funded    / total)   * 100 : 0 },
-      { label: "First Payout", count: withPay,   pct: funded  > 0 ? (withPay   / funded)  * 100 : 0 },
-      { label: "Total Payouts",count: totalPay,  pct: 100 },
-    ];
-  }, [challenges, fundedAccounts, payouts]);
-
   // ── Pending payouts ────────────────────────────────────────────────────────
   const pendingPayouts = useMemo(
     () => [...payouts.filter((p) => p.status === "pending")].sort((a, b) => a.payoutDate.localeCompare(b.payoutDate)),
@@ -437,11 +427,11 @@ export default function Dashboard() {
           </div>
           {/* Metric tabs */}
           <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.12)" }}>
-            {(["equity", "profit", "payouts", "roi"] as ChartMetric[]).map((m) => (
+            {(["challengeCapital", "fundedCapital", "payouts"] as ChartMetric[]).map((m) => (
               <button key={m} type="button" onClick={() => setMetric(m)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 pointer-events-auto"
                 style={{ color: metric === m ? "#F8FAFC" : "#94A3B8", background: metric === m ? `${METRIC_META[m].color}28` : "transparent" }}>
-                {m === "equity" ? "Equity" : m === "profit" ? "Cum. Profit" : m === "payouts" ? "Payouts" : "ROI"}
+                {METRIC_META[m].label}
               </button>
             ))}
           </div>
@@ -480,7 +470,7 @@ export default function Dashboard() {
               <XAxis dataKey="date" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false}
                 tickFormatter={(v: string) => v.slice(5)} />
               <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false}
-                tickFormatter={(v: number) => metric === "roi" ? `${v.toFixed(0)}%` : fmtShort(v)} />
+                tickFormatter={(v: number) => fmtShort(v)} />
               <Tooltip
                 contentStyle={{ background: "rgba(11,18,32,0.95)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: "12px", color: "#F8FAFC" }}
                 formatter={((value: number) => [cfg.format(value), cfg.label]) as never}
@@ -623,47 +613,7 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── SECTION 7 — Funding Pipeline ── */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, duration: 0.5 }}
-        className="relative rounded-xl p-6" style={CARD}>
-        <div className="flex items-center gap-2 mb-6">
-          <ArrowUpRight className="w-5 h-5 text-[#298DFF]" />
-          <h3 className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.section }}>Funding Progression</h3>
-        </div>
-        {challenges.length === 0 ? (
-          <div className="text-center py-8">
-            <ArrowUpRight className="w-10 h-10 text-[#475569] mx-auto mb-3" />
-            <p className="text-[#94A3B8] text-sm">Create your first challenge to see progression</p>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-y-4">
-            {pipeline.map((stage, i) => (
-              <div key={stage.label} className="flex items-center">
-                <div className="flex flex-col items-center text-center px-3 min-w-[80px]">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2 font-bold text-lg"
-                    style={{
-                      background: stage.count > 0 ? "rgba(41,141,255,0.15)" : "rgba(148,163,184,0.06)",
-                      border: `2px solid ${stage.count > 0 ? "rgba(41,141,255,0.45)" : "rgba(148,163,184,0.15)"}`,
-                      color: stage.count > 0 ? "#298DFF" : "#475569",
-                    }}>
-                    {stage.count}
-                  </div>
-                  <p className="text-[#F8FAFC] text-xs font-medium leading-tight">{stage.label}</p>
-                  <p className="text-[#475569] text-xs mt-0.5">{fmtPct(stage.pct)}</p>
-                </div>
-                {i < pipeline.length - 1 && (
-                  <div className="flex items-center flex-shrink-0">
-                    <div className="h-px w-3" style={{ background: "rgba(148,163,184,0.2)" }} />
-                    <ArrowRight className="w-3 h-3 text-[#334155]" />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
-
-      {/* ── SECTION 8 — Upcoming / Pending Payouts ── */}
+      {/* ── SECTION 7 — Upcoming / Pending Payouts ── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}
         className="relative rounded-xl p-6" style={CARD}>
         <div className="flex items-center justify-between mb-5">
