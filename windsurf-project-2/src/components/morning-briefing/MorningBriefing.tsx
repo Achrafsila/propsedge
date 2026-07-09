@@ -17,7 +17,7 @@ import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
 import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
 import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { getAccountBriefings, getAccountRiskStates } from "@/lib/analytics/aiCoach";
-import { getMarketBrief, getEdgePilotInsight, getDailyMotivation } from "@/lib/analytics/morningBriefing";
+import { getMarketBrief, buildEmptyMarketBrief, getEdgePilotInsight, getDailyMotivation, MarketBrief } from "@/lib/analytics/morningBriefing";
 import { STEP_ORDER } from "./types";
 import { WelcomeStep } from "./WelcomeStep";
 import { ObjectiveStep } from "./ObjectiveStep";
@@ -72,7 +72,22 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
   );
 
   const riskStates = useMemo(() => getAccountRiskStates(challenges, fundedAccounts, trades), [challenges, fundedAccounts, trades]);
-  const marketBrief = useMemo(() => getMarketBrief(), []);
+
+  // Fetched from the server-only /api/market-brief route (Finnhub) — starts
+  // on the safe all-placeholder shape and swaps in real data once the fetch
+  // resolves; getMarketBrief() itself already falls back to the placeholder
+  // shape on any failure, so this never needs its own error state.
+  const [marketBrief, setMarketBrief] = useState<MarketBrief>(buildEmptyMarketBrief);
+  useEffect(() => {
+    let cancelled = false;
+    getMarketBrief().then((mb) => {
+      if (!cancelled) setMarketBrief(mb);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const insight = useMemo(() => getEdgePilotInsight(discipline, edge, evolution), [discipline, edge, evolution]);
   const motivation = useMemo(() => getDailyMotivation(discipline, evolution, todayDateString()), [discipline, evolution]);
 

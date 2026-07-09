@@ -6,12 +6,13 @@ import { TraderEvolution } from "./traderEvolution";
 // PropEdge — Morning Briefing copy generators (V1, deterministic)
 // ============================================================
 // Two responsibilities, kept separate from aiCoach.ts (which owns risk/Mode
-// math, not prose): a placeholder Market Brief (no real market data source
-// exists or is being integrated in V1 — the shape below is designed so a
-// real feed can fill it in later without changing callers), and two
-// single-sentence generators (EdgePilot Insight, Daily Motivation) that only
-// ever read fields the Trader DNA engines already compute — no new
-// analytics, no AI call, no randomness that changes on re-render.
+// math, not prose): a Market Brief backed by the server-only
+// /api/market-brief route (Finnhub — see src/lib/finnhub.ts, never
+// imported here since this file has no access to FINNHUB_API_KEY and
+// shouldn't), and two single-sentence generators (EdgePilot Insight, Daily
+// Motivation) that only ever read fields the Trader DNA engines already
+// compute — no new analytics, no AI call, no randomness that changes on
+// re-render.
 
 // ── Market Brief ─────────────────────────────────────────────────────────
 
@@ -52,11 +53,13 @@ function emptyInstrumentBrief(symbol: string): MarketInstrumentBrief {
   };
 }
 
-// No market data source is integrated in V1 — every field is a graceful
-// placeholder (MarketBriefStep renders "Data unavailable" copy for nulls).
-// A future version swaps this function's body for a real feed/LLM summary
-// call while every caller keeps working unchanged (same MarketBrief shape).
-export function getMarketBrief(): MarketBrief {
+// The safe fallback shape — every field a graceful placeholder
+// (MarketBriefStep renders "Data unavailable" copy for nulls). Used as the
+// initial render state before the fetch below resolves, and as the result
+// of getMarketBrief() itself on any network failure, non-2xx response, or
+// unexpected shape, so a Finnhub outage or rate limit never breaks the
+// Morning Briefing.
+export function buildEmptyMarketBrief(): MarketBrief {
   return {
     gold: emptyInstrumentBrief("Gold"),
     ndx: emptyInstrumentBrief("NDX"),
@@ -64,6 +67,38 @@ export function getMarketBrief(): MarketBrief {
     eurusd: emptyInstrumentBrief("EURUSD"),
     generatedAt: new Date().toISOString(),
   };
+}
+
+function isMarketInstrumentBrief(value: unknown): value is MarketInstrumentBrief {
+  return typeof value === "object" && value !== null && typeof (value as { symbol?: unknown }).symbol === "string";
+}
+
+function isMarketBrief(value: unknown): value is MarketBrief {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    isMarketInstrumentBrief(v.gold) &&
+    isMarketInstrumentBrief(v.ndx) &&
+    isMarketInstrumentBrief(v.us30) &&
+    isMarketInstrumentBrief(v.eurusd)
+  );
+}
+
+// Fetches real data from Finnhub via the server-only /api/market-brief
+// route (this file has no direct access to FINNHUB_API_KEY, and never
+// should — see src/lib/finnhub.ts). Falls back to buildEmptyMarketBrief()
+// on any failure, keeping this function's shape exactly what it was in V1
+// (a Promise<MarketBrief>, no caller changes needed beyond awaiting it) —
+// the "Future Ready" swap this file's header already anticipated.
+export async function getMarketBrief(): Promise<MarketBrief> {
+  try {
+    const res = await fetch("/api/market-brief");
+    if (!res.ok) return buildEmptyMarketBrief();
+    const data: unknown = await res.json();
+    return isMarketBrief(data) ? data : buildEmptyMarketBrief();
+  } catch {
+    return buildEmptyMarketBrief();
+  }
 }
 
 // ── EdgePilot Insight ────────────────────────────────────────────────────
