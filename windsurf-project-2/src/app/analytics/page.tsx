@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useTradingMode } from "@/context/TradingModeContext";
 import { getTradesForTradingMode } from "@/lib/tradingMode";
+import { getAccountOptionLabel } from "@/lib/accountLabels";
 import { typography, gradientText } from "@/design-system";
 import {
   DEFAULT_GLOBAL_FILTERS,
@@ -164,12 +165,16 @@ export default function GlobalAnalyticsPage() {
   // account that couldn't possibly match. Instrument/session are drawn from
   // the full trade set so they don't disappear as other filters narrow.
   const scopedAccounts = useMemo(() => {
-    const list: { id: string; name: string; propFirmName: string }[] = [];
+    const list: { id: string; name: string; propFirmName: string; label: string }[] = [];
     if (filters.scope !== "funded") {
-      challenges.forEach((c) => list.push({ id: c.id, name: c.accountName, propFirmName: c.propFirmName }));
+      challenges.forEach((c) =>
+        list.push({ id: c.id, name: c.accountName, propFirmName: c.propFirmName, label: getAccountOptionLabel(c, true) })
+      );
     }
     if (filters.scope !== "challenge") {
-      fundedAccounts.forEach((a) => list.push({ id: a.id, name: a.accountName, propFirmName: a.propFirmName }));
+      fundedAccounts.forEach((a) =>
+        list.push({ id: a.id, name: a.accountName, propFirmName: a.propFirmName, label: getAccountOptionLabel(a, false) })
+      );
     }
     return list;
   }, [challenges, fundedAccounts, filters.scope]);
@@ -179,12 +184,16 @@ export default function GlobalAnalyticsPage() {
     [scopedAccounts]
   );
 
+  // Dropdown label uses the shared "Name (Status) — Start: Date" format
+  // (same as Trade Journal / Import Trades / Add Trade) — sorted by the
+  // underlying account name so ordering stays alphabetical rather than
+  // grouping by status/date.
   const accountOptions = useMemo(
     () =>
       scopedAccounts
         .filter((a) => !filters.propFirm || a.propFirmName === filters.propFirm)
-        .map((a) => ({ id: a.id, name: a.name }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((a) => ({ id: a.id, name: a.label })),
     [scopedAccounts, filters.propFirm]
   );
 
