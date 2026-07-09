@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
 import { motion } from "framer-motion";
+import { getAccountOptionLabel } from "@/lib/accountLabels";
 
 interface AddFundedAccountDialogProps {
   open: boolean;
@@ -98,7 +99,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
               <option value="">None (Manual Entry)</option>
               {challenges.map((challenge) => (
                 <option key={challenge.id} value={challenge.id}>
-                  {challenge.accountName} - {challenge.propFirmName}
+                  {getAccountOptionLabel(challenge, true)}
                 </option>
               ))}
             </select>

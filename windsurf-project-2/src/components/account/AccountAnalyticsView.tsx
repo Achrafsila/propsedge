@@ -33,6 +33,7 @@ import {
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
+import { getAccountOptionLabel } from "@/lib/accountLabels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AccountAnalyticsViewProps {
@@ -807,7 +808,7 @@ function Header({
             >
               {allAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.accountName}
+                  {getAccountOptionLabel(a, accountType === "challenge")}
                 </option>
               ))}
             </select>

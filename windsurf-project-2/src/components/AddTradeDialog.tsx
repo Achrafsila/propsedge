@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
 import { motion } from "framer-motion";
 import { Upload, Clock } from "lucide-react";
+import { getAccountOptionLabel } from "@/lib/accountLabels";
 
 interface AddTradeDialogProps {
   open: boolean;
@@ -141,7 +142,7 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
               <option value="">Select an account</option>
               {availableAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.accountName}
+                  {getAccountOptionLabel(account, formData.accountType === "challenge")}
                 </option>
               ))}
             </select>

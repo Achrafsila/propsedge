@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
+import { getAccountOptionLabel } from "@/lib/accountLabels";
 
 interface AddPayoutDialogProps {
   open: boolean;
@@ -86,7 +87,7 @@ export function AddPayoutDialog({
               <option value="">Select an account</option>
               {fundedAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.accountName} — {account.propFirmName}
+                  {getAccountOptionLabel(account, false)}
                 </option>
               ))}
             </select>
