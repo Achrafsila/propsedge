@@ -324,8 +324,21 @@ function buildExpectancyTrend(periods: Periods): EvolutionInsight {
 // within each period, same statistic traderDiscipline.ts's Risk
 // Consistency uses, just compared period-over-period instead of read as a
 // single snapshot. Rising variation reads as declining discipline.
+//
+// Never pools raw lot sizes across instruments (a 0.10 lot on XAUUSD isn't
+// comparable to 2.00 lots on NDX100) — each instrument's CV is computed
+// independently, then combined via a trade-count-weighted average, same
+// approach traderDiscipline.ts's Risk Consistency uses.
 
 const DISCIPLINE_TREND_LABEL = "Discipline Trend";
+
+// A 30-day period is inherently smaller than the whole-history samples
+// traderDiscipline.ts works with, so a single instrument only needs this
+// many of its own trades within the period to contribute a CV — lower than
+// MIN_TRADES_PER_PERIOD's whole-period floor, same relationship
+// MIN_TRADES_PER_COMBO already has to MIN_TRADES_PER_PERIOD below for
+// Setup Quality Trend.
+const MIN_TRADES_PER_INSTRUMENT_PERIOD = 5;
 
 interface LotSizeConsistency {
   cv: number;
@@ -333,10 +346,25 @@ interface LotSizeConsistency {
 }
 
 function computeLotSizeConsistency(trades: Trade[]): LotSizeConsistency | null {
-  const lots = trades.map((t) => t.quantity).filter((q) => q > 0);
-  if (lots.length < MIN_TRADES_PER_PERIOD) return null;
-  const avg = mean(lots);
-  return { cv: avg > 0 ? stdDev(lots) / avg : 0, count: lots.length };
+  const bySymbol = new Map<string, number[]>();
+  for (const t of trades) {
+    if (!t.symbol || t.quantity <= 0) continue;
+    const lots = bySymbol.get(t.symbol) ?? [];
+    lots.push(t.quantity);
+    bySymbol.set(t.symbol, lots);
+  }
+
+  const perInstrument: LotSizeConsistency[] = [];
+  for (const lots of bySymbol.values()) {
+    if (lots.length < MIN_TRADES_PER_INSTRUMENT_PERIOD) continue;
+    const avg = mean(lots);
+    perInstrument.push({ cv: avg > 0 ? stdDev(lots) / avg : 0, count: lots.length });
+  }
+  if (perInstrument.length === 0) return null;
+
+  const totalCount = perInstrument.reduce((s, p) => s + p.count, 0);
+  const weightedCv = perInstrument.reduce((s, p) => s + p.cv * p.count, 0) / totalCount;
+  return { cv: weightedCv, count: totalCount };
 }
 
 function buildDisciplineTrend(periods: Periods): EvolutionInsight {

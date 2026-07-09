@@ -163,28 +163,79 @@ function classifyRiskConsistency(cv: number): string {
   return "Highly Variable";
 }
 
-function computeRiskConsistency(lots: number[]): RiskInsight {
-  if (lots.length < MIN_TRADES_FOR_LOT_ANALYSIS) return notEnoughDataInsight(RISK_CONSISTENCY_LABEL);
+interface InstrumentRiskConsistency {
+  symbol: string;
+  cv: number;
+  medianLot: number;
+  low: number;
+  high: number;
+  bandPercentage: number;
+  count: number;
+}
 
-  const avg = mean(lots);
-  const med = median(lots);
-  const sd = stdDev(lots);
-  const cv = avg > 0 ? sd / avg : 0;
+// A coefficient of variation only means something when every value shares
+// the same unit — a 0.10 lot on XAUUSD and a 2.00 lot on NDX100 are not
+// comparable sizes, so this never pools raw lot sizes across instruments.
+// Each instrument gets its own distribution and needs its own
+// MIN_TRADES_FOR_LOT_ANALYSIS-trade floor before it can contribute.
+function computeInstrumentRiskConsistencies(trades: Trade[]): InstrumentRiskConsistency[] {
+  const bySymbol = new Map<string, number[]>();
+  for (const t of trades) {
+    if (!t.symbol || t.quantity <= 0) continue;
+    const lots = bySymbol.get(t.symbol) ?? [];
+    lots.push(t.quantity);
+    bySymbol.set(t.symbol, lots);
+  }
 
-  // "Typical band": the range within one standard deviation of the median
-  // lot size, and what share of trades actually falls inside it — this is
-  // what the narrative reports, not the raw stdDev number.
-  const low = Math.max(0, med - sd);
-  const high = med + sd;
-  const withinBand = lots.filter((l) => l >= low && l <= high).length;
-  const bandPercentage = Math.round((withinBand / lots.length) * 100);
+  const results: InstrumentRiskConsistency[] = [];
+  for (const [symbol, lots] of bySymbol) {
+    if (lots.length < MIN_TRADES_FOR_LOT_ANALYSIS) continue;
+    const avg = mean(lots);
+    const med = median(lots);
+    const sd = stdDev(lots);
+    const low = Math.max(0, med - sd);
+    const high = med + sd;
+    const withinBand = lots.filter((l) => l >= low && l <= high).length;
+    results.push({
+      symbol,
+      cv: avg > 0 ? sd / avg : 0,
+      medianLot: med,
+      low,
+      high,
+      bandPercentage: Math.round((withinBand / lots.length) * 100),
+      count: lots.length,
+    });
+  }
+  return results;
+}
+
+function computeRiskConsistency(trades: Trade[]): RiskInsight {
+  const perInstrument = computeInstrumentRiskConsistencies(trades);
+  if (perInstrument.length === 0) return notEnoughDataInsight(RISK_CONSISTENCY_LABEL);
+
+  // Combine each instrument's independently-computed CV via a trade-count-
+  // weighted average — the weighting happens on the already-computed
+  // per-instrument scores, never on the raw lot sizes themselves.
+  const totalCount = perInstrument.reduce((s, p) => s + p.count, 0);
+  const weightedCv = perInstrument.reduce((s, p) => s + p.cv * p.count, 0) / totalCount;
+  const primary = [...perInstrument].sort((a, b) => b.count - a.count)[0];
+
+  const metricLabel =
+    perInstrument.length === 1
+      ? `${formatLot(primary.medianLot)} median`
+      : `${formatLot(primary.medianLot)} median on ${primary.symbol} (${perInstrument.length} instruments)`;
+
+  const narrative =
+    perInstrument.length === 1
+      ? `${primary.bandPercentage}% of your ${primary.symbol} trades are executed between ${primary.low.toFixed(2)} and ${primary.high.toFixed(2)} lots.`
+      : `Calculated independently per instrument (${perInstrument.map((p) => p.symbol).join(", ")}) and combined by trade count — sizing on one instrument is never compared to another.`;
 
   return {
     label: RISK_CONSISTENCY_LABEL,
-    value: classifyRiskConsistency(cv),
-    metricLabel: `${formatLot(med)} median`,
-    narrative: `${bandPercentage}% of your trades are executed between ${low.toFixed(2)} and ${high.toFixed(2)} lots.`,
-    sampleSize: lots.length,
+    value: classifyRiskConsistency(weightedCv),
+    metricLabel,
+    narrative,
+    sampleSize: totalCount,
   };
 }
 
@@ -211,11 +262,15 @@ function getTopInstrumentAverageLots(trades: Trade[]): InstrumentLotSize[] {
 }
 
 // ── 3 & 4. Position Size After Wins / After Losses ───────────────────────
-// Chronologically, for every trade matching the target outcome (win or
-// loss), compare its own lot size ("before") to the very next trade's lot
-// size ("after") — this is a reaction pattern, not a ranking, so it's
-// never gated by MIN_GROUP_SAMPLE_SIZE's expectancy logic, just a plain
-// mean-before vs mean-after comparison.
+// For every trade matching the target outcome (win or loss), compare its
+// own lot size ("before") to the very next trade's lot size ("after") — a
+// reaction pattern, not a ranking, so it's never gated by
+// MIN_GROUP_SAMPLE_SIZE's expectancy logic, just a plain mean-before vs
+// mean-after comparison. Chronology is tracked independently PER
+// INSTRUMENT: comparing a 0.10 lot XAUUSD trade to the next trade's 2.00
+// lots on NDX100 isn't a size change, it's two different instruments'
+// normal sizes, so "before"/"after" pairs only ever come from consecutive
+// trades on the same symbol.
 
 interface SizeShift {
   before: number;
@@ -224,20 +279,48 @@ interface SizeShift {
 }
 
 function computeSizeShiftAfterOutcome(sorted: Trade[], isOutcome: (t: Trade) => boolean): SizeShift | null {
-  const beforeLots: number[] = [];
-  const afterLots: number[] = [];
-
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const current = sorted[i];
-    const next = sorted[i + 1];
-    if (current.quantity > 0 && next.quantity > 0 && isOutcome(current)) {
-      beforeLots.push(current.quantity);
-      afterLots.push(next.quantity);
-    }
+  const bySymbol = new Map<string, Trade[]>();
+  for (const t of sorted) {
+    if (!t.symbol) continue;
+    const arr = bySymbol.get(t.symbol) ?? [];
+    arr.push(t);
+    bySymbol.set(t.symbol, arr);
   }
 
-  if (beforeLots.length < MIN_GROUP_SAMPLE_SIZE) return null;
-  return { before: mean(beforeLots), after: mean(afterLots), count: beforeLots.length };
+  // Each instrument's own before/after pairs are reduced to a single
+  // relative change (e.g. "+18%") before being combined — the aggregate
+  // below is a trade-count-weighted average of those independent relative
+  // changes, never a mix of raw lot numbers from different instruments.
+  const perInstrument: { relativeChange: number; count: number }[] = [];
+  for (const symbolTrades of bySymbol.values()) {
+    const beforeLots: number[] = [];
+    const afterLots: number[] = [];
+    for (let i = 0; i < symbolTrades.length - 1; i++) {
+      const current = symbolTrades[i];
+      const next = symbolTrades[i + 1];
+      if (current.quantity > 0 && next.quantity > 0 && isOutcome(current)) {
+        beforeLots.push(current.quantity);
+        afterLots.push(next.quantity);
+      }
+    }
+    if (beforeLots.length < MIN_GROUP_SAMPLE_SIZE) continue;
+    const beforeAvg = mean(beforeLots);
+    const afterAvg = mean(afterLots);
+    const relativeChange = beforeAvg > 0 ? (afterAvg - beforeAvg) / beforeAvg : 0;
+    perInstrument.push({ relativeChange, count: beforeLots.length });
+  }
+
+  if (perInstrument.length === 0) return null;
+
+  const totalCount = perInstrument.reduce((s, p) => s + p.count, 0);
+  const weightedRelativeChange =
+    perInstrument.reduce((s, p) => s + p.relativeChange * p.count, 0) / totalCount;
+
+  // Normalized to a 1 → 1+change pair so classifySizeShift()/
+  // formatSizeShiftPercent() (which only ever read the relative change
+  // between before/after) reproduce the exact weighted percentage without
+  // needing their own instrument-aware logic.
+  return { before: 1, after: 1 + weightedRelativeChange, count: totalCount };
 }
 
 function classifySizeShift(shift: SizeShift): string {
@@ -834,8 +917,7 @@ export function getTraderDiscipline(trades: Trade[]): TraderDiscipline {
   const firstTrade = sampleSize > 0 ? sorted[0].entryDate : null;
   const lastTrade = sampleSize > 0 ? sorted[sampleSize - 1].entryDate : null;
 
-  const lots = sorted.map((t) => t.quantity).filter((q) => q > 0);
-  const riskConsistency = computeRiskConsistency(lots);
+  const riskConsistency = computeRiskConsistency(sorted);
 
   const topInstruments = getTopInstrumentAverageLots(sorted);
 
