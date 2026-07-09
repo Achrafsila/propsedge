@@ -1,0 +1,201 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { motion, AnimatePresence } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
+import { useAccounts } from "@/context/AccountsContext";
+import { useTodayObjective } from "@/context/TodayObjectiveContext";
+import { todayDateString } from "@/lib/dateKey";
+import { getFirstName } from "@/lib/userDisplay";
+import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
+import { getTraderHabits } from "@/lib/analytics/traderHabits";
+import { getTraderEdge } from "@/lib/analytics/traderEdge";
+import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
+import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
+import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
+import { getDataConfidence } from "@/lib/analytics/dataConfidence";
+import { getAccountBriefings, getAccountRiskStates } from "@/lib/analytics/aiCoach";
+import { getMarketBrief, getEdgePilotInsight, getDailyMotivation } from "@/lib/analytics/morningBriefing";
+import { STEP_ORDER } from "./types";
+import { WelcomeStep } from "./WelcomeStep";
+import { ObjectiveStep } from "./ObjectiveStep";
+import { MarketBriefStep } from "./MarketBriefStep";
+import { TodaysRulesStep } from "./TodaysRulesStep";
+import { TradingProtocolStep, getProtocolRowIds } from "./TradingProtocolStep";
+import { AccountHealthStep } from "./AccountHealthStep";
+import { InsightStep } from "./InsightStep";
+import { MotivationStep } from "./MotivationStep";
+import { StartTradingStep } from "./StartTradingStep";
+
+const STORAGE_KEY_PREFIX = "pe_morning_briefing_";
+
+// Only mounted once the daily gate below decides the briefing should show —
+// this is what keeps the (fairly heavy — 6 Trader DNA engines + aiCoach)
+// computation from re-running on every route navigation for the rest of the
+// day; MorningBriefing itself only ever runs the cheap loading-flag checks.
+function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: () => void }) {
+  const { challenges, fundedAccounts, trades, payouts } = useAccounts();
+  const { objective, setObjective } = useTodayObjective();
+
+  const [stepIndex, setStepIndex] = useState(0);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+
+  const identity = useMemo(() => getTraderIdentity(trades), [trades]);
+  const habits = useMemo(() => getTraderHabits(trades), [trades]);
+  const edge = useMemo(() => getTraderEdge(trades), [trades]);
+  const blindSpots = useMemo(() => getTraderBlindSpots(trades), [trades]);
+  const discipline = useMemo(() => getTraderDiscipline(trades), [trades]);
+  const evolution = useMemo(() => getTraderEvolution(trades), [trades]);
+  const dataConfidence = useMemo(() => getDataConfidence(trades), [trades]);
+
+  const briefings = useMemo(
+    () =>
+      getAccountBriefings(
+        {
+          trades,
+          challenges,
+          fundedAccounts,
+          payouts,
+          traderIdentity: identity,
+          traderHabits: habits,
+          traderEdge: edge,
+          traderBlindSpots: blindSpots,
+          traderDiscipline: discipline,
+          traderEvolution: evolution,
+          dataConfidence,
+        },
+        objective ?? undefined
+      ),
+    [trades, challenges, fundedAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
+  );
+
+  const riskStates = useMemo(() => getAccountRiskStates(challenges, fundedAccounts, trades), [challenges, fundedAccounts, trades]);
+  const marketBrief = useMemo(() => getMarketBrief(), []);
+  const insight = useMemo(() => getEdgePilotInsight(discipline, edge, evolution), [discipline, edge, evolution]);
+  const motivation = useMemo(() => getDailyMotivation(discipline, evolution, todayDateString()), [discipline, evolution]);
+
+  const firstName = getFirstName(user);
+  const currentStep = STEP_ORDER[stepIndex];
+
+  const toggleChecked = (id: string) => setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+  const protocolRowIds = useMemo(() => getProtocolRowIds(briefings), [briefings]);
+  const allChecked = protocolRowIds.length > 0 && protocolRowIds.every((id) => checked[id]);
+
+  const canContinue = currentStep === "objective" ? objective !== null : currentStep === "trading_protocol" ? allChecked : true;
+
+  const goNext = () => setStepIndex((i) => Math.min(i + 1, STEP_ORDER.length - 1));
+  const goBack = () => setStepIndex((i) => Math.max(i - 1, 0));
+
+  const handleStart = () => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${user.id}`, todayDateString());
+    onDismiss();
+  };
+
+  const continueLabel = currentStep === "welcome" ? "Start Briefing" : currentStep === "trading_protocol" ? "I Commit" : "Continue";
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-6 overflow-y-auto"
+      style={{ background: "#030712" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 h-[420px]"
+        style={{ background: "radial-gradient(80% 60% at 50% -10%, rgba(41,141,255,0.18) 0%, rgba(41,141,255,0) 60%)" }}
+      />
+      <div className="relative w-full max-w-2xl py-8">
+        <div className="flex items-center justify-center gap-1.5 mb-10">
+          {STEP_ORDER.map((step, i) => (
+            <div
+              key={step}
+              className="h-1 rounded-full transition-all duration-300"
+              style={{ width: i === stepIndex ? 24 : 8, background: i <= stepIndex ? "#298DFF" : "rgba(148,163,184,0.2)" }}
+            />
+          ))}
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            {currentStep === "welcome" && <WelcomeStep firstName={firstName} />}
+            {currentStep === "objective" && <ObjectiveStep objective={objective} onSelect={setObjective} />}
+            {currentStep === "market_brief" && <MarketBriefStep marketBrief={marketBrief} />}
+            {currentStep === "todays_rules" && <TodaysRulesStep briefings={briefings} />}
+            {currentStep === "trading_protocol" && (
+              <TradingProtocolStep briefings={briefings} checked={checked} onToggle={toggleChecked} />
+            )}
+            {currentStep === "account_health" && <AccountHealthStep briefings={briefings} riskStates={riskStates} />}
+            {currentStep === "insight" && <InsightStep insight={insight} />}
+            {currentStep === "motivation" && <MotivationStep motivation={motivation} />}
+            {currentStep === "start_trading" && <StartTradingStep onStart={handleStart} />}
+          </motion.div>
+        </AnimatePresence>
+
+        {currentStep !== "start_trading" && (
+          <div className="flex items-center justify-between mt-10">
+            <div>
+              {stepIndex > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={goBack}
+                  className="border-[rgba(148,163,184,0.2)] text-[#94A3B8] hover:bg-[rgba(148,163,184,0.08)] rounded-xl pointer-events-auto"
+                >
+                  Back
+                </Button>
+              )}
+            </div>
+            <Button
+              type="button"
+              onClick={goNext}
+              disabled={!canContinue}
+              className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] transition-all duration-300 text-white rounded-xl px-6 pointer-events-auto disabled:opacity-40 disabled:pointer-events-none"
+            >
+              {continueLabel}
+            </Button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// Shows once per calendar day, on first login, before the normal app is
+// usable — gated by a localStorage "last completed date" per user (no
+// Supabase schema change). Only runs the cheap loading-flag checks itself;
+// MorningBriefingContent (the actual 9-step flow, and its Trader DNA/aiCoach
+// computation) only mounts once the gate decides to show it.
+export function MorningBriefing() {
+  const { user } = useAuth();
+  const { challengesLoading, fundedAccountsLoading, tradesLoading, payoutsLoading } = useAccounts();
+
+  const [visible, setVisible] = useState(false);
+  const [hasChecked, setHasChecked] = useState(false);
+
+  useEffect(() => {
+    if (hasChecked || !user) return;
+    if (challengesLoading || fundedAccountsLoading || tradesLoading || payoutsLoading) return;
+    setHasChecked(true);
+    const lastShown = localStorage.getItem(`${STORAGE_KEY_PREFIX}${user.id}`);
+    if (lastShown !== todayDateString()) {
+      setVisible(true);
+    }
+  }, [user, challengesLoading, fundedAccountsLoading, tradesLoading, payoutsLoading, hasChecked]);
+
+  return (
+    <AnimatePresence>
+      {visible && user && <MorningBriefingContent key="morning-briefing" user={user} onDismiss={() => setVisible(false)} />}
+    </AnimatePresence>
+  );
+}

@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/sidebar";
 import { TopNav } from "@/components/top-nav";
 import { Footer } from "@/components/Footer";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { MorningBriefing } from "@/components/morning-briefing/MorningBriefing";
 import { useTradingMode } from "@/context/TradingModeContext";
 
 const CHROMELESS_ROUTES = ["/welcome", "/login", "/signup", "/forgot-password"];
@@ -59,6 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <AnimatePresence>{isLoading && <LoadingScreen onComplete={handleLoadComplete} />}</AnimatePresence>
+      <MorningBriefing />
 
       <div className="flex min-h-screen">
         <Sidebar />
