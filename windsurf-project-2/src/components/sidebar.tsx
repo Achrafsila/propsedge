@@ -11,7 +11,8 @@ import {
   DollarSign,
   Settings,
   Shield,
-  LineChart
+  LineChart,
+  Compass
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
@@ -35,6 +36,7 @@ export function Sidebar() {
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
+    { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];

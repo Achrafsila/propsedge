@@ -30,13 +30,11 @@ import { getTraderBlindSpots } from "@/lib/analytics/traderBlindSpots";
 import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
 import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
 import { getDataConfidence } from "@/lib/analytics/dataConfidence";
-import { getAICoachRecommendation } from "@/lib/analytics/aiCoach";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
 import { DataConfidenceCard } from "@/components/analytics/DataConfidenceCard";
-import { AICoachPanel } from "@/components/analytics/AICoachPanel";
 import { RadialGauge } from "@/components/analytics/visualizations/RadialGauge";
 import { CountUpNumber } from "@/components/analytics/visualizations/CountUpNumber";
 
@@ -46,7 +44,7 @@ const itemVariants = {
 };
 
 export default function GlobalAnalyticsPage() {
-  const { challenges, fundedAccounts, trades, payouts, getDashboardKPIs, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
+  const { challenges, fundedAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
   const { tradingMode } = useTradingMode();
   const [filters, setFilters] = useState<GlobalFilters>(DEFAULT_GLOBAL_FILTERS);
 
@@ -144,36 +142,6 @@ export default function GlobalAnalyticsPage() {
   // or hides any KPI/card above, just labels how much trade history backs
   // them right now.
   const dataConfidence = useMemo(() => getDataConfidence(filteredTrades), [filteredTrades]);
-
-  // AI Coach (deterministic, V1) — see src/lib/analytics/aiCoach.ts. Reuses
-  // every Trader DNA engine already computed above; guardrail rules
-  // (daily/max loss, profit target, payout readiness) read raw `trades`/
-  // `challenges`/`fundedAccounts` rather than the page's filtered subset,
-  // since those must reflect real account state regardless of the Global
-  // Filter Bar's date/account/instrument selection.
-  const dashboardKPIs = getDashboardKPIs();
-  const coach = useMemo(
-    () =>
-      getAICoachRecommendation({
-        trades,
-        challenges,
-        fundedAccounts,
-        payouts,
-        dashboardKPIs,
-        traderIdentity: identity,
-        traderHabits: habits,
-        traderEdge: edge,
-        traderBlindSpots: blindSpots,
-        traderDiscipline: discipline,
-        traderEvolution: evolution,
-        dataConfidence,
-      }),
-    // getDashboardKPIs() (AccountsContext) returns a fresh object every
-    // render, so this recomputes on every render regardless of memoization
-    // — acceptable since aiCoach.ts is pure arithmetic over already-small
-    // arrays, same cost class as the engines above.
-    [trades, challenges, fundedAccounts, payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
-  );
 
   // Trades whose accountId/accountType no longer resolve to a live account
   // (typically because that account was deleted).
@@ -345,9 +313,6 @@ export default function GlobalAnalyticsPage() {
         />
       </motion.div>
 
-      <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
-        <AICoachPanel coach={coach} />
-      </motion.div>
     </div>
   );
 }

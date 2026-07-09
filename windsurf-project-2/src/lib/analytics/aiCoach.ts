@@ -123,7 +123,7 @@ function severityRank(s: CoachSeverity): number {
 // rule below actually needs, built once per account so the daily/max loss
 // math never has to branch on account type.
 
-interface AccountRef {
+export interface AccountRef {
   id: string;
   type: "challenge" | "funded";
   name: string;
@@ -196,7 +196,7 @@ function suggestedRiskFromBuffer(buffer: number, factor: number): number {
 const DAILY_RISK_FACTOR = 0.08;
 const MAX_LOSS_RISK_FACTOR = 0.05;
 
-interface AccountRiskState {
+export interface AccountRiskState {
   account: AccountRef;
   dailyLimit: number | null;
   dailyBuffer: number | null;
@@ -709,6 +709,21 @@ function buildSummary(
       ? ` You currently have ${dashboardKPIs.breachedFundedAccounts} breached account${dashboardKPIs.breachedFundedAccounts === 1 ? "" : "s"} — review what went wrong there before sizing up elsewhere.`
       : "";
   return `Your overall risk level today is ${riskLevel}. ${mainPriority}.${riskAmountPhrase}${breachNote}`;
+}
+
+// ── Per-account risk states (exported for EdgePilot's Account Command
+// Center / Rule Monitor — same buildActiveAccountRefs/computeAccountRiskState
+// helpers getAICoachRecommendation() already uses internally, no new math) ──
+
+export function getAccountRiskStates(
+  challenges: Challenge[],
+  fundedAccounts: FundedAccount[],
+  trades: Trade[]
+): AccountRiskState[] {
+  const today = todayDateString();
+  return buildActiveAccountRefs(challenges, fundedAccounts).map((account) =>
+    computeAccountRiskState(account, trades, today)
+  );
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────
