@@ -9,6 +9,7 @@ import { AdminProvider } from "@/context/AdminContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { TradingModeProvider } from "@/context/TradingModeContext";
 import { TodayObjectiveProvider } from "@/context/TodayObjectiveContext";
+import { DailyContractsProvider } from "@/context/DailyContractsContext";
 import { PersonalPortfolioProvider } from "@/context/PersonalPortfolioContext";
 import { Toaster } from "sonner";
 
@@ -54,9 +55,11 @@ export default function RootLayout({
               <AdminProvider>
                 <TradingModeProvider>
                   <TodayObjectiveProvider>
-                    <PersonalPortfolioProvider>
-                      <AppShell>{children}</AppShell>
-                    </PersonalPortfolioProvider>
+                    <DailyContractsProvider>
+                      <PersonalPortfolioProvider>
+                        <AppShell>{children}</AppShell>
+                      </PersonalPortfolioProvider>
+                    </DailyContractsProvider>
                   </TodayObjectiveProvider>
                 </TradingModeProvider>
               </AdminProvider>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { useAccounts } from "@/context/AccountsContext";
 import { useTodayObjective } from "@/context/TodayObjectiveContext";
+import { useDailyContracts } from "@/context/DailyContractsContext";
 import { todayDateString } from "@/lib/dateKey";
 import { getFirstName } from "@/lib/userDisplay";
 import { getTraderIdentity } from "@/lib/analytics/traderIdentity";
@@ -17,13 +18,14 @@ import { getTraderDiscipline } from "@/lib/analytics/traderDiscipline";
 import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
 import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { getAccountBriefings, getAccountRiskStates } from "@/lib/analytics/aiCoach";
+import { buildContractDraft, getAccountInstrumentOptions, validateContractDraft, DailyContractDraft } from "@/lib/analytics/dailyContract";
 import { getMarketBrief, buildEmptyMarketBrief, getEdgePilotInsight, getDailyMotivation, MarketBrief } from "@/lib/analytics/morningBriefing";
 import { STEP_ORDER } from "./types";
 import { WelcomeStep } from "./WelcomeStep";
 import { ObjectiveStep } from "./ObjectiveStep";
 import { MarketBriefStep } from "./MarketBriefStep";
 import { TodaysRulesStep } from "./TodaysRulesStep";
-import { TradingProtocolStep, getProtocolRowIds } from "./TradingProtocolStep";
+import { TradingProtocolStep, accountKey } from "./TradingProtocolStep";
 import { AccountHealthStep } from "./AccountHealthStep";
 import { InsightStep } from "./InsightStep";
 import { MotivationStep } from "./MotivationStep";
@@ -38,9 +40,11 @@ const STORAGE_KEY_PREFIX = "pe_morning_briefing_";
 function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: () => void }) {
   const { challenges, fundedAccounts, personalAccounts, trades, payouts } = useAccounts();
   const { objective, setObjective } = useTodayObjective();
+  const { commitContract } = useDailyContracts();
 
   const [stepIndex, setStepIndex] = useState(0);
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [drafts, setDrafts] = useState<Record<string, DailyContractDraft>>({});
+  const [committing, setCommitting] = useState(false);
 
   const identity = useMemo(() => getTraderIdentity(trades), [trades]);
   const habits = useMemo(() => getTraderHabits(trades), [trades]);
@@ -77,6 +81,37 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
     [challenges, fundedAccounts, trades, personalAccounts]
   );
 
+  const today = todayDateString();
+
+  // Seeds a draft for every active account the first time it's seen —
+  // never overwrites an in-progress edit, so switching steps and coming
+  // back doesn't lose anything the trader already typed.
+  useEffect(() => {
+    setDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const b of briefings) {
+        const key = accountKey(b);
+        if (!next[key]) {
+          next[key] = buildContractDraft(b, today);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [briefings, today]);
+
+  const instrumentOptions = useMemo(
+    () =>
+      Object.fromEntries(
+        briefings.map((b) => [accountKey(b), getAccountInstrumentOptions(trades, b.account.id, b.account.type)])
+      ),
+    [briefings, trades]
+  );
+
+  const updateDraft = (key: string, patch: Partial<DailyContractDraft>) =>
+    setDrafts((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...patch } } : prev));
+
   // Fetched from the server-only /api/market-brief route (Finnhub) — starts
   // on the safe all-placeholder shape and swaps in real data once the fetch
   // resolves; getMarketBrief() itself already falls back to the placeholder
@@ -98,11 +133,11 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
   const firstName = getFirstName(user);
   const currentStep = STEP_ORDER[stepIndex];
 
-  const toggleChecked = (id: string) => setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
-  const protocolRowIds = useMemo(() => getProtocolRowIds(briefings), [briefings]);
-  const allChecked = protocolRowIds.length > 0 && protocolRowIds.every((id) => checked[id]);
+  const allDraftsValid =
+    briefings.length === 0 || briefings.every((b) => validateContractDraft(drafts[accountKey(b)] ?? buildContractDraft(b, today)).valid);
 
-  const canContinue = currentStep === "objective" ? objective !== null : currentStep === "trading_protocol" ? allChecked : true;
+  const canContinue =
+    currentStep === "objective" ? objective !== null : currentStep === "trading_protocol" ? allDraftsValid && !committing : true;
 
   const goNext = () => setStepIndex((i) => Math.min(i + 1, STEP_ORDER.length - 1));
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0));
@@ -112,7 +147,31 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
     onDismiss();
   };
 
-  const continueLabel = currentStep === "welcome" ? "Start Briefing" : currentStep === "trading_protocol" ? "I Commit" : "Continue";
+  // "I Commit" persists every account's Daily Contract to Supabase before
+  // advancing — this is the one moment in the whole flow that actually
+  // writes anything besides the localStorage gate flag.
+  const handleContinue = async () => {
+    if (currentStep !== "trading_protocol") {
+      goNext();
+      return;
+    }
+    setCommitting(true);
+    try {
+      for (const b of briefings) {
+        const draft = drafts[accountKey(b)];
+        if (!draft) continue;
+        await commitContract({ ...draft, primaryObjective: objective ?? null });
+      }
+      goNext();
+    } catch (error) {
+      console.error("[MorningBriefing] Failed to commit today's Trading Contract:", error);
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  const continueLabel =
+    currentStep === "welcome" ? "Start Briefing" : currentStep === "trading_protocol" ? (committing ? "Committing…" : "I Commit") : "Continue";
 
   return (
     <motion.div
@@ -152,7 +211,7 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
             {currentStep === "market_brief" && <MarketBriefStep marketBrief={marketBrief} />}
             {currentStep === "todays_rules" && <TodaysRulesStep briefings={briefings} />}
             {currentStep === "trading_protocol" && (
-              <TradingProtocolStep briefings={briefings} checked={checked} onToggle={toggleChecked} />
+              <TradingProtocolStep briefings={briefings} drafts={drafts} onDraftChange={updateDraft} instrumentOptions={instrumentOptions} />
             )}
             {currentStep === "account_health" && <AccountHealthStep briefings={briefings} riskStates={riskStates} />}
             {currentStep === "insight" && <InsightStep insight={insight} />}
@@ -177,7 +236,7 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
             </div>
             <Button
               type="button"
-              onClick={goNext}
+              onClick={handleContinue}
               disabled={!canContinue}
               className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] transition-all duration-300 text-white rounded-xl px-6 pointer-events-auto disabled:opacity-40 disabled:pointer-events-none"
             >

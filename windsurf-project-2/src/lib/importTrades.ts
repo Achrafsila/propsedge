@@ -285,7 +285,7 @@ const ASIAN_SESSION_END_MINUTES = 8 * 60; // last Asian minute is 07:59
 const LONDON_SESSION_END_MINUTES = 13 * 60 + 30; // last London minute is 13:29
 const NEW_YORK_SESSION_END_MINUTES = 22 * 60; // New York runs through 22:00 inclusive
 
-function detectSession(entryTime: string): Trade["session"] {
+export function detectSession(entryTime: string): Trade["session"] {
   const m = entryTime.match(/^(\d{2}):(\d{2})$/);
   if (!m) return undefined;
   const minutes = +m[1] * 60 + +m[2];

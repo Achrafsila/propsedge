@@ -141,6 +141,39 @@ export interface Trade {
   picture?: string;
 }
 
+// The daily objective enum a trader picks each morning (mirrors
+// TodaysObjective in src/lib/analytics/aiCoach.ts — duplicated here rather
+// than imported, since types/index.ts is the base layer every lib/
+// analytics file imports FROM, never the reverse).
+export type DailyContractObjective =
+  | "pass_challenge"
+  | "protect_funded"
+  | "prepare_payout"
+  | "build_consistency"
+  | "focus_discipline"
+  | "recover_losses";
+
+// EdgePilot V2 — the plan a trader commits to each morning for one account
+// on one trading day (see Morning Briefing's Trading Protocol step). Persisted
+// to Supabase (supabase/migrations/009_daily_contracts.sql) so the
+// Accountability Engine can audit actual trades against it, including for
+// Personal Accounts even though PersonalAccount itself is localStorage-only
+// — accountId here is just an app-level string, no FK.
+export interface DailyContract {
+  id: string;
+  accountId: string;
+  accountType: "challenge" | "funded" | "personal";
+  contractDate: string; // "YYYY-MM-DD"
+  primaryObjective: DailyContractObjective | null;
+  maxRiskPerTrade: number | null;
+  maxTrades: number | null;
+  stopAfterLosses: number | null;
+  allowedSessions: ("London" | "New York" | "Asian")[]; // [] = no restriction
+  allowedInstruments: string[]; // [] = no restriction
+  specialRules: string | null;
+  committedAt: string;
+}
+
 export interface FundingRateStats {
   totalChallengesPurchased: number;
   activeChallenges: number;
