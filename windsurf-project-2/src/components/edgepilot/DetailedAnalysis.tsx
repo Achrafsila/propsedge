@@ -18,6 +18,7 @@ import { Deviation, DeviationSeverity } from "@/lib/analytics/accountabilityEngi
 import { Decision } from "@/lib/analytics/decisionEngine";
 import { AnimatedBar } from "@/components/analytics/visualizations/AnimatedBar";
 import { PrimaryEvaluation } from "./CockpitHero";
+import { EdgePilotAvatar } from "./EdgePilotAvatar";
 
 // ============================================================
 // PropEdge — Detailed Analysis (EdgePilot V3)
@@ -601,9 +602,12 @@ export function DetailedAnalysis({
 
               {/* ── Ask EdgePilot ── */}
               <div className="rounded-xl p-6 flex items-center justify-between gap-4 flex-wrap" style={CARD}>
-                <div>
-                  <h3 className="text-[#F8FAFC] font-semibold mb-1" style={{ fontSize: typography.fontSize.section }}>Ask EdgePilot</h3>
-                  <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs }}>Coming soon: conversational trading copilot.</p>
+                <div className="flex items-center gap-4">
+                  <EdgePilotAvatar state="confident" size={72} />
+                  <div>
+                    <h3 className="text-[#F8FAFC] font-semibold mb-1" style={{ fontSize: typography.fontSize.section }}>Ask EdgePilot</h3>
+                    <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.xs }}>Coming soon: conversational trading copilot.</p>
+                  </div>
                 </div>
                 <button
                   type="button"

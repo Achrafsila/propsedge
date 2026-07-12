@@ -3,10 +3,12 @@
 import { motion } from "framer-motion";
 import { Clock } from "lucide-react";
 import { typography, gradientText } from "@/design-system";
+import { EdgePilotAvatar } from "@/components/edgepilot/EdgePilotAvatar";
 
 export function WelcomeStep({ firstName }: { firstName: string }) {
   return (
     <div className="flex flex-col items-center text-center px-4">
+      <EdgePilotAvatar state="morning" size={220} priority className="mb-6" />
       <motion.h1
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}

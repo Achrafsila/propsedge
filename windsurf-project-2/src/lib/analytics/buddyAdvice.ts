@@ -17,7 +17,22 @@ import { TraderDiscipline } from "./traderDiscipline";
 // Single source of truth for both the Account Health executive card's
 // label/color and the avatar's color, so the two can never disagree.
 
-export type EdgePilotAvatarState = "healthy" | "recovery" | "danger" | "payout";
+// The full EdgePilot character library (see public/edgepilot/ and
+// EdgePilotAvatar.tsx). getAccountHealthState below only ever selects the
+// subset the operating mode can justify; the other states (focus, morning,
+// reviewing, motivation, payout) are driven by their own surfaces
+// (Morning Briefing → morning, Ask EdgePilot → confident, etc.).
+export type EdgePilotAvatarState =
+  | "confident"
+  | "healthy"
+  | "recovery"
+  | "focus"
+  | "nearPayout"
+  | "motivation"
+  | "critical"
+  | "reviewing"
+  | "morning"
+  | "payout";
 
 export interface AccountHealthState {
   label: "Recovery" | "Healthy" | "Near Payout" | "Near Breach";
@@ -33,19 +48,25 @@ const HEALTH_STATE_COLOR: Record<AccountHealthState["label"], string> = {
 };
 
 // protection is folded into the Recovery bucket — both are defensive,
-// reduced-size states, and the spec's cockpit only asks for 4 labels.
+// reduced-size states, and the cockpit's Account Health card only shows 4
+// labels. The avatar is a touch more granular than the label: a strong
+// growth/attack run shows the "confident" character while a steady normal
+// session shows "healthy", though both read as the same "Healthy" label.
 export function getAccountHealthState(mode: BriefingMode): AccountHealthState {
   let label: AccountHealthState["label"];
   let avatarState: EdgePilotAvatarState;
   if (mode === "near_breach" || mode === "no_trading") {
     label = "Near Breach";
-    avatarState = "danger";
+    avatarState = "critical";
   } else if (mode === "payout_protection") {
     label = "Near Payout";
-    avatarState = "payout";
+    avatarState = "nearPayout";
   } else if (mode === "recovery" || mode === "protection") {
     label = "Recovery";
     avatarState = "recovery";
+  } else if (mode === "growth" || mode === "aggressive_attack") {
+    label = "Healthy";
+    avatarState = "confident";
   } else {
     label = "Healthy";
     avatarState = "healthy";

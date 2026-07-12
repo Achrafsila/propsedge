@@ -109,9 +109,9 @@ export function CockpitHero({
 
         {/* ── Avatar | Quote + Pilot's Advice | Decision ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)_auto] gap-8 items-stretch">
-          {/* Avatar column — reserved for the future EdgePilot character asset */}
+          {/* Avatar column — the official EdgePilot character, mode-driven */}
           <div className="flex lg:flex-col items-center justify-center">
-            <EdgePilotAvatar state={healthState?.avatarState ?? "healthy"} size={132} />
+            <EdgePilotAvatar state={healthState?.avatarState ?? "confident"} size={300} priority />
           </div>
 
           {/* Quote + Pilot's Advice */}
