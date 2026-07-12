@@ -7,6 +7,7 @@ import {
   InstrumentKey,
   KeyLevels,
   MarketError,
+  MarketProviders,
   unavailableInstrument,
   notConfiguredSentiment,
   buildUnavailableIntelligence,
@@ -17,7 +18,8 @@ import {
   FinnhubRawNews,
   FinnhubRawEvent,
 } from "./providers/finnhub";
-import { fetchTwelveDataDaily, TwelveDataResult } from "./providers/twelvedata";
+import { fetchTwelveDataDaily, fetchTwelveDataWeekly, TwelveDataResult } from "./providers/twelvedata";
+import { buildMarketContext } from "./marketContext";
 
 // ============================================================
 // PropEdge — Market Intelligence orchestrator (SERVER-ONLY)
@@ -180,13 +182,18 @@ export function normalizeCalendar(raw: FinnhubRawEvent[]): EconomicEvent[] {
 
 // ── Instrument prices + key levels (from real OHLC only) ──────────────────
 
-export function normalizeInstrumentFromTD(symbol: string, result: TwelveDataResult): InstrumentMarketData {
+// `weekly` is optional/independent of `daily` — a weekly-fetch failure never
+// makes the instrument unavailable, it just leaves the three weekly fields
+// null (computeStructuralBias/insight already degrade gracefully for that).
+export function normalizeInstrumentFromTD(symbol: string, result: TwelveDataResult, weekly?: TwelveDataResult): InstrumentMarketData {
   if (result.error || !result.data || result.data.candles.length === 0) {
     return unavailableInstrument(symbol);
   }
   const [today, prev] = result.data.candles;
   const currentPrice = today?.close ?? null;
   if (currentPrice === null) return unavailableInstrument(symbol);
+
+  const [thisWeek, prevWeek] = weekly?.data?.candles ?? [];
 
   // Only real OHLC becomes a level; a level is null when its candle field is
   // missing. keyLevels is null only if nothing at all could be computed.
@@ -195,8 +202,12 @@ export function normalizeInstrumentFromTD(symbol: string, result: TwelveDataResu
     previousDayHigh: prev?.high ?? null,
     previousDayLow: prev?.low ?? null,
     previousDayClose: prev?.close ?? null,
+    weeklyOpen: thisWeek?.open ?? null,
+    previousWeekHigh: prevWeek?.high ?? null,
+    previousWeekLow: prevWeek?.low ?? null,
   };
   const hasAnyLevel = Object.values(levels).some((v) => v !== null);
+  const keyLevels = hasAnyLevel ? levels : null;
 
   return {
     symbol,
@@ -206,7 +217,8 @@ export function normalizeInstrumentFromTD(symbol: string, result: TwelveDataResu
     timestamp: today?.datetime ? `${today.datetime}T00:00:00Z` : null,
     status: "available",
     provider: "twelvedata",
-    keyLevels: hasAnyLevel ? levels : null,
+    keyLevels,
+    marketContext: buildMarketContext(symbol, currentPrice, keyLevels),
   };
 }
 
@@ -231,26 +243,32 @@ export async function getMarketIntelligence(timezone: string): Promise<MarketInt
   const date = dateInTimezone(now, tz);
 
   try {
-    const [newsRes, calendarRes, eurRes, xauRes] = await Promise.all([
+    const [newsRes, calendarRes, eurRes, xauRes, eurWeeklyRes, xauWeeklyRes] = await Promise.all([
       fetchFinnhubGeneralNews(),
       fetchFinnhubEconomicCalendar(date, date),
       fetchTwelveDataDaily("EUR/USD"),
       fetchTwelveDataDaily("XAU/USD"),
+      fetchTwelveDataWeekly("EUR/USD"),
+      fetchTwelveDataWeekly("XAU/USD"),
     ]);
 
     const news = normalizeNews(newsRes.raw);
     const economicEvents = normalizeCalendar(calendarRes.raw);
 
     const instruments: Record<InstrumentKey, InstrumentMarketData> = {
-      EURUSD: normalizeInstrumentFromTD("EURUSD", eurRes),
-      XAUUSD: normalizeInstrumentFromTD("XAUUSD", xauRes),
+      EURUSD: normalizeInstrumentFromTD("EURUSD", eurRes, eurWeeklyRes),
+      XAUUSD: normalizeInstrumentFromTD("XAUUSD", xauRes, xauWeeklyRes),
       // Indices aren't covered by either free tier — explicit unavailable,
       // never a substituted ETF (spec §5).
       NDX: unavailableInstrument("NDX"),
       US30: unavailableInstrument("US30"),
     };
 
-    const errors: MarketError[] = [newsRes.error, calendarRes.error, eurRes.error, xauRes.error].filter(
+    // Weekly fetch failures are surfaced (never silently swallowed) but
+    // don't by themselves flip an instrument to unavailable or the overall
+    // status away from "complete" — weekly key levels are additive context
+    // on top of the required daily price/levels, not a required V1 field.
+    const errors: MarketError[] = [newsRes.error, calendarRes.error, eurRes.error, xauRes.error, eurWeeklyRes.error, xauWeeklyRes.error].filter(
       (e): e is MarketError => e !== null
     );
 
@@ -260,6 +278,15 @@ export async function getMarketIntelligence(timezone: string): Promise<MarketInt
     const everythingClean = newsOk && calendarRes.error === null && instruments.EURUSD.status === "available" && instruments.XAUUSD.status === "available";
     const status: MarketIntelligence["status"] = nothing ? "unavailable" : everythingClean ? "complete" : "partial";
 
+    // Explicit per-domain attribution — never a single global provider
+    // string. "prices" is "twelvedata" the moment ANY instrument actually
+    // resolved from it; it's independent of news/calendar succeeding.
+    const providers: MarketProviders = {
+      news: newsOk ? "finnhub" : null,
+      calendar: calendarRes.error === null ? "finnhub" : null,
+      prices: anyPriceOk ? "twelvedata" : null,
+    };
+
     const result: MarketIntelligence = {
       date,
       timezone: tz,
@@ -268,7 +295,7 @@ export async function getMarketIntelligence(timezone: string): Promise<MarketInt
       instruments,
       sentiment: notConfiguredSentiment(),
       fetchedAt: now.toISOString(),
-      provider: "finnhub",
+      providers,
       status,
       errors,
     };

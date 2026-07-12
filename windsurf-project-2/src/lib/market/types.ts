@@ -39,14 +39,38 @@ export interface MarketNewsItem {
 }
 
 // Deterministic levels, only ever computed from real OHLC (never invented).
+// Weekly fields added for the Market Context phase — same rule as daily:
+// null unless the provider actually returned that candle.
 export interface KeyLevels {
   dailyOpen: number | null;
   previousDayHigh: number | null;
   previousDayLow: number | null;
   previousDayClose: number | null;
+  weeklyOpen: number | null;
+  previousWeekHigh: number | null;
+  previousWeekLow: number | null;
 }
 
 export type InstrumentStatus = "available" | "delayed" | "unavailable";
+
+// Deterministic structural read from price vs. real levels only — never a
+// news-derived or LLM-derived sentiment. "unknown" whenever the reference
+// levels needed to judge it aren't available (never guessed).
+export type StructuralBias = "bullish" | "neutral" | "bearish" | "unknown";
+
+export interface KeyLevelDistance {
+  label: string; // e.g. "Daily Open", "Prev Week High"
+  price: number;
+  distance: number; // currentPrice - level (signed)
+  distancePercent: number; // distance / level * 100 (signed)
+}
+
+export interface MarketContext {
+  bias: StructuralBias;
+  nearestLevel: KeyLevelDistance | null;
+  distances: KeyLevelDistance[]; // every level actually available, closest first
+  insight: string; // one concise deterministic sentence, template-built only
+}
 
 export interface InstrumentMarketData {
   symbol: string;
@@ -57,6 +81,7 @@ export interface InstrumentMarketData {
   status: InstrumentStatus;
   provider: MarketProvider | null; // null when unavailable from every provider
   keyLevels: KeyLevels | null; // null => "Key levels unavailable from current provider."
+  marketContext: MarketContext | null; // null whenever keyLevels/currentPrice aren't available
 }
 
 // V1 sentiment is deliberately never generated from headlines — always
@@ -80,6 +105,17 @@ export interface MarketError {
 
 export type InstrumentKey = "XAUUSD" | "NDX" | "US30" | "EURUSD";
 
+// Explicit per-domain attribution — never a single global "provider" string.
+// A domain is null whenever that domain's fetch failed or wasn't
+// configured, even if a different domain succeeded (e.g. calendar can be
+// null while news is "finnhub" and prices is "twelvedata" — exactly today's
+// real state on the free tiers).
+export interface MarketProviders {
+  news: MarketProvider | null;
+  calendar: MarketProvider | null;
+  prices: MarketProvider | null;
+}
+
 export interface MarketIntelligence {
   date: string; // YYYY-MM-DD (user tz)
   timezone: string;
@@ -88,10 +124,7 @@ export interface MarketIntelligence {
   instruments: Record<InstrumentKey, InstrumentMarketData>;
   sentiment: MarketSentiment;
   fetchedAt: string; // ISO 8601 (UTC)
-  // The primary / news provider. Per-instrument price provider is on each
-  // InstrumentMarketData.provider (may be "twelvedata"), so this staying
-  // "finnhub" is accurate for the news + calendar domains it covers.
-  provider: "finnhub";
+  providers: MarketProviders;
   status: "complete" | "partial" | "unavailable";
   errors: MarketError[];
 }
@@ -108,11 +141,16 @@ export function unavailableInstrument(symbol: string): InstrumentMarketData {
     status: "unavailable",
     provider: null,
     keyLevels: null,
+    marketContext: null,
   };
 }
 
 export function notConfiguredSentiment(): MarketSentiment {
   return { label: "unknown", confidence: null, drivers: [], methodology: "not_configured" };
+}
+
+export function noProviders(): MarketProviders {
+  return { news: null, calendar: null, prices: null };
 }
 
 // Shared safe fallback — used server-side on a catastrophic failure and
@@ -133,7 +171,7 @@ export function buildUnavailableIntelligence(timezone: string, errors: MarketErr
     },
     sentiment: notConfiguredSentiment(),
     fetchedAt: now.toISOString(),
-    provider: "finnhub",
+    providers: noProviders(),
     status: "unavailable",
     errors,
   };
@@ -151,6 +189,8 @@ export function isMarketIntelligence(value: unknown): value is MarketIntelligenc
     Array.isArray(v.news) &&
     typeof v.instruments === "object" &&
     v.instruments !== null &&
+    typeof v.providers === "object" &&
+    v.providers !== null &&
     typeof v.fetchedAt === "string" &&
     typeof v.status === "string"
   );

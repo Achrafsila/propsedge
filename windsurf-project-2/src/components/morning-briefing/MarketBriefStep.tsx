@@ -178,11 +178,21 @@ export function MarketBriefStep({ intel }: { intel: MarketIntelligence }) {
   const calendarUnavailable = intel.economicEvents.length === 0;
   const showPartial = intel.status !== "complete" && (anyUnavailable || calendarUnavailable);
 
+  // Built from the real per-domain attribution — never a single hardcoded
+  // "Finnhub is connected" line, since prices now come from TwelveData and
+  // the calendar domain may have no provider at all (e.g. 403 on this tier).
   const partialText = (() => {
+    const connected: string[] = [];
+    if (intel.providers.news) connected.push(`${intel.providers.news} (news)`);
+    if (intel.providers.prices) connected.push(`${intel.providers.prices} (prices)`);
+    const connectedLine = connected.length > 0 ? `Connected to ${connected.join(" and ")}.` : "";
+
     const bits: string[] = [];
+    if (!intel.providers.calendar) bits.push("the economic calendar isn't available on the current provider plan");
     if (anyUnavailable) bits.push("some instrument price data isn't covered by the current provider");
-    if (calendarUnavailable) bits.push("the economic calendar requires a paid plan");
-    return `Finnhub is connected. ${bits.length ? bits.join(", ") : "some data isn't available"}.`;
+    const gapSentence = bits.length > 0 ? `${bits[0][0].toUpperCase()}${bits.join(", ").slice(1)}.` : "";
+
+    return `${connectedLine} ${gapSentence}`.trim() || "Some market data isn't available right now.";
   })();
 
   return (

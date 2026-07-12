@@ -8,13 +8,18 @@ import { MarketError } from "../types";
 // commodity price + OHLC that Finnhub's free tier can't serve.
 //
 // Confirmed against this key's tier during integration (2026-07):
-//   /time_series EUR/USD, XAU/USD  -> 200 (open/high/low/close + prev day)
-//   NDX / DJI (indices)            -> 404 "available on Grow/Venture plan"
+//   /time_series EUR/USD, XAU/USD, interval=1day  -> 200 (OHLC + prev day)
+//   /time_series EUR/USD, XAU/USD, interval=1week -> 200 (OHLC + prev week)
+//   NDX / DJI (indices)                            -> 404 "available on
+//                                                      Grow/Venture plan"
 // So indices return an explicit unavailable state, never a substituted ETF.
 
 const TWELVEDATA_BASE_URL = "https://api.twelvedata.com";
 const TIMEOUT_MS = 12_000;
 export const PRICES_REVALIDATE_SECONDS = 300; // 5 min (spec §9)
+// Weekly OHLC only moves once a new week opens — a much longer window than
+// the 5-min intraday price cache is appropriate and cuts request volume.
+export const WEEKLY_REVALIDATE_SECONDS = 1800; // 30 min
 
 function getApiKey(): string {
   const key = process.env.TWELVEDATA_API_KEY;
@@ -26,9 +31,10 @@ function toMarketError(code: string, message: string): MarketError {
   return { domain: "prices", code, message };
 }
 
-// One daily OHLC candle, already parsed from TwelveData's string fields to
-// numbers (null if a field was missing/unparseable — never guessed).
-export interface DailyCandle {
+// One OHLC candle (daily or weekly, shape is identical), already parsed
+// from TwelveData's string fields to numbers (null if a field was
+// missing/unparseable — never guessed).
+export interface Candle {
   datetime: string; // "YYYY-MM-DD"
   open: number | null;
   high: number | null;
@@ -36,13 +42,13 @@ export interface DailyCandle {
   close: number | null;
 }
 
-export interface TwelveDataDaily {
+export interface TwelveDataSeries {
   symbol: string;
-  candles: DailyCandle[]; // newest first: [today, previousDay]
+  candles: Candle[]; // newest first: [current period, previous period]
 }
 
 export interface TwelveDataResult {
-  data: TwelveDataDaily | null;
+  data: TwelveDataSeries | null;
   error: MarketError | null;
 }
 
@@ -62,9 +68,11 @@ interface RawTimeSeries {
   values?: Array<{ datetime?: string; open?: string; high?: string; low?: string; close?: string }>;
 }
 
-// Fetches the last two daily candles (today forming + previous day) for a
-// TwelveData FX/commodity symbol like "EUR/USD" or "XAU/USD".
-export async function fetchTwelveDataDaily(symbol: string): Promise<TwelveDataResult> {
+type Interval = "1day" | "1week";
+
+// Shared fetch/parse for both daily and weekly series — same endpoint,
+// same response shape, only the interval differs.
+async function fetchTwelveDataSeries(symbol: string, interval: Interval, revalidate: number): Promise<TwelveDataResult> {
   let key: string;
   try {
     key = getApiKey();
@@ -72,9 +80,9 @@ export async function fetchTwelveDataDaily(symbol: string): Promise<TwelveDataRe
     return { data: null, error: toMarketError("no_api_key", "Price data provider is not configured.") };
   }
 
-  const url = `${TWELVEDATA_BASE_URL}/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=2&apikey=${key}`;
+  const url = `${TWELVEDATA_BASE_URL}/time_series?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=2&apikey=${key}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), next: { revalidate: PRICES_REVALIDATE_SECONDS } });
+    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), next: { revalidate } });
     // TwelveData returns 200 with an { status:"error", code } body for most
     // failures, and sometimes a real HTTP error — handle both.
     const body: RawTimeSeries = await res.json().catch(() => ({}) as RawTimeSeries);
@@ -90,7 +98,7 @@ export async function fetchTwelveDataDaily(symbol: string): Promise<TwelveDataRe
     const values = Array.isArray(body.values) ? body.values : [];
     if (values.length === 0) return { data: null, error: toMarketError("empty", `No price data returned for ${symbol}.`) };
 
-    const candles: DailyCandle[] = values.map((v) => ({
+    const candles: Candle[] = values.map((v) => ({
       datetime: typeof v.datetime === "string" ? v.datetime : "",
       open: num(v.open),
       high: num(v.high),
@@ -103,4 +111,16 @@ export async function fetchTwelveDataDaily(symbol: string): Promise<TwelveDataRe
     const isTimeout = name === "TimeoutError" || name === "AbortError";
     return { data: null, error: toMarketError(isTimeout ? "timeout" : "network_error", isTimeout ? "The price provider did not respond in time." : "Could not reach the price provider.") };
   }
+}
+
+// Fetches the last two daily candles (today forming + previous day) for a
+// TwelveData FX/commodity symbol like "EUR/USD" or "XAU/USD".
+export async function fetchTwelveDataDaily(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "1day", PRICES_REVALIDATE_SECONDS);
+}
+
+// Fetches the last two weekly candles (this week forming + previous
+// complete week) — the source for weekly open / previous week high / low.
+export async function fetchTwelveDataWeekly(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "1week", WEEKLY_REVALIDATE_SECONDS);
 }
