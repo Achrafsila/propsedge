@@ -19,7 +19,9 @@ import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
 import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { getAccountBriefings, getAccountRiskStates } from "@/lib/analytics/aiCoach";
 import { buildContractDraft, getAccountInstrumentOptions, validateContractDraft, DailyContractDraft } from "@/lib/analytics/dailyContract";
-import { getMarketBrief, buildEmptyMarketBrief, getEdgePilotInsight, getDailyMotivation, MarketBrief } from "@/lib/analytics/morningBriefing";
+import { getEdgePilotInsight, getDailyMotivation } from "@/lib/analytics/morningBriefing";
+import { fetchMarketIntelligence, buildInitialIntelligence } from "@/lib/market/client";
+import { MarketIntelligence } from "@/lib/market/types";
 import { STEP_ORDER } from "./types";
 import { WelcomeStep } from "./WelcomeStep";
 import { ObjectiveStep } from "./ObjectiveStep";
@@ -112,15 +114,15 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
   const updateDraft = (key: string, patch: Partial<DailyContractDraft>) =>
     setDrafts((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...patch } } : prev));
 
-  // Fetched from the server-only /api/market-brief route (Finnhub) — starts
-  // on the safe all-placeholder shape and swaps in real data once the fetch
-  // resolves; getMarketBrief() itself already falls back to the placeholder
-  // shape on any failure, so this never needs its own error state.
-  const [marketBrief, setMarketBrief] = useState<MarketBrief>(buildEmptyMarketBrief);
+  // Fetched from the server-only /api/market-intelligence route — starts on
+  // the safe "unavailable" shape and swaps in real data once the fetch
+  // resolves; fetchMarketIntelligence() already falls back to that shape on
+  // any failure, so this never needs its own error state.
+  const [marketIntel, setMarketIntel] = useState<MarketIntelligence>(buildInitialIntelligence);
   useEffect(() => {
     let cancelled = false;
-    getMarketBrief().then((mb) => {
-      if (!cancelled) setMarketBrief(mb);
+    fetchMarketIntelligence().then((mi) => {
+      if (!cancelled) setMarketIntel(mi);
     });
     return () => {
       cancelled = true;
@@ -208,7 +210,7 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
           >
             {currentStep === "welcome" && <WelcomeStep firstName={firstName} />}
             {currentStep === "objective" && <ObjectiveStep objective={objective} onSelect={setObjective} />}
-            {currentStep === "market_brief" && <MarketBriefStep marketBrief={marketBrief} />}
+            {currentStep === "market_brief" && <MarketBriefStep intel={marketIntel} />}
             {currentStep === "todays_rules" && <TodaysRulesStep briefings={briefings} />}
             {currentStep === "trading_protocol" && (
               <TradingProtocolStep briefings={briefings} drafts={drafts} onDraftChange={updateDraft} instrumentOptions={instrumentOptions} />

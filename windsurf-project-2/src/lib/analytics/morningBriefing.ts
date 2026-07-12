@@ -3,103 +3,15 @@ import { TraderEdge } from "./traderEdge";
 import { TraderEvolution } from "./traderEvolution";
 
 // ============================================================
-// PropEdge — Morning Briefing copy generators (V1, deterministic)
+// PropEdge — Morning Briefing copy generators (deterministic)
 // ============================================================
-// Two responsibilities, kept separate from aiCoach.ts (which owns risk/Mode
-// math, not prose): a Market Brief backed by the server-only
-// /api/market-brief route (Finnhub — see src/lib/finnhub.ts, never
-// imported here since this file has no access to FINNHUB_API_KEY and
-// shouldn't), and two single-sentence generators (EdgePilot Insight, Daily
-// Motivation) that only ever read fields the Trader DNA engines already
-// compute — no new analytics, no AI call, no randomness that changes on
-// re-render.
-
-// ── Market Brief ─────────────────────────────────────────────────────────
-
-export interface MarketInstrumentBrief {
-  symbol: string;
-  highImpactNews: string | null;
-  sentiment: "bullish" | "bearish" | "neutral" | null;
-  openingPrice: number | null;
-  keyLevels: string | null;
-  // Reserved for future data feeds (Fear & Greed, VIX, Dollar Index, Bond
-  // Yields) — always null in V1, not rendered by MarketBriefStep yet, kept
-  // here so the type doesn't need to change when a real source is wired up.
-  fearGreedIndex: number | null;
-  vix: number | null;
-  dollarIndex: number | null;
-  bondYields: string | null;
-}
-
-export interface MarketBrief {
-  gold: MarketInstrumentBrief;
-  ndx: MarketInstrumentBrief;
-  us30: MarketInstrumentBrief;
-  eurusd: MarketInstrumentBrief;
-  generatedAt: string;
-}
-
-function emptyInstrumentBrief(symbol: string): MarketInstrumentBrief {
-  return {
-    symbol,
-    highImpactNews: null,
-    sentiment: null,
-    openingPrice: null,
-    keyLevels: null,
-    fearGreedIndex: null,
-    vix: null,
-    dollarIndex: null,
-    bondYields: null,
-  };
-}
-
-// The safe fallback shape — every field a graceful placeholder
-// (MarketBriefStep renders "Data unavailable" copy for nulls). Used as the
-// initial render state before the fetch below resolves, and as the result
-// of getMarketBrief() itself on any network failure, non-2xx response, or
-// unexpected shape, so a Finnhub outage or rate limit never breaks the
-// Morning Briefing.
-export function buildEmptyMarketBrief(): MarketBrief {
-  return {
-    gold: emptyInstrumentBrief("Gold"),
-    ndx: emptyInstrumentBrief("NDX"),
-    us30: emptyInstrumentBrief("US30"),
-    eurusd: emptyInstrumentBrief("EURUSD"),
-    generatedAt: new Date().toISOString(),
-  };
-}
-
-function isMarketInstrumentBrief(value: unknown): value is MarketInstrumentBrief {
-  return typeof value === "object" && value !== null && typeof (value as { symbol?: unknown }).symbol === "string";
-}
-
-function isMarketBrief(value: unknown): value is MarketBrief {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    isMarketInstrumentBrief(v.gold) &&
-    isMarketInstrumentBrief(v.ndx) &&
-    isMarketInstrumentBrief(v.us30) &&
-    isMarketInstrumentBrief(v.eurusd)
-  );
-}
-
-// Fetches real data from Finnhub via the server-only /api/market-brief
-// route (this file has no direct access to FINNHUB_API_KEY, and never
-// should — see src/lib/finnhub.ts). Falls back to buildEmptyMarketBrief()
-// on any failure, keeping this function's shape exactly what it was in V1
-// (a Promise<MarketBrief>, no caller changes needed beyond awaiting it) —
-// the "Future Ready" swap this file's header already anticipated.
-export async function getMarketBrief(): Promise<MarketBrief> {
-  try {
-    const res = await fetch("/api/market-brief");
-    if (!res.ok) return buildEmptyMarketBrief();
-    const data: unknown = await res.json();
-    return isMarketBrief(data) ? data : buildEmptyMarketBrief();
-  } catch {
-    return buildEmptyMarketBrief();
-  }
-}
+// Two single-sentence generators (EdgePilot Insight, Daily Motivation) that
+// only ever read fields the Trader DNA engines already compute — no new
+// analytics, no AI call, no randomness that changes on re-render.
+//
+// The Market Brief now lives in its own provider-independent module
+// (src/lib/market/*, surfaced via /api/market-intelligence); this file no
+// longer owns any market-data types or fetching.
 
 // ── EdgePilot Insight ────────────────────────────────────────────────────
 // One sentence, picked from already-computed fields in priority order (same
