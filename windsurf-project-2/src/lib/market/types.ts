@@ -84,6 +84,35 @@ export interface InstrumentMarketData {
   marketContext: MarketContext | null; // null whenever keyLevels/currentPrice aren't available
 }
 
+// One OHLC candle, provider-independent normalized shape (mirrors the raw
+// provider Candle field-for-field — see providers/twelvedata.ts). Nulls
+// only, never guessed, same rule as every other field in this file.
+export interface MarketCandle {
+  datetime: string; // "YYYY-MM-DD"
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+}
+
+export type HistoryQuality = "complete" | "partial" | "unavailable";
+
+// Market Data foundation only — no Pulse/Regime/Phase/Conviction/Volatility/
+// Opportunity/Liquidity/Breakout logic reads this yet. Candles are
+// newest-first (index 0 = currently-forming, per the empirical TwelveData
+// verification); any consumer that requires only completed candles must
+// explicitly skip index 0.
+export interface InstrumentMarketHistory {
+  symbol: string;
+  currentPrice: number | null;
+  dailyCandles: MarketCandle[];
+  weeklyCandles: MarketCandle[];
+  dataQuality: {
+    dailyHistory: HistoryQuality;
+    weeklyHistory: HistoryQuality;
+  };
+}
+
 // V1 sentiment is deliberately never generated from headlines — always
 // "unknown" until an objective market-context model is wired up.
 export interface MarketSentiment {

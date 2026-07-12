@@ -21,6 +21,17 @@ export const PRICES_REVALIDATE_SECONDS = 300; // 5 min (spec §9)
 // the 5-min intraday price cache is appropriate and cuts request volume.
 export const WEEKLY_REVALIDATE_SECONDS = 1800; // 30 min
 
+// History fetches (Market Data foundation) — deeper OHLC for future
+// Pulse/Regime/etc. engines, not the live 2-candle Market Context path.
+// Sizes are the exact depths empirically confirmed clean on the current
+// TwelveData plan for both EUR/USD and XAU/USD (100 daily, 50 weekly).
+// Longer revalidate windows than the live fetch: history doesn't need
+// 5-min freshness, and TwelveData enforces an 8-credit/minute limit.
+export const HISTORY_DAILY_OUTPUTSIZE = 100;
+export const HISTORY_WEEKLY_OUTPUTSIZE = 50;
+export const DAILY_HISTORY_REVALIDATE_SECONDS = 1800; // 30 min
+export const WEEKLY_HISTORY_REVALIDATE_SECONDS = 3600; // 1 hour
+
 function getApiKey(): string {
   const key = process.env.TWELVEDATA_API_KEY;
   if (!key) throw new Error("TWELVEDATA_API_KEY is not configured");
@@ -71,8 +82,8 @@ interface RawTimeSeries {
 type Interval = "1day" | "1week";
 
 // Shared fetch/parse for both daily and weekly series — same endpoint,
-// same response shape, only the interval differs.
-async function fetchTwelveDataSeries(symbol: string, interval: Interval, revalidate: number): Promise<TwelveDataResult> {
+// same response shape, only the interval and outputsize differ.
+async function fetchTwelveDataSeries(symbol: string, interval: Interval, revalidate: number, outputsize: number): Promise<TwelveDataResult> {
   let key: string;
   try {
     key = getApiKey();
@@ -80,7 +91,7 @@ async function fetchTwelveDataSeries(symbol: string, interval: Interval, revalid
     return { data: null, error: toMarketError("no_api_key", "Price data provider is not configured.") };
   }
 
-  const url = `${TWELVEDATA_BASE_URL}/time_series?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=2&apikey=${key}`;
+  const url = `${TWELVEDATA_BASE_URL}/time_series?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=${outputsize}&apikey=${key}`;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), next: { revalidate } });
     // TwelveData returns 200 with an { status:"error", code } body for most
@@ -114,13 +125,29 @@ async function fetchTwelveDataSeries(symbol: string, interval: Interval, revalid
 }
 
 // Fetches the last two daily candles (today forming + previous day) for a
-// TwelveData FX/commodity symbol like "EUR/USD" or "XAU/USD".
+// TwelveData FX/commodity symbol like "EUR/USD" or "XAU/USD". Unchanged
+// behavior — still outputsize=2, still what Market Context's live price/
+// key-levels path consumes.
 export async function fetchTwelveDataDaily(symbol: string): Promise<TwelveDataResult> {
-  return fetchTwelveDataSeries(symbol, "1day", PRICES_REVALIDATE_SECONDS);
+  return fetchTwelveDataSeries(symbol, "1day", PRICES_REVALIDATE_SECONDS, 2);
 }
 
 // Fetches the last two weekly candles (this week forming + previous
 // complete week) — the source for weekly open / previous week high / low.
+// Unchanged behavior — still outputsize=2.
 export async function fetchTwelveDataWeekly(symbol: string): Promise<TwelveDataResult> {
-  return fetchTwelveDataSeries(symbol, "1week", WEEKLY_REVALIDATE_SECONDS);
+  return fetchTwelveDataSeries(symbol, "1week", WEEKLY_REVALIDATE_SECONDS, 2);
+}
+
+// Fetches up to HISTORY_DAILY_OUTPUTSIZE daily candles — the Market Data
+// foundation's reusable deep-history fetch. Index 0 is still the
+// currently-forming candle (same ordering as the live 2-candle fetch).
+export async function fetchTwelveDataDailyHistory(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "1day", DAILY_HISTORY_REVALIDATE_SECONDS, HISTORY_DAILY_OUTPUTSIZE);
+}
+
+// Fetches up to HISTORY_WEEKLY_OUTPUTSIZE weekly candles — same shape/
+// ordering rules as fetchTwelveDataDailyHistory, one interval up.
+export async function fetchTwelveDataWeeklyHistory(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "1week", WEEKLY_HISTORY_REVALIDATE_SECONDS, HISTORY_WEEKLY_OUTPUTSIZE);
 }
