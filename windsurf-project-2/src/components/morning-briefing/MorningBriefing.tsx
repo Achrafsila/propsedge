@@ -20,12 +20,9 @@ import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { getAccountBriefings, getAccountRiskStates } from "@/lib/analytics/aiCoach";
 import { buildContractDraft, getAccountInstrumentOptions, validateContractDraft, DailyContractDraft } from "@/lib/analytics/dailyContract";
 import { getEdgePilotInsight, getDailyMotivation } from "@/lib/analytics/morningBriefing";
-import { fetchMarketIntelligence, buildInitialIntelligence } from "@/lib/market/client";
-import { MarketIntelligence } from "@/lib/market/types";
 import { STEP_ORDER } from "./types";
 import { WelcomeStep } from "./WelcomeStep";
 import { ObjectiveStep } from "./ObjectiveStep";
-import { MarketBriefStep } from "./MarketBriefStep";
 import { TodaysRulesStep } from "./TodaysRulesStep";
 import { TradingProtocolStep, accountKey } from "./TradingProtocolStep";
 import { AccountHealthStep } from "./AccountHealthStep";
@@ -114,21 +111,6 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
   const updateDraft = (key: string, patch: Partial<DailyContractDraft>) =>
     setDrafts((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...patch } } : prev));
 
-  // Fetched from the server-only /api/market-intelligence route — starts on
-  // the safe "unavailable" shape and swaps in real data once the fetch
-  // resolves; fetchMarketIntelligence() already falls back to that shape on
-  // any failure, so this never needs its own error state.
-  const [marketIntel, setMarketIntel] = useState<MarketIntelligence>(buildInitialIntelligence);
-  useEffect(() => {
-    let cancelled = false;
-    fetchMarketIntelligence().then((mi) => {
-      if (!cancelled) setMarketIntel(mi);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const insight = useMemo(() => getEdgePilotInsight(discipline, edge, evolution), [discipline, edge, evolution]);
   const motivation = useMemo(() => getDailyMotivation(discipline, evolution, todayDateString()), [discipline, evolution]);
 
@@ -209,14 +191,13 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
             transition={{ duration: 0.3, ease: "easeOut" }}
           >
             {currentStep === "welcome" && <WelcomeStep firstName={firstName} />}
-            {currentStep === "objective" && <ObjectiveStep objective={objective} onSelect={setObjective} />}
-            {currentStep === "market_brief" && <MarketBriefStep intel={marketIntel} />}
+            {currentStep === "account_health" && <AccountHealthStep briefings={briefings} riskStates={riskStates} />}
             {currentStep === "todays_rules" && <TodaysRulesStep briefings={briefings} />}
+            {currentStep === "insight" && <InsightStep insight={insight} />}
+            {currentStep === "objective" && <ObjectiveStep objective={objective} onSelect={setObjective} />}
             {currentStep === "trading_protocol" && (
               <TradingProtocolStep briefings={briefings} drafts={drafts} onDraftChange={updateDraft} instrumentOptions={instrumentOptions} />
             )}
-            {currentStep === "account_health" && <AccountHealthStep briefings={briefings} riskStates={riskStates} />}
-            {currentStep === "insight" && <InsightStep insight={insight} />}
             {currentStep === "motivation" && <MotivationStep motivation={motivation} />}
             {currentStep === "start_trading" && <StartTradingStep onStart={handleStart} />}
           </motion.div>
@@ -254,7 +235,7 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
 // Shows once per calendar day, on first login, before the normal app is
 // usable — gated by a localStorage "last completed date" per user (no
 // Supabase schema change). Only runs the cheap loading-flag checks itself;
-// MorningBriefingContent (the actual 9-step flow, and its Trader DNA/aiCoach
+// MorningBriefingContent (the actual 8-step flow, and its Trader DNA/aiCoach
 // computation) only mounts once the gate decides to show it.
 export function MorningBriefing() {
   const { user } = useAuth();
