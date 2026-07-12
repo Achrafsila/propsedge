@@ -7,6 +7,13 @@ import { buildUnavailableIntelligence } from "@/lib/market/types";
 // Node runtime so process.env is available. React components fetch THIS,
 // never Finnhub/TwelveData directly, and never see an API key.
 export const runtime = "nodejs";
+// Explicit, not implicit: this route must never be served from Next's Full
+// Route Cache (a GET handler with no dynamic API usage can otherwise be
+// frozen at build/first-request time). Freshness is already governed
+// per-domain by each provider's own `next: { revalidate }` window
+// (news 15m / calendar 30m / prices 5m / weekly 30m) — this only makes sure
+// the route wrapper itself is never an extra, stale caching layer on top.
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   // The user's timezone comes from the client (Intl) so event times can be

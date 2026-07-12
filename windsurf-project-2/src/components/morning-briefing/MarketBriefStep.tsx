@@ -1,6 +1,6 @@
 "use client";
 
-import { Newspaper, CalendarClock, TrendingUp, Info } from "lucide-react";
+import { Newspaper, CalendarClock, TrendingUp, Info, Compass } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import {
   MarketIntelligence,
@@ -8,6 +8,7 @@ import {
   EconomicEvent,
   InstrumentMarketData,
   ImpactLevel,
+  StructuralBias,
   INSTRUMENT_KEYS,
 } from "@/lib/market/types";
 
@@ -23,6 +24,12 @@ const IMPACT_COLOR: Record<Exclude<ImpactLevel, "unknown">, string> = {
   high: "#EF4444",
   medium: "#F59E0B",
   low: "#298DFF",
+};
+
+const BIAS_COLOR: Record<Exclude<StructuralBias, "unknown">, string> = {
+  bullish: "#10B981",
+  bearish: "#EF4444",
+  neutral: "#94A3B8",
 };
 
 const MAX_GLOBAL_NEWS = 3;
@@ -138,9 +145,14 @@ function LevelRow({ label, value }: { label: string; value: number | null }) {
   );
 }
 
+// Weekly levels are shown alongside the daily ones whenever the provider
+// returned them — never a placeholder row when they're null.
 function InstrumentCard({ data, ago }: { data: InstrumentMarketData; ago: string | null }) {
   const kl = data.keyLevels;
-  const hasLevels = kl !== null && (kl.dailyOpen !== null || kl.previousDayHigh !== null || kl.previousDayLow !== null || kl.previousDayClose !== null);
+  const hasDailyLevels = kl !== null && (kl.dailyOpen !== null || kl.previousDayHigh !== null || kl.previousDayLow !== null || kl.previousDayClose !== null);
+  const hasWeeklyLevels = kl !== null && (kl.weeklyOpen !== null || kl.previousWeekHigh !== null || kl.previousWeekLow !== null);
+  const ctx = data.marketContext;
+
   return (
     <div className="rounded-xl p-4" style={CARD_STYLE}>
       <div className="flex items-center justify-between mb-3">
@@ -156,14 +168,39 @@ function InstrumentCard({ data, ago }: { data: InstrumentMarketData; ago: string
       </div>
 
       <Label>Key Levels</Label>
-      {hasLevels ? (
+      {hasDailyLevels ? (
         <div className="space-y-1.5 mt-1.5">
           <LevelRow label="Prev Day High" value={kl.previousDayHigh} />
           <LevelRow label="Prev Day Low" value={kl.previousDayLow} />
           <LevelRow label="Prev Day Close" value={kl.previousDayClose} />
+          {hasWeeklyLevels && (
+            <>
+              <LevelRow label="Weekly Open" value={kl.weeklyOpen} />
+              <LevelRow label="Prev Week High" value={kl.previousWeekHigh} />
+              <LevelRow label="Prev Week Low" value={kl.previousWeekLow} />
+            </>
+          )}
         </div>
       ) : (
         <p className="text-[#64748B] mt-1" style={{ fontSize: typography.fontSize.xs }}>Key levels unavailable from current provider.</p>
+      )}
+
+      {ctx && (
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(148,163,184,0.08)" }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <Compass className="w-3.5 h-3.5 text-[#298DFF] flex-shrink-0" />
+            <Label>Market Context</Label>
+            {ctx.bias !== "unknown" && (
+              <span
+                className="px-2 py-0.5 rounded-full font-semibold uppercase ml-auto"
+                style={{ fontSize: "0.5625rem", background: `${BIAS_COLOR[ctx.bias]}1A`, color: BIAS_COLOR[ctx.bias], border: `1px solid ${BIAS_COLOR[ctx.bias]}40` }}
+              >
+                {ctx.bias}
+              </span>
+            )}
+          </div>
+          <p className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs, lineHeight: typography.lineHeight.normal }}>{ctx.insight}</p>
+        </div>
       )}
 
       {ago && <p className="text-[#475569] mt-3" style={{ fontSize: "0.5625rem" }}>Updated {ago}</p>}
@@ -228,7 +265,15 @@ export function MarketBriefStep({ intel }: { intel: MarketIntelligence }) {
           </div>
         )}
 
-        <p className="text-[#475569] text-center" style={{ fontSize: "0.625rem" }}>Market context model not connected yet.</p>
+        {/* This is about `sentiment` only (the global bullish/bearish label,
+            deliberately never generated in V1) — not the per-instrument
+            Market Context above, which is real deterministic data from
+            TwelveData OHLC and must never be shadowed by this disclaimer. */}
+        {intel.sentiment.methodology === "not_configured" && (
+          <p className="text-[#475569] text-center" style={{ fontSize: "0.625rem" }}>
+            Directional sentiment model not connected yet — Market Context above is real, deterministic data.
+          </p>
+        )}
       </div>
     </div>
   );
