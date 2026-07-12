@@ -21,8 +21,9 @@ import {
   getAccountOptionLabel,
   getAccountStartDateLabel,
   getAccountStatusLabel,
+  getSelectableAccounts,
 } from "@/lib/accountLabels";
-import { Challenge, FundedAccount, PersonalAccount } from "@/types";
+import Link from "next/link";
 
 export default function Journal() {
   const { trades, tradesLoading, deleteTrade, deleteTradesForAccount, challenges, fundedAccounts, personalAccounts } = useAccounts();
@@ -31,10 +32,29 @@ export default function Journal() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [selectedAccountType, setSelectedAccountType] = useState<AccountKind>("challenge");
+  // Lazy-initialized from the CURRENT trading mode, not hardcoded to
+  // "challenge" — this was the bug. The mode-change effect below only
+  // corrects selectedAccountType when tradingMode actually changes
+  // (prevTradingMode !== tradingMode), which is never true on the very
+  // first render since prevTradingMode is seeded from tradingMode itself.
+  // So landing on this page while Personal Capital mode was already active
+  // (page reload, or switching mode on another page first) left
+  // selectedAccountType stuck on "challenge": the Account Type <select>
+  // rendered only its "Personal Account" option (visually locked, per
+  // tradingMode), but the Account dropdown underneath still resolved
+  // Challenge accounts, because it read the stale "challenge" state.
+  const [selectedAccountType, setSelectedAccountType] = useState<AccountKind>(() =>
+    tradingMode === "personal-capital" ? "personal" : "challenge"
+  );
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // Remembers the last Challenge/Funded choice so switching back to Prop
+  // Firm mode restores it instead of always resetting to "challenge".
+  const [lastPropAccountType, setLastPropAccountType] = useState<"challenge" | "funded">(
+    tradingMode === "personal-capital" ? "challenge" : (selectedAccountType as "challenge" | "funded")
+  );
 
   // The account-type selector tracks Trading Mode — Prop Firm mode only
   // ever offers Challenge/Funded, Personal Capital mode only ever offers
@@ -44,13 +64,17 @@ export default function Journal() {
   const [prevTradingMode, setPrevTradingMode] = useState(tradingMode);
   if (tradingMode !== prevTradingMode) {
     setPrevTradingMode(tradingMode);
-    setSelectedAccountType(tradingMode === "personal-capital" ? "personal" : "challenge");
+    setSelectedAccountType(tradingMode === "personal-capital" ? "personal" : lastPropAccountType);
     setSelectedAccountId("");
   }
 
-  const selectableAccounts: (Challenge | FundedAccount | PersonalAccount)[] =
-    selectedAccountType === "challenge" ? challenges : selectedAccountType === "funded" ? fundedAccounts : personalAccounts;
+  const selectableAccounts = getSelectableAccounts(selectedAccountType, tradingMode, {
+    challenges,
+    fundedAccounts,
+    personalAccounts,
+  });
   const hasSelectedAccount = selectedAccountId !== "";
+  const noPersonalAccountsAvailable = tradingMode === "personal-capital" && personalAccounts.length === 0;
 
   // Journal must never mix Prop Firm and Personal Capital trades — Prop
   // Firm mode is a no-op pass-through (identical to before Personal
@@ -235,8 +259,10 @@ export default function Journal() {
             <select
               value={selectedAccountType}
               onChange={(e) => {
-                setSelectedAccountType(e.target.value as AccountKind);
+                const next = e.target.value as AccountKind;
+                setSelectedAccountType(next);
                 setSelectedAccountId("");
+                if (next === "challenge" || next === "funded") setLastPropAccountType(next);
               }}
               className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             >
@@ -252,18 +278,27 @@ export default function Journal() {
           </div>
           <div className="space-y-2">
             <label className="text-[#8B97A8] text-sm">Account</label>
-            <select
-              value={selectedAccountId}
-              onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
-            >
-              <option value="">Select an account</option>
-              {selectableAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {getAccountOptionLabel(account, selectedAccountType)}
-                </option>
-              ))}
-            </select>
+            {noPersonalAccountsAvailable ? (
+              <div className="w-full bg-[#0D1424] border border-[#1A2942] rounded-lg px-3 py-2 text-sm text-[#8B97A8]">
+                No personal account found.{" "}
+                <Link href="/portfolio" className="text-[#298DFF] hover:underline">
+                  Create one from Portfolio.
+                </Link>
+              </div>
+            ) : (
+              <select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+              >
+                <option value="">Select an account</option>
+                {selectableAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {getAccountOptionLabel(account, selectedAccountType)}
+                  </option>
+                ))}
+              </select>
+            )}
             {hasSelectedAccount && (() => {
               const selectedAccount = selectableAccounts.find((a) => a.id === selectedAccountId);
               if (!selectedAccount) return null;

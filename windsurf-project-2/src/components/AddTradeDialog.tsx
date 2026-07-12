@@ -12,10 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
+import { useTradingMode } from "@/context/TradingModeContext";
 import { motion } from "framer-motion";
 import { Upload, Clock } from "lucide-react";
-import { AccountKind, getAccountOptionLabel } from "@/lib/accountLabels";
-import { Challenge, FundedAccount, PersonalAccount } from "@/types";
+import { AccountKind, getAccountOptionLabel, getSelectableAccounts } from "@/lib/accountLabels";
+import Link from "next/link";
 
 interface AddTradeDialogProps {
   open: boolean;
@@ -26,6 +27,7 @@ interface AddTradeDialogProps {
 
 export function AddTradeDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: AddTradeDialogProps) {
   const { addTrade, challenges, fundedAccounts, personalAccounts } = useAccounts();
+  const { tradingMode } = useTradingMode();
   const [formData, setFormData] = useState({
     accountId: "",
     accountType: "challenge" as AccountKind,
@@ -41,14 +43,18 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
 
   // Default to the account selected on the Trade Journal page whenever the
   // dialog opens, so a manually added trade lands on the account the user
-  // is currently viewing.
+  // is currently viewing. Callers that don't pass defaultAccountType (the
+  // Dashboard's quick "Add Trade" action, AccountAnalyticsView) fall back
+  // to a Trading-Mode-appropriate default rather than whatever accountType
+  // happened to be left over from a previous open — Personal Capital mode
+  // must never default to Challenge/Funded, and vice versa.
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
       setFormData((prev) => ({
         ...prev,
-        accountType: defaultAccountType ?? prev.accountType,
+        accountType: defaultAccountType ?? (tradingMode === "personal-capital" ? "personal" : "challenge"),
         accountId: defaultAccountId ?? "",
       }));
     }
@@ -108,12 +114,11 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
     });
   };
 
-  const availableAccounts: (Challenge | FundedAccount | PersonalAccount)[] =
-    formData.accountType === "challenge"
-      ? challenges.filter((c) => c.status === "active")
-      : formData.accountType === "funded"
-        ? fundedAccounts.filter((a) => a.status === "active")
-        : personalAccounts.filter((p) => p.status === "active");
+  const availableAccounts = getSelectableAccounts(formData.accountType, tradingMode, {
+    challenges,
+    fundedAccounts,
+    personalAccounts,
+  }).filter((a) => a.status === "active");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,27 +135,39 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
               onChange={(e) => setFormData({ ...formData, accountType: e.target.value as AccountKind, accountId: "" })}
               className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             >
-              <option value="challenge">Challenge</option>
-              <option value="funded">Funded Account</option>
-              <option value="personal">Personal Account</option>
+              {tradingMode === "prop-firm" ? (
+                <>
+                  <option value="challenge">Challenge</option>
+                  <option value="funded">Funded Account</option>
+                </>
+              ) : (
+                <option value="personal">Personal Account</option>
+              )}
             </select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="accountId" className="text-[#8B97A8]">Account</Label>
-            <select
-              id="accountId"
-              value={formData.accountId}
-              onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-              required
-              className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
-            >
-              <option value="">Select an account</option>
-              {availableAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {getAccountOptionLabel(account, formData.accountType)}
-                </option>
-              ))}
-            </select>
+            {tradingMode === "personal-capital" && personalAccounts.length === 0 ? (
+              <div className="w-full bg-[#0D1424] border border-[#1A2942] rounded-lg px-3 py-2 text-sm text-[#8B97A8]">
+                No personal account found.{" "}
+                <Link href="/portfolio" className="text-[#2F80ED] hover:underline">Create one from Portfolio.</Link>
+              </div>
+            ) : (
+              <select
+                id="accountId"
+                value={formData.accountId}
+                onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
+                required
+                className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+              >
+                <option value="">Select an account</option>
+                {availableAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {getAccountOptionLabel(account, formData.accountType)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="entryDate" className="text-[#8B97A8]">Date</Label>

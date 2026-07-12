@@ -11,16 +11,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/context/AccountsContext";
+import { useTradingMode } from "@/context/TradingModeContext";
 import { toast } from "sonner";
 import { UploadCloud, FileSpreadsheet, X } from "lucide-react";
 import { parseTradeFile, ParsedTrade, SkippedRow } from "@/lib/importTrades";
-import { Challenge, FundedAccount, PersonalAccount } from "@/types";
+import Link from "next/link";
 import {
   AccountKind,
   ACCOUNT_STATUS_BADGE_COLOR,
   getAccountOptionLabel,
   getAccountStartDateLabel,
   getAccountStatusLabel,
+  getSelectableAccounts,
 } from "@/lib/accountLabels";
 
 interface ImportTradesDialogProps {
@@ -34,6 +36,7 @@ const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv"];
 
 export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: ImportTradesDialogProps) {
   const { addTradesBatch, challenges, fundedAccounts, personalAccounts } = useAccounts();
+  const { tradingMode } = useTradingMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [accountType, setAccountType] = useState<AccountKind>("challenge");
@@ -47,11 +50,14 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
 
   // Default to the account selected on the Trade Journal page whenever the
   // dialog opens, so imported trades land on the account being viewed.
+  // Callers that don't pass defaultAccountType fall back to a
+  // Trading-Mode-appropriate default, never hardcoded to "challenge" —
+  // Personal Capital mode must never default to Challenge/Funded.
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setAccountType(defaultAccountType ?? "challenge");
+      setAccountType(defaultAccountType ?? (tradingMode === "personal-capital" ? "personal" : "challenge"));
       setAccountId(defaultAccountId ?? "");
     }
   }
@@ -62,12 +68,11 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   // "failed" status (active/breached/closed), so that side is unchanged.
   // Personal Accounts have no such lifecycle either — only active ones are
   // valid import destinations.
-  const availableAccounts: (Challenge | FundedAccount | PersonalAccount)[] =
-    accountType === "challenge"
-      ? challenges.filter((c) => c.status === "active" || c.status === "failed")
-      : accountType === "funded"
-        ? fundedAccounts.filter((a) => a.status === "active")
-        : personalAccounts.filter((p) => p.status === "active");
+  const availableAccounts = getSelectableAccounts(accountType, tradingMode, {
+    challenges,
+    fundedAccounts,
+    personalAccounts,
+  }).filter((a) => a.status === "active" || a.status === "failed");
 
   // accountId alone isn't enough — it can be a stale id (e.g. an account
   // deleted after being selected) that no longer matches anything in
@@ -76,7 +81,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   const isDestinationValid = availableAccounts.some((a) => a.id === accountId);
 
   const resetState = () => {
-    setAccountType("challenge");
+    setAccountType(tradingMode === "personal-capital" ? "personal" : "challenge");
     setAccountId("");
     setIsDragActive(false);
     setFileName(null);
@@ -211,26 +216,38 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                 }}
                 className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
               >
-                <option value="challenge">Challenge</option>
-                <option value="funded">Funded Account</option>
-                <option value="personal">Personal Account</option>
+                {tradingMode === "prop-firm" ? (
+                  <>
+                    <option value="challenge">Challenge</option>
+                    <option value="funded">Funded Account</option>
+                  </>
+                ) : (
+                  <option value="personal">Personal Account</option>
+                )}
               </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="importAccountId" className="text-[#8B97A8]">Destination Account</Label>
-              <select
-                id="importAccountId"
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
-              >
-                <option value="">Select an account</option>
-                {availableAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {getAccountOptionLabel(account, accountType)}
-                  </option>
-                ))}
-              </select>
+              {tradingMode === "personal-capital" && personalAccounts.length === 0 ? (
+                <div className="w-full bg-[#0D1424] border border-[#1A2942] rounded-lg px-3 py-2 text-sm text-[#8B97A8]">
+                  No personal account found.{" "}
+                  <Link href="/portfolio" className="text-[#2F80ED] hover:underline">Create one from Portfolio.</Link>
+                </div>
+              ) : (
+                <select
+                  id="importAccountId"
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
+                >
+                  <option value="">Select an account</option>
+                  {availableAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {getAccountOptionLabel(account, accountType)}
+                    </option>
+                  ))}
+                </select>
+              )}
               {isDestinationValid && selectedAccount && (() => {
                 const status = getAccountStatusLabel(selectedAccount, accountType);
                 const color = ACCOUNT_STATUS_BADGE_COLOR[status] ?? "#94A3B8";

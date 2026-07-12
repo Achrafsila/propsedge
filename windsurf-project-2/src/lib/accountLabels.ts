@@ -1,4 +1,5 @@
 import { Challenge, FundedAccount, PersonalAccount, PersonalAccountStatus } from "@/types";
+import { TradingMode } from "@/context/TradingModeContext";
 
 // Shared account dropdown formatting — used by the Trade Journal account
 // selector and the Import Trades dialog's destination account selector so
@@ -6,6 +7,31 @@ import { Challenge, FundedAccount, PersonalAccount, PersonalAccountStatus } from
 // format instead of drifting into two different conventions.
 
 export type AccountKind = "challenge" | "funded" | "personal";
+
+export interface SelectableAccountSources {
+  challenges: Challenge[];
+  fundedAccounts: FundedAccount[];
+  personalAccounts: PersonalAccount[];
+}
+
+// The single choke point every account-type selector (Trade Journal, Add
+// Trade, Import Trades) funnels through — Trading Mode always wins over
+// whatever accountType happens to be selected, so Personal and Prop Firm
+// accounts can never appear in the same dropdown. Personal Capital mode
+// only ever returns personalAccounts, regardless of accountType; Prop Firm
+// mode never returns personalAccounts, even if accountType were somehow
+// "personal" (defensive — callers keep accountType in sync with mode, but
+// this makes the invariant hold even if one doesn't).
+export function getSelectableAccounts(
+  accountType: AccountKind,
+  tradingMode: TradingMode,
+  accounts: SelectableAccountSources
+): (Challenge | FundedAccount | PersonalAccount)[] {
+  if (tradingMode === "personal-capital") return accounts.personalAccounts;
+  if (accountType === "challenge") return accounts.challenges;
+  if (accountType === "funded") return accounts.fundedAccounts;
+  return [];
+}
 
 // A converted challenge reads as "Funded" (not "Passed") since that's its
 // actual current lifecycle state.
