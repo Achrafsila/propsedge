@@ -10,9 +10,19 @@ const PUBLIC_ROUTES = new Set([
   "/auth/callback",
 ]);
 
+// API routes never return HTML — redirecting one to /login on an auth
+// failure breaks every fetch()-based JSON consumer (the browser follows
+// the 307, lands on the login page's HTML, and res.json() throws, which
+// callers then silently treat as "provider unavailable"). This route
+// carries no user-specific data (it's market regime/phase/price/news
+// data, not account data) and its actual API keys never leave the route
+// handler, so it's safe to exempt from the session redirect rather than
+// forcing it to 307 like a page route.
+const PUBLIC_API_ROUTES = new Set(["/api/market-intelligence"]);
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_ROUTES.has(pathname) || pathname === "/";
+  const isPublic = PUBLIC_ROUTES.has(pathname) || pathname === "/" || PUBLIC_API_ROUTES.has(pathname);
 
   let supabaseResponse = NextResponse.next({ request });
 
