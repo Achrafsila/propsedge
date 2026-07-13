@@ -14,8 +14,10 @@ import { computeMarketEnvironment, MarketEnvironmentResult } from "./engines/mar
 // outputs, evidence, and data-quality states into one object per
 // instrument. No API calls, no React, no Supabase, no localStorage, no
 // AI/LLM, no trade signals, no entries/targets, no directional
-// recommendations. Not connected to EdgePilot, the API route, or any UI
-// yet — this is the orchestration layer only.
+// recommendations. Called by marketIntelligence.ts's orchestrator (which
+// attaches the result to InstrumentMarketData.marketPulse, served by
+// /api/market-intelligence) — not yet rendered by any UI (EdgePilot
+// integration is a separate, later step).
 //
 // Dependency order (why it's fixed):
 //   1. computeMarketRegime(history)                        — no dependencies
@@ -39,6 +41,29 @@ export type MarketPulseEvidenceSource = "regime" | "phase" | "volatility" | "con
 export interface MarketPulseEvidence {
   source: MarketPulseEvidenceSource;
   message: string;
+}
+
+// Trader-facing contract: MarketPulse.evidence is capped, never a raw dump
+// of every upstream engine's evidence array. The five analytical engines
+// keep ALL of their own evidence untouched (pulse.regime.evidence,
+// pulse.phase.evidence, etc. are unchanged) — only the top-level composed
+// MarketPulse.evidence array is deduplicated and capped.
+const MAX_EVIDENCE_ITEMS = 8;
+
+// Exact-duplicate removal, first occurrence wins. Two engines occasionally
+// state the same fact in the same words (e.g. both citing an identical
+// volatility reading); a trader-facing summary should show that once, not
+// twice. This never touches wording — a message survives byte-for-byte or
+// is dropped entirely, never edited.
+export function dedupeEvidence(items: MarketPulseEvidence[]): MarketPulseEvidence[] {
+  const seen = new Set<string>();
+  const out: MarketPulseEvidence[] = [];
+  for (const item of items) {
+    if (seen.has(item.message)) continue;
+    seen.add(item.message);
+    out.push(item);
+  }
+  return out;
 }
 
 export interface MarketPulse {
@@ -150,30 +175,39 @@ export function computeMarketPulse(history: InstrumentMarketHistory, marketConte
     status = "partial";
   }
 
-  const evidence: MarketPulseEvidence[] = [
-    ...regime.evidence.map((message) => ({ source: "regime" as const, message })),
-    ...phase.evidence.map((message) => ({ source: "phase" as const, message })),
-    ...volatility.evidence.map((message) => ({ source: "volatility" as const, message })),
-    ...conviction.evidence.map((message) => ({ source: "conviction" as const, message })),
-    ...environment.evidence.map((message) => ({ source: "environment" as const, message })),
-  ];
-  // Market Context's own deterministic facts (its insight sentence and
-  // nearest key-level reading) are surfaced verbatim as evidence — never
+  // Deterministic source order for the trader-facing array: Market
+  // Context's own facts lead (they're the most concrete, human-readable
+  // facts — an insight sentence and a level reading), then the five
+  // engines in their dependency order, then Pulse's own data-quality note
+  // last. Market Context's facts are surfaced verbatim — never
   // recomputed, just tagged and carried through.
+  const rawEvidence: MarketPulseEvidence[] = [];
   if (marketContext?.insight) {
-    evidence.push({ source: "market_context", message: marketContext.insight });
+    rawEvidence.push({ source: "market_context", message: marketContext.insight });
   }
   if (marketContext?.nearestLevel) {
     const nl = marketContext.nearestLevel;
     const sign = (n: number) => (n >= 0 ? "+" : "");
-    evidence.push({
+    rawEvidence.push({
       source: "market_context",
       message: `Nearest level: ${nl.label} at ${nl.price} (distance ${sign(nl.distance)}${nl.distance}, ${sign(nl.distancePercent)}${nl.distancePercent}%).`,
     });
   }
+  rawEvidence.push(...regime.evidence.map((message) => ({ source: "regime" as const, message })));
+  rawEvidence.push(...phase.evidence.map((message) => ({ source: "phase" as const, message })));
+  rawEvidence.push(...volatility.evidence.map((message) => ({ source: "volatility" as const, message })));
+  rawEvidence.push(...conviction.evidence.map((message) => ({ source: "conviction" as const, message })));
+  rawEvidence.push(...environment.evidence.map((message) => ({ source: "environment" as const, message })));
   if (degradations.length > 0) {
-    evidence.push({ source: "pulse", message: `Data quality degraded: ${degradations.join("; ")}.` });
+    rawEvidence.push({ source: "pulse", message: `Data quality degraded: ${degradations.join("; ")}.` });
   }
+
+  // Trader-facing cap: exact duplicates removed (first occurrence wins,
+  // per dedupeEvidence), then capped at MAX_EVIDENCE_ITEMS. Order is
+  // preserved throughout, so a cap only ever drops the LEAST-prioritized
+  // trailing items (later engines / the pulse-level note), never
+  // reorders what survives.
+  const evidence = dedupeEvidence(rawEvidence).slice(0, MAX_EVIDENCE_ITEMS);
 
   return {
     symbol,

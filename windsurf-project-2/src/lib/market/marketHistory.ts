@@ -12,13 +12,16 @@ import {
 // PropEdge — Market Data foundation (SERVER-ONLY)
 // ============================================================
 // Normalizes the deep-history TwelveData fetches into InstrumentMarketHistory.
-// Foundation only: no Market Pulse/Regime/Phase/Conviction/Volatility/
-// Opportunity/Liquidity/Breakout logic lives here, and nothing in the
-// existing orchestrator (marketIntelligence.ts), Market Context
-// (marketContext.ts), the API route, or the UI calls this yet. Never
-// invents data — a candle list is exactly what the provider returned,
-// possibly shorter than requested (dataQuality reflects that), never
-// padded or guessed.
+// No Market Pulse/Regime/Phase/Conviction/Volatility/Opportunity/
+// Liquidity/Breakout logic lives here — this file only normalizes raw
+// provider results into the shared history shape. As of the Market Pulse
+// backend integration, marketIntelligence.ts's orchestrator calls
+// buildInstrumentMarketHistory directly (reusing the same TwelveDataResult
+// it also passes to normalizeInstrumentFromTD, never a second fetch); the
+// API route and UI still don't call this file directly. Never invents
+// data — a candle list is exactly what the provider returned, possibly
+// shorter than requested (dataQuality reflects that), never padded or
+// guessed.
 
 function toMarketCandle(c: Candle): MarketCandle {
   return { datetime: c.datetime, open: c.open, high: c.high, low: c.low, close: c.close };

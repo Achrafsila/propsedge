@@ -5,6 +5,14 @@
 // (no process.env, no provider modules) so this file is safe to import
 // from client components as well as server code. Every provider normalizes
 // its raw response INTO these shapes; the UI only ever sees these.
+//
+// The MarketPulse import below is `import type` only — it is fully erased
+// at compile time (isolatedModules already requires this), so it creates
+// no runtime module dependency and no runtime circularity, even though
+// marketPulse.ts itself imports several types from this file. TypeScript
+// resolves circular type-only references fine; only circular VALUE
+// imports would be a problem, and there are none here.
+import type { MarketPulse } from "./marketPulse";
 
 export type MarketProvider = "finnhub" | "twelvedata";
 
@@ -82,6 +90,11 @@ export interface InstrumentMarketData {
   provider: MarketProvider | null; // null when unavailable from every provider
   keyLevels: KeyLevels | null; // null => "Key levels unavailable from current provider."
   marketContext: MarketContext | null; // null whenever keyLevels/currentPrice aren't available
+  // null only when there is no history to build a Pulse from at all (e.g.
+  // NDX/US30, never fetched from TwelveData). Whenever a fetch WAS
+  // attempted, Pulse is still populated — its own status/dataQuality
+  // fields report degradation honestly rather than being replaced by null.
+  marketPulse: MarketPulse | null;
 }
 
 // One OHLC candle, provider-independent normalized shape (mirrors the raw
@@ -171,6 +184,7 @@ export function unavailableInstrument(symbol: string): InstrumentMarketData {
     provider: null,
     keyLevels: null,
     marketContext: null,
+    marketPulse: null,
   };
 }
 

@@ -18,8 +18,10 @@ import {
   FinnhubRawNews,
   FinnhubRawEvent,
 } from "./providers/finnhub";
-import { fetchTwelveDataDaily, fetchTwelveDataWeekly, TwelveDataResult } from "./providers/twelvedata";
+import { fetchTwelveDataDailyHistory, fetchTwelveDataWeeklyHistory, TwelveDataResult } from "./providers/twelvedata";
 import { buildMarketContext } from "./marketContext";
+import { buildInstrumentMarketHistory } from "./marketHistory";
+import { computeMarketPulse } from "./marketPulse";
 
 // ============================================================
 // PropEdge — Market Intelligence orchestrator (SERVER-ONLY)
@@ -185,6 +187,15 @@ export function normalizeCalendar(raw: FinnhubRawEvent[]): EconomicEvent[] {
 // `weekly` is optional/independent of `daily` — a weekly-fetch failure never
 // makes the instrument unavailable, it just leaves the three weekly fields
 // null (computeStructuralBias/insight already degrade gracefully for that).
+//
+// Unchanged since the Market Pulse backend integration: this only ever
+// reads the first two candles of whatever array it's given (`result`/
+// `weekly` may now carry up to 100/50 candles instead of 2 — TwelveData
+// always returns newest-first, so candles[0]/[1] are identical either
+// way), so currentPrice/keyLevels/marketContext are computed exactly as
+// before. marketPulse is set to null here and attached separately by
+// buildInstrumentMarketDataWithPulse — this function stays a pure,
+// Pulse-agnostic normalizer.
 export function normalizeInstrumentFromTD(symbol: string, result: TwelveDataResult, weekly?: TwelveDataResult): InstrumentMarketData {
   if (result.error || !result.data || result.data.candles.length === 0) {
     return unavailableInstrument(symbol);
@@ -219,7 +230,26 @@ export function normalizeInstrumentFromTD(symbol: string, result: TwelveDataResu
     provider: "twelvedata",
     keyLevels,
     marketContext: buildMarketContext(symbol, currentPrice, keyLevels),
+    marketPulse: null,
   };
+}
+
+// Builds the full InstrumentMarketData for a TwelveData-backed instrument,
+// including its Market Pulse, from ONE already-fetched pair of daily/
+// weekly results — never a second fetch. Reuses normalizeInstrumentFromTD
+// (unchanged analytical logic) for current price/key levels/bias, then
+// builds InstrumentMarketHistory from the SAME two TwelveDataResult
+// objects (buildInstrumentMarketHistory, from marketHistory.ts) and feeds
+// that plus the already-computed Market Context into computeMarketPulse
+// (from marketPulse.ts). Always attempts Pulse, even on a failed fetch —
+// buildInstrumentMarketHistory/computeMarketPulse already degrade to an
+// honest "unavailable"/"partial" Pulse from empty/short history, so there
+// is no need to special-case failure here.
+export function buildInstrumentMarketDataWithPulse(symbol: string, dailyResult: TwelveDataResult, weeklyResult: TwelveDataResult): InstrumentMarketData {
+  const base = normalizeInstrumentFromTD(symbol, dailyResult, weeklyResult);
+  const history = buildInstrumentMarketHistory(symbol, dailyResult, weeklyResult);
+  const marketPulse = computeMarketPulse(history, base.marketContext);
+  return { ...base, marketPulse };
 }
 
 // ── Orchestrator ──────────────────────────────────────────────────────────
@@ -243,23 +273,29 @@ export async function getMarketIntelligence(timezone: string): Promise<MarketInt
   const date = dateInTimezone(now, tz);
 
   try {
+    // ONE fetch per symbol/interval — the 100-daily/50-weekly history
+    // fetch now serves both the live current-price/key-levels path AND
+    // Market Pulse. No separate 2-candle fetch is made (see
+    // buildInstrumentMarketDataWithPulse / the revalidate-window comment
+    // in providers/twelvedata.ts).
     const [newsRes, calendarRes, eurRes, xauRes, eurWeeklyRes, xauWeeklyRes] = await Promise.all([
       fetchFinnhubGeneralNews(),
       fetchFinnhubEconomicCalendar(date, date),
-      fetchTwelveDataDaily("EUR/USD"),
-      fetchTwelveDataDaily("XAU/USD"),
-      fetchTwelveDataWeekly("EUR/USD"),
-      fetchTwelveDataWeekly("XAU/USD"),
+      fetchTwelveDataDailyHistory("EUR/USD"),
+      fetchTwelveDataDailyHistory("XAU/USD"),
+      fetchTwelveDataWeeklyHistory("EUR/USD"),
+      fetchTwelveDataWeeklyHistory("XAU/USD"),
     ]);
 
     const news = normalizeNews(newsRes.raw);
     const economicEvents = normalizeCalendar(calendarRes.raw);
 
     const instruments: Record<InstrumentKey, InstrumentMarketData> = {
-      EURUSD: normalizeInstrumentFromTD("EURUSD", eurRes, eurWeeklyRes),
-      XAUUSD: normalizeInstrumentFromTD("XAUUSD", xauRes, xauWeeklyRes),
+      EURUSD: buildInstrumentMarketDataWithPulse("EURUSD", eurRes, eurWeeklyRes),
+      XAUUSD: buildInstrumentMarketDataWithPulse("XAUUSD", xauRes, xauWeeklyRes),
       // Indices aren't covered by either free tier — explicit unavailable,
-      // never a substituted ETF (spec §5).
+      // never a substituted ETF (spec §5). marketPulse is null here too:
+      // there is no history to build one from, and none was fetched.
       NDX: unavailableInstrument("NDX"),
       US30: unavailableInstrument("US30"),
     };

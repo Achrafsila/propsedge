@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { computeMarketPulse } from "../src/lib/market/marketPulse";
+import { computeMarketPulse, dedupeEvidence } from "../src/lib/market/marketPulse";
+import type { MarketPulseEvidence } from "../src/lib/market/marketPulse";
 import { computeMarketRegime } from "../src/lib/market/engines/marketRegime";
 import { computeMarketPhase } from "../src/lib/market/engines/marketPhase";
 import { computeMarketVolatility } from "../src/lib/market/engines/marketVolatility";
@@ -143,50 +144,90 @@ scenario("Pulse composes real engine outputs, byte-identical to calling each eng
   assert.deepEqual(pulse.nearestLevel, context.nearestLevel);
 });
 
-// ── 2. Evidence is a faithful, source-tagged concatenation, not new text ──
+// ── 2. Evidence is source-tagged, order-preserving, deduplicated, and capped ──
+// (upstream engine result objects — pulse.regime, pulse.phase, etc. — keep
+// their own full, untouched .evidence arrays; only the top-level composed
+// MarketPulse.evidence is affected by any of this.)
 
-scenario("Evidence array is the tagged concatenation of every engine's own evidence, in order", () => {
-  const history = ampleHistory("XAUUSD");
+function sourceOrderIndex(source: MarketPulseEvidence["source"]): number {
+  const order: MarketPulseEvidence["source"][] = ["market_context", "regime", "phase", "volatility", "conviction", "environment", "pulse"];
+  return order.indexOf(source);
+}
+
+function assertStableSourceOrder(evidence: MarketPulseEvidence[]) {
+  let lastIndex = -1;
+  for (const e of evidence) {
+    const idx = sourceOrderIndex(e.source);
+    assert.ok(idx >= lastIndex, `evidence source order violated at "${e.source}" (expected market_context, regime, phase, volatility, conviction, environment, pulse)`);
+    lastIndex = idx;
+  }
+}
+
+scenario("dedupeEvidence removes exact duplicate messages, keeping the first occurrence", () => {
+  const items: MarketPulseEvidence[] = [
+    { source: "market_context", message: "Alpha" },
+    { source: "regime", message: "Bravo" },
+    { source: "phase", message: "Alpha" }, // exact duplicate of the first message
+    { source: "volatility", message: "Charlie" },
+    { source: "conviction", message: "Bravo" }, // exact duplicate of the second message
+  ];
+  const result = dedupeEvidence(items);
+  assert.deepEqual(result, [
+    { source: "market_context", message: "Alpha" },
+    { source: "regime", message: "Bravo" },
+    { source: "volatility", message: "Charlie" },
+  ]);
+  // First occurrence is preserved by source: the surviving "Alpha" is
+  // market_context's, not phase's; the surviving "Bravo" is regime's, not
+  // conviction's.
+  assert.equal(result[0].source, "market_context");
+  assert.equal(result[1].source, "regime");
+});
+
+scenario("Evidence source order is stable: market_context, regime, phase, volatility, conviction, environment, pulse", () => {
+  const withContext = computeMarketPulse(ampleHistory("EURUSD"), bullishContext());
+  assertStableSourceOrder(withContext.evidence);
+
+  const withoutContext = computeMarketPulse(ampleHistory("XAUUSD"), null);
+  assertStableSourceOrder(withoutContext.evidence);
+
+  const unavailable = computeMarketPulse(unavailableHistory("US30"), null);
+  assertStableSourceOrder(unavailable.evidence);
+});
+
+scenario("Evidence is capped at 8 items even when many more are available", () => {
+  const history = ampleHistory("EURUSD");
   const context = bullishContext();
   const pulse = computeMarketPulse(history, context);
 
-  const regimeCount = pulse.regime.evidence.length;
-  const phaseCount = pulse.phase.evidence.length;
-  const volCount = pulse.volatility.evidence.length;
-  const convCount = pulse.conviction.evidence.length;
-  const envCount = pulse.environment.evidence.length;
+  // Sanity: prove the raw (pre-cap) total genuinely exceeds 8, so this
+  // test actually exercises the cap rather than passing by coincidence.
+  const rawTotal =
+    2 /* market_context: insight + nearest level */ +
+    pulse.regime.evidence.length +
+    pulse.phase.evidence.length +
+    pulse.volatility.evidence.length +
+    pulse.conviction.evidence.length +
+    pulse.environment.evidence.length;
+  assert.ok(rawTotal > 8, "fixture must produce more than 8 raw evidence items to exercise the cap");
 
-  const regimeSlice = pulse.evidence.slice(0, regimeCount);
-  const phaseSlice = pulse.evidence.slice(regimeCount, regimeCount + phaseCount);
-  const volSlice = pulse.evidence.slice(regimeCount + phaseCount, regimeCount + phaseCount + volCount);
-  const convSlice = pulse.evidence.slice(regimeCount + phaseCount + volCount, regimeCount + phaseCount + volCount + convCount);
-  const envSlice = pulse.evidence.slice(regimeCount + phaseCount + volCount + convCount, regimeCount + phaseCount + volCount + convCount + envCount);
+  assert.equal(pulse.evidence.length, 8);
+  assertStableSourceOrder(pulse.evidence);
+});
 
-  assert.deepEqual(
-    regimeSlice.map((e) => e.message),
-    pulse.regime.evidence
-  );
-  assert.ok(regimeSlice.every((e) => e.source === "regime"));
-  assert.deepEqual(
-    phaseSlice.map((e) => e.message),
-    pulse.phase.evidence
-  );
-  assert.ok(phaseSlice.every((e) => e.source === "phase"));
-  assert.deepEqual(
-    volSlice.map((e) => e.message),
-    pulse.volatility.evidence
-  );
-  assert.ok(volSlice.every((e) => e.source === "volatility"));
-  assert.deepEqual(
-    convSlice.map((e) => e.message),
-    pulse.conviction.evidence
-  );
-  assert.ok(convSlice.every((e) => e.source === "conviction"));
-  assert.deepEqual(
-    envSlice.map((e) => e.message),
-    pulse.environment.evidence
-  );
-  assert.ok(envSlice.every((e) => e.source === "environment"));
+scenario("Fewer than 8 raw evidence items -> nothing is removed by the cap", () => {
+  const pulse = computeMarketPulse(unavailableHistory("EURUSD"), null);
+  assert.equal(pulse.status, "unavailable"); // confirms degradations exist -> a pulse-level note is present
+
+  const rawTotal =
+    pulse.regime.evidence.length +
+    pulse.phase.evidence.length +
+    pulse.volatility.evidence.length +
+    pulse.conviction.evidence.length +
+    pulse.environment.evidence.length +
+    1; // the one pulse-level degradation note
+  assert.ok(rawTotal < 8, "fixture must produce fewer than 8 raw evidence items to prove the cap is a no-op here");
+  assert.equal(pulse.evidence.length, rawTotal, "no evidence is dropped when the raw total is already under the cap");
 });
 
 // ── 3. Fully available status when everything resolves cleanly ──
@@ -226,8 +267,13 @@ scenario("Regime unknown but Phase and Volatility resolve -> status partial, not
 
   const pulse = computeMarketPulse(history, null);
   assert.equal(pulse.regime.regime, "unknown");
+  // status is the authoritative signal here — it is computed from the
+  // degradations list directly, not from the (separately capped)
+  // evidence array, so it is unaffected even when this fixture's raw
+  // evidence (17 items across regime+phase) exceeds the 8-item cap and
+  // pushes the "pulse"-sourced degradation note out.
   assert.equal(pulse.status, "partial");
-  assert.ok(pulse.evidence.some((e) => e.source === "pulse" && e.message.includes("regime could not be determined")));
+  assert.ok(pulse.evidence.length <= 8, "evidence respects the cap even when truncation excludes the pulse-level note");
 });
 
 // ── 4c. Regime unknown but Market Context available -> partial ──
@@ -250,8 +296,13 @@ scenario("20 completed candles (enough for Regime+Phase, not Volatility) -> stat
   assert.equal(volatilityCheck.volatility, "unknown");
 
   const pulse = computeMarketPulse(history, bullishContext());
+  // status (computed from the full degradations list, independent of the
+  // separately capped evidence array) is the authoritative check here —
+  // this fixture's raw regime+phase evidence alone exceeds the 8-item
+  // cap, so the "pulse"-sourced degradation note is not guaranteed to
+  // survive truncation.
   assert.equal(pulse.status, "partial");
-  assert.ok(pulse.evidence.some((e) => e.source === "pulse" && e.message.includes("volatility could not be determined")));
+  assert.ok(pulse.evidence.length <= 8);
 });
 
 // ── 6. Missing MarketContext -> dataQuality.marketContext unavailable, bias/nearestLevel fall back honestly ──
@@ -262,7 +313,10 @@ scenario("No MarketContext -> dataQuality reflects it, bias is unknown, nearestL
   assert.equal(pulse.bias, "unknown");
   assert.equal(pulse.nearestLevel, null);
   assert.equal(pulse.status, "partial"); // regime resolves, but context is missing
-  assert.ok(pulse.evidence.some((e) => e.source === "pulse" && e.message.includes("market context is unavailable")));
+  // Same caveat as above: status is authoritative; the degradation note
+  // itself may or may not survive the 8-item cap depending on how much
+  // evidence the engines produced.
+  assert.ok(pulse.evidence.length <= 8);
 });
 
 // ── 7. dataQuality.dailyHistory/weeklyHistory are a direct passthrough of the input, not recomputed ──

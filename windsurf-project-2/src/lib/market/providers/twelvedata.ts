@@ -21,16 +21,25 @@ export const PRICES_REVALIDATE_SECONDS = 300; // 5 min (spec §9)
 // the 5-min intraday price cache is appropriate and cuts request volume.
 export const WEEKLY_REVALIDATE_SECONDS = 1800; // 30 min
 
-// History fetches (Market Data foundation) — deeper OHLC for future
-// Pulse/Regime/etc. engines, not the live 2-candle Market Context path.
-// Sizes are the exact depths empirically confirmed clean on the current
-// TwelveData plan for both EUR/USD and XAU/USD (100 daily, 50 weekly).
-// Longer revalidate windows than the live fetch: history doesn't need
-// 5-min freshness, and TwelveData enforces an 8-credit/minute limit.
+// History fetches — deeper OHLC for the Market Data engines. Sizes are the
+// exact depths empirically confirmed clean on the current TwelveData plan
+// for both EUR/USD and XAU/USD (100 daily, 50 weekly).
+//
+// As of the Market Pulse backend integration, this is also the ONLY
+// TwelveData fetch the live orchestrator (marketIntelligence.ts) makes —
+// the same daily/weekly candles it returns are read for both the live
+// current-price/key-levels path (which only ever looks at the first two
+// candles, same as before) and the deeper history the engines need, so
+// there is exactly one fetch per symbol/interval, never two. The
+// revalidate windows below are therefore set to match what the live path
+// previously used on its own (PRICES_REVALIDATE_SECONDS /
+// WEEKLY_REVALIDATE_SECONDS above) rather than a slower "history doesn't
+// need to be fresh" cadence — this single fetch now has to satisfy the
+// live consumer's freshness need too.
 export const HISTORY_DAILY_OUTPUTSIZE = 100;
 export const HISTORY_WEEKLY_OUTPUTSIZE = 50;
-export const DAILY_HISTORY_REVALIDATE_SECONDS = 1800; // 30 min
-export const WEEKLY_HISTORY_REVALIDATE_SECONDS = 3600; // 1 hour
+export const DAILY_HISTORY_REVALIDATE_SECONDS = PRICES_REVALIDATE_SECONDS; // 5 min — matches the live daily-price cadence it now also serves
+export const WEEKLY_HISTORY_REVALIDATE_SECONDS = WEEKLY_REVALIDATE_SECONDS; // 30 min — matches the live weekly-price cadence it now also serves
 
 function getApiKey(): string {
   const key = process.env.TWELVEDATA_API_KEY;
