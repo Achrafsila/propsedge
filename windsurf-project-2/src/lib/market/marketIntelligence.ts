@@ -4,9 +4,11 @@ import {
   EconomicEvent,
   ImpactLevel,
   InstrumentMarketData,
+  InstrumentMarketHistory,
   InstrumentKey,
   KeyLevels,
   MarketError,
+  MarketProvider,
   MarketProviders,
   unavailableInstrument,
   notConfiguredSentiment,
@@ -18,10 +20,11 @@ import {
   FinnhubRawNews,
   FinnhubRawEvent,
 } from "./providers/finnhub";
-import { fetchTwelveDataDailyHistory, fetchTwelveDataWeeklyHistory, TwelveDataResult } from "./providers/twelvedata";
+import { TwelveDataResult } from "./providers/twelvedata";
 import { buildMarketContext } from "./marketContext";
 import { buildInstrumentMarketHistory } from "./marketHistory";
 import { computeMarketPulse } from "./marketPulse";
+import { getMarketDataFromGateway, MarketDataGatewayResult, MarketDataProviderId } from "./marketDataGateway";
 
 // ============================================================
 // PropEdge — Market Intelligence orchestrator (SERVER-ONLY)
@@ -252,6 +255,69 @@ export function buildInstrumentMarketDataWithPulse(symbol: string, dailyResult: 
   return { ...base, marketPulse };
 }
 
+// ── Gateway-backed instruments (Market Data Gateway integration) ──────────
+// The Gateway already normalizes every provider (TwelveData, Alpha Vantage,
+// FMP) into the same InstrumentMarketHistory shape, so unlike
+// normalizeInstrumentFromTD (which is TwelveData-result-specific and kept
+// above, unused, for backward compatibility with its existing tests), this
+// reads directly from MarketCandle[] — provider-agnostic by construction,
+// no per-provider branching needed here.
+function toMarketProvider(providerUsed: MarketDataProviderId): MarketProvider | null {
+  return providerUsed === "none" ? null : providerUsed;
+}
+
+// Same "first two candles" reading normalizeInstrumentFromTD already uses,
+// just sourced from the Gateway's already-normalized history instead of a
+// raw provider result. marketPulse is left null here and attached
+// separately, same convention as normalizeInstrumentFromTD.
+export function buildInstrumentMarketDataFromHistory(symbol: string, history: InstrumentMarketHistory, provider: MarketProvider | null): InstrumentMarketData {
+  const [today, prev] = history.dailyCandles;
+  const currentPrice = today?.close ?? null;
+  if (currentPrice === null) return unavailableInstrument(symbol);
+
+  const [thisWeek, prevWeek] = history.weeklyCandles;
+
+  const levels: KeyLevels = {
+    dailyOpen: today?.open ?? null,
+    previousDayHigh: prev?.high ?? null,
+    previousDayLow: prev?.low ?? null,
+    previousDayClose: prev?.close ?? null,
+    weeklyOpen: thisWeek?.open ?? null,
+    previousWeekHigh: prevWeek?.high ?? null,
+    previousWeekLow: prevWeek?.low ?? null,
+  };
+  const hasAnyLevel = Object.values(levels).some((v) => v !== null);
+  const keyLevels = hasAnyLevel ? levels : null;
+
+  return {
+    symbol,
+    currentPrice,
+    dailyOpen: today?.open ?? null,
+    previousClose: prev?.close ?? null,
+    timestamp: today?.datetime ? `${today.datetime}T00:00:00Z` : null,
+    status: "available",
+    provider,
+    keyLevels,
+    marketContext: buildMarketContext(symbol, currentPrice, keyLevels),
+    marketPulse: null,
+  };
+}
+
+// Builds the full InstrumentMarketData (+ Market Pulse) for a Gateway-
+// routed instrument from ONE already-fetched MarketDataGatewayResult —
+// never a second fetch. `displaySymbol` is the UI-facing key (e.g.
+// "US30"), which may differ from the Gateway's own routing symbol (e.g.
+// "DJI") — the history (and therefore every downstream Pulse engine
+// result, which all read history.symbol) is relabeled to displaySymbol so
+// nothing downstream ever surfaces the internal Gateway symbol.
+export function buildInstrumentMarketDataFromGatewayResult(displaySymbol: string, gatewayResult: MarketDataGatewayResult): InstrumentMarketData {
+  const history: InstrumentMarketHistory = { ...gatewayResult.history, symbol: displaySymbol };
+  const provider = toMarketProvider(gatewayResult.meta.providerUsed);
+  const base = buildInstrumentMarketDataFromHistory(displaySymbol, history, provider);
+  const marketPulse = computeMarketPulse(history, base.marketContext);
+  return { ...base, marketPulse };
+}
+
 // ── Orchestrator ──────────────────────────────────────────────────────────
 
 function dateInTimezone(now: Date, tz: string): string {
@@ -260,6 +326,21 @@ function dateInTimezone(now: Date, tz: string): string {
   } catch {
     return now.toISOString().slice(0, 10);
   }
+}
+
+// Rolls several instruments' individual `.provider` values into the one
+// top-level MarketProviders.prices field. This is necessarily a
+// simplification once different instruments can be served by different
+// providers (unlike before this integration, when every price came from
+// TwelveData or nothing) — it reports the "most primary" provider that
+// served at least one instrument, in the same priority order the Gateway
+// itself tries them (TwelveData before Alpha Vantage; FMP is a separate,
+// unrelated route so it only wins when neither of the other two did).
+export function summarizePricesProvider(providers: (MarketProvider | null)[]): MarketProvider | null {
+  if (providers.includes("twelvedata")) return "twelvedata";
+  if (providers.includes("alphavantage")) return "alphavantage";
+  if (providers.includes("fmp")) return "fmp";
+  return null;
 }
 
 // Whole-object fallback if a refresh throws catastrophically — the Next Data
@@ -273,54 +354,71 @@ export async function getMarketIntelligence(timezone: string): Promise<MarketInt
   const date = dateInTimezone(now, tz);
 
   try {
-    // ONE fetch per symbol/interval — the 100-daily/50-weekly history
-    // fetch now serves both the live current-price/key-levels path AND
-    // Market Pulse. No separate 2-candle fetch is made (see
-    // buildInstrumentMarketDataWithPulse / the revalidate-window comment
-    // in providers/twelvedata.ts).
-    const [newsRes, calendarRes, eurRes, xauRes, eurWeeklyRes, xauWeeklyRes] = await Promise.all([
+    // ONE Gateway call per instrument — the Gateway itself makes exactly
+    // one provider fetch per symbol/interval (see marketDataGateway.ts),
+    // so there is no duplicate provider fetching here either. US30 is
+    // requested from the Gateway as "DJI" (its actual routing symbol —
+    // the Gateway has no "US30" entry) and relabeled back to "US30" by
+    // buildInstrumentMarketDataFromGatewayResult so nothing downstream
+    // ever surfaces the internal Gateway symbol. NDX has no Gateway route
+    // at all (unavailable, never a substituted ETF) and is not requested.
+    const [newsRes, calendarRes, eurGateway, xauGateway, djiGateway] = await Promise.all([
       fetchFinnhubGeneralNews(),
       fetchFinnhubEconomicCalendar(date, date),
-      fetchTwelveDataDailyHistory("EUR/USD"),
-      fetchTwelveDataDailyHistory("XAU/USD"),
-      fetchTwelveDataWeeklyHistory("EUR/USD"),
-      fetchTwelveDataWeeklyHistory("XAU/USD"),
+      getMarketDataFromGateway("EURUSD"),
+      getMarketDataFromGateway("XAUUSD"),
+      getMarketDataFromGateway("DJI"),
     ]);
 
     const news = normalizeNews(newsRes.raw);
     const economicEvents = normalizeCalendar(calendarRes.raw);
 
     const instruments: Record<InstrumentKey, InstrumentMarketData> = {
-      EURUSD: buildInstrumentMarketDataWithPulse("EURUSD", eurRes, eurWeeklyRes),
-      XAUUSD: buildInstrumentMarketDataWithPulse("XAUUSD", xauRes, xauWeeklyRes),
-      // Indices aren't covered by either free tier — explicit unavailable,
-      // never a substituted ETF (spec §5). marketPulse is null here too:
-      // there is no history to build one from, and none was fetched.
+      EURUSD: buildInstrumentMarketDataFromGatewayResult("EURUSD", eurGateway),
+      XAUUSD: buildInstrumentMarketDataFromGatewayResult("XAUUSD", xauGateway),
+      US30: buildInstrumentMarketDataFromGatewayResult("US30", djiGateway),
+      // Nasdaq 100 has no route in the Gateway on any current plan —
+      // explicit unavailable, never a substituted ETF (spec §5).
+      // marketPulse is null: there is no history to build one from, and
+      // none was fetched.
       NDX: unavailableInstrument("NDX"),
-      US30: unavailableInstrument("US30"),
     };
 
-    // Weekly fetch failures are surfaced (never silently swallowed) but
-    // don't by themselves flip an instrument to unavailable or the overall
-    // status away from "complete" — weekly key levels are additive context
-    // on top of the required daily price/levels, not a required V1 field.
-    const errors: MarketError[] = [newsRes.error, calendarRes.error, eurRes.error, xauRes.error, eurWeeklyRes.error, xauWeeklyRes.error].filter(
+    // Each Gateway result's primaryFailure (present whenever its fallback
+    // was engaged, succeeded or not) is surfaced here — never silently
+    // swallowed, same convention weekly-fetch failures already followed
+    // before this integration.
+    const gatewayErrors: MarketError[] = [eurGateway.meta.primaryFailure, xauGateway.meta.primaryFailure, djiGateway.meta.primaryFailure].filter(
       (e): e is MarketError => e !== null
     );
+    const errors: MarketError[] = [newsRes.error, calendarRes.error, ...gatewayErrors].filter((e): e is MarketError => e !== null);
 
     const newsOk = newsRes.error === null;
-    const anyPriceOk = instruments.EURUSD.status === "available" || instruments.XAUUSD.status === "available";
+    const anyPriceOk = instruments.EURUSD.status === "available" || instruments.XAUUSD.status === "available" || instruments.US30.status === "available";
     const nothing = !newsOk && !anyPriceOk && economicEvents.length === 0;
-    const everythingClean = newsOk && calendarRes.error === null && instruments.EURUSD.status === "available" && instruments.XAUUSD.status === "available";
+    // NDX is intentionally excluded here (same reason both indices were
+    // excluded before this integration): it is categorically unavailable
+    // on every current plan, so requiring it would make "complete"
+    // permanently unreachable. US30 is now genuinely available via the
+    // Gateway's DJI route, so — unlike before — it IS required for
+    // "complete", the same way EURUSD/XAUUSD already are.
+    const everythingClean =
+      newsOk &&
+      calendarRes.error === null &&
+      instruments.EURUSD.status === "available" &&
+      instruments.XAUUSD.status === "available" &&
+      instruments.US30.status === "available";
     const status: MarketIntelligence["status"] = nothing ? "unavailable" : everythingClean ? "complete" : "partial";
 
     // Explicit per-domain attribution — never a single global provider
-    // string. "prices" is "twelvedata" the moment ANY instrument actually
-    // resolved from it; it's independent of news/calendar succeeding.
+    // string. "prices" summarizes which provider served ANY instrument,
+    // preferring TwelveData > Alpha Vantage > FMP for this rollup field
+    // when providers differ across instruments; each instrument's own
+    // .provider field remains the precise per-instrument source of truth.
     const providers: MarketProviders = {
       news: newsOk ? "finnhub" : null,
       calendar: calendarRes.error === null ? "finnhub" : null,
-      prices: anyPriceOk ? "twelvedata" : null,
+      prices: summarizePricesProvider([instruments.EURUSD.provider, instruments.XAUUSD.provider, instruments.US30.provider]),
     };
 
     const result: MarketIntelligence = {

@@ -8,6 +8,9 @@ import {
   dedupeNews,
   topGlobalNews,
   newsForInstrument,
+  buildInstrumentMarketDataFromHistory,
+  buildInstrumentMarketDataFromGatewayResult,
+  summarizePricesProvider,
 } from "../src/lib/market/marketIntelligence";
 import {
   computeKeyLevelDistances,
@@ -16,9 +19,10 @@ import {
   buildMarketContextInsight,
   buildMarketContext,
 } from "../src/lib/market/marketContext";
-import { buildUnavailableIntelligence, isMarketIntelligence, KeyLevels } from "../src/lib/market/types";
+import { buildUnavailableIntelligence, isMarketIntelligence, KeyLevels, InstrumentMarketHistory } from "../src/lib/market/types";
 import { FinnhubRawNews, FinnhubRawEvent } from "../src/lib/market/providers/finnhub";
 import { TwelveDataResult } from "../src/lib/market/providers/twelvedata";
+import { MarketDataGatewayResult } from "../src/lib/market/marketDataGateway";
 
 // ============================================================
 // PropEdge — Market Intelligence deterministic scenarios
@@ -312,6 +316,77 @@ scenario("dedupeNews is order-stable and keeps the first occurrence", () => {
   assert.equal(a[0].sourceName, "A");
   // dedupe of an already-unique list is a no-op
   assert.equal(dedupeNews(a).length, 1);
+});
+
+// ── Market Data Gateway integration ───────────────────────────────────────
+
+function marketCandle(datetime: string, close: number) {
+  return { datetime, open: close, high: close, low: close, close };
+}
+
+function historyFixture(symbol: string, dailyCloses: number[]): InstrumentMarketHistory {
+  return {
+    symbol,
+    currentPrice: dailyCloses[0] ?? null,
+    dailyCandles: dailyCloses.map((c, i) => marketCandle(`2026-07-${13 - i}`, c)),
+    weeklyCandles: [marketCandle("2026-07-13", dailyCloses[0] ?? 0), marketCandle("2026-07-06", dailyCloses[1] ?? 0)],
+    dataQuality: { dailyHistory: "complete", weeklyHistory: "complete" },
+  };
+}
+
+scenario("buildInstrumentMarketDataFromHistory reads current price/key levels from MarketCandle[], provider-agnostic", () => {
+  const history = historyFixture("EURUSD", [1.14, 1.13]);
+  const data = buildInstrumentMarketDataFromHistory("EURUSD", history, "alphavantage");
+  assert.equal(data.status, "available");
+  assert.equal(data.currentPrice, 1.14);
+  assert.equal(data.provider, "alphavantage");
+  assert.equal(data.keyLevels?.previousDayClose, 1.13);
+  assert.notEqual(data.marketContext, null);
+});
+
+scenario("buildInstrumentMarketDataFromHistory: empty history -> unavailableInstrument", () => {
+  const history: InstrumentMarketHistory = {
+    symbol: "EURUSD",
+    currentPrice: null,
+    dailyCandles: [],
+    weeklyCandles: [],
+    dataQuality: { dailyHistory: "unavailable", weeklyHistory: "unavailable" },
+  };
+  const data = buildInstrumentMarketDataFromHistory("EURUSD", history, null);
+  assert.equal(data.status, "unavailable");
+  assert.equal(data.provider, null);
+});
+
+scenario("buildInstrumentMarketDataFromGatewayResult relabels the Gateway's internal symbol to the display symbol everywhere, including nested Pulse", () => {
+  const gatewayResult: MarketDataGatewayResult = {
+    symbol: "DJI",
+    history: historyFixture("DJI", [44500, 44300]),
+    meta: { providerUsed: "fmp", fallbackUsed: false, primaryFailure: null },
+  };
+  const data = buildInstrumentMarketDataFromGatewayResult("US30", gatewayResult);
+  assert.equal(data.symbol, "US30");
+  assert.equal(data.provider, "fmp");
+  assert.equal(data.marketPulse?.symbol, "US30", "nested Pulse must use the display symbol, never the Gateway's internal 'DJI'");
+  assert.equal(data.marketPulse?.regime.symbol, "US30");
+});
+
+scenario("buildInstrumentMarketDataFromGatewayResult: Gateway failure -> unavailable, but Pulse is still attempted and honestly reports unavailable", () => {
+  const gatewayResult: MarketDataGatewayResult = {
+    symbol: "DJI",
+    history: { symbol: "DJI", currentPrice: null, dailyCandles: [], weeklyCandles: [], dataQuality: { dailyHistory: "unavailable", weeklyHistory: "unavailable" } },
+    meta: { providerUsed: "none", fallbackUsed: false, primaryFailure: { domain: "prices", code: "402", message: "plan restricted" } },
+  };
+  const data = buildInstrumentMarketDataFromGatewayResult("US30", gatewayResult);
+  assert.equal(data.status, "unavailable");
+  assert.equal(data.marketPulse?.status, "unavailable");
+  assert.equal(data.marketPulse?.symbol, "US30");
+});
+
+scenario("summarizePricesProvider prefers TwelveData, then Alpha Vantage, then FMP", () => {
+  assert.equal(summarizePricesProvider(["twelvedata", "fmp", null]), "twelvedata");
+  assert.equal(summarizePricesProvider(["alphavantage", "fmp"]), "alphavantage");
+  assert.equal(summarizePricesProvider(["fmp", null]), "fmp");
+  assert.equal(summarizePricesProvider([null, null]), null);
 });
 
 console.log(`\n${pass} scenario(s) passed.`);

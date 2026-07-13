@@ -14,7 +14,11 @@
 // imports would be a problem, and there are none here.
 import type { MarketPulse } from "./marketPulse";
 
-export type MarketProvider = "finnhub" | "twelvedata";
+// "alphavantage" and "fmp" added for the Market Data Gateway integration —
+// an instrument's price data can now honestly be attributed to whichever
+// provider the gateway actually used (primary or fallback), not just
+// TwelveData.
+export type MarketProvider = "finnhub" | "twelvedata" | "alphavantage" | "fmp";
 
 export type ImpactLevel = "low" | "medium" | "high" | "unknown";
 
