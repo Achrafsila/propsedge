@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, Gavel, Brain, CheckCircle2, Circle, ChevronDown, FileCheck, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Gavel, Brain, CheckCircle2, Circle, ChevronDown, FileCheck, AlertTriangle, Activity } from "lucide-react";
 import { glassmorphism, borderRadius, typography } from "@/design-system";
 import { Challenge, FundedAccount, PersonalAccount, Trade } from "@/types";
 import {
@@ -19,6 +19,9 @@ import { Decision } from "@/lib/analytics/decisionEngine";
 import { AnimatedBar } from "@/components/analytics/visualizations/AnimatedBar";
 import { PrimaryEvaluation } from "./CockpitHero";
 import { EdgePilotAvatar } from "./EdgePilotAvatar";
+import { fetchMarketIntelligence, buildInitialIntelligence } from "@/lib/market/client";
+import { MarketIntelligence, InstrumentMarketData, INSTRUMENT_KEYS } from "@/lib/market/types";
+import type { MarketPulseEvidence } from "@/lib/market/marketPulse";
 
 // ============================================================
 // PropEdge — Detailed Analysis (EdgePilot V3)
@@ -62,6 +65,140 @@ const DEVIATION_SEVERITY_COLOR: Record<DeviationSeverity, string> = {
 };
 
 const GRADE_COLOR: Record<string, string> = { A: "#10B981", B: "#10B981", C: "#F59E0B", D: "#F59E0B", F: "#EF4444" };
+
+// ── Market Intelligence display-only maps (presentation, not analytical rules) ──
+const REGIME_COLOR: Record<string, string> = {
+  bullish_trend: "#10B981",
+  bearish_trend: "#EF4444",
+  range: "#298DFF",
+  transition: "#F59E0B",
+  unknown: "#64748B",
+};
+const PHASE_COLOR: Record<string, string> = {
+  expansion: "#10B981",
+  pullback: "#F59E0B",
+  compression: "#298DFF",
+  rotation: "#298DFF",
+  unknown: "#64748B",
+};
+const BIAS_COLOR: Record<string, string> = { bullish: "#10B981", bearish: "#EF4444", neutral: "#298DFF", unknown: "#64748B" };
+const CONVICTION_COLOR: Record<string, string> = { high: "#10B981", medium: "#F59E0B", low: "#EF4444", unknown: "#64748B" };
+const VOLATILITY_COLOR: Record<string, string> = { low: "#10B981", normal: "#298DFF", high: "#F59E0B", extreme: "#EF4444", unknown: "#64748B" };
+const ENVIRONMENT_COLOR: Record<string, string> = { favorable: "#10B981", selective: "#F59E0B", poor: "#EF4444", unknown: "#64748B" };
+
+function titleCase(value: string): string {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function formatLevelPrice(price: number): string {
+  return price.toLocaleString(undefined, { maximumFractionDigits: 5 });
+}
+function formatSignedPercent(value: number): string {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+function formatUpdatedAt(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function EvidenceDisclosure({ evidence }: { evidence: MarketPulseEvidence[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (evidence.length === 0) return null;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 font-medium"
+        style={{ color: "#298DFF", fontSize: typography.fontSize.xs }}
+      >
+        <ChevronDown className="w-3.5 h-3.5 transition-transform" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />
+        {expanded ? "Hide Evidence" : "Show Evidence"}
+      </button>
+      {expanded && (
+        <ul className="mt-2 space-y-1.5">
+          {evidence.map((e, i) => (
+            <li key={i} className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs }}>
+              <span className="text-[#64748B] uppercase mr-1.5" style={{ fontSize: "0.625rem", letterSpacing: typography.letterSpacing.label }}>
+                {e.source}
+              </span>
+              {e.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Card status is derived from the instrument's own price/history
+// availability AND the (separately honest) MarketPulse rollup — never
+// invented: an instrument with no price data at all (NDX/US30, or a
+// failed fetch) is "unavailable" regardless of what Pulse says; otherwise
+// Pulse's own status (available/partial/unavailable) is trusted as-is.
+function resolveCardStatus(instrument: InstrumentMarketData): "available" | "partial" | "unavailable" {
+  if (instrument.status === "unavailable" || !instrument.marketPulse) return "unavailable";
+  return instrument.marketPulse.status;
+}
+
+const CARD_STATUS_COLOR = { available: "#10B981", partial: "#F59E0B", unavailable: "#64748B" };
+const CARD_STATUS_LABEL = { available: "Available", partial: "Partial Market Intelligence", unavailable: "Unavailable" };
+
+function MarketIntelligenceCard({ instrument }: { instrument: InstrumentMarketData }) {
+  const pulse = instrument.marketPulse;
+  const status = resolveCardStatus(instrument);
+
+  return (
+    <div className="rounded-xl p-5 space-y-4" style={CARD}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[#F8FAFC] font-semibold text-sm">{instrument.symbol}</p>
+        <Badge color={CARD_STATUS_COLOR[status]}>{CARD_STATUS_LABEL[status]}</Badge>
+      </div>
+
+      {status === "unavailable" && (
+        <p className="text-[#64748B]" style={{ fontSize: typography.fontSize.sm }}>
+          Unavailable with current provider plan
+        </p>
+      )}
+
+      {status === "partial" && pulse && (
+        <p className="text-[#94A3B8]" style={{ fontSize: typography.fontSize.xs }}>
+          Daily history: {pulse.dataQuality.dailyHistory} · Weekly history: {pulse.dataQuality.weeklyHistory} · Market Context:{" "}
+          {pulse.dataQuality.marketContext}
+        </p>
+      )}
+
+      {pulse && status !== "unavailable" && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile label="Market Regime" value={titleCase(pulse.regime.regime)} color={REGIME_COLOR[pulse.regime.regime]} />
+            <StatTile label="Market Phase" value={titleCase(pulse.phase.phase)} color={PHASE_COLOR[pulse.phase.phase]} />
+            <StatTile label="Structural Bias" value={titleCase(pulse.bias)} color={BIAS_COLOR[pulse.bias]} />
+            <StatTile label="Conviction" value={titleCase(pulse.conviction.conviction)} color={CONVICTION_COLOR[pulse.conviction.conviction]} />
+            <StatTile label="Volatility" value={titleCase(pulse.volatility.volatility)} color={VOLATILITY_COLOR[pulse.volatility.volatility]} />
+            <StatTile label="Environment" value={titleCase(pulse.environment.environment)} color={ENVIRONMENT_COLOR[pulse.environment.environment]} />
+          </div>
+
+          <div>
+            <p className="text-[#64748B] uppercase mb-1" style={{ fontSize: "0.625rem", letterSpacing: typography.letterSpacing.label }}>
+              Nearest Key Level
+            </p>
+            <p className="text-[#F8FAFC] text-sm font-medium">
+              {pulse.nearestLevel
+                ? `${pulse.nearestLevel.label} @ ${formatLevelPrice(pulse.nearestLevel.price)} (${formatSignedPercent(pulse.nearestLevel.distancePercent)})`
+                : "Not available"}
+            </p>
+          </div>
+
+          <p className="text-[#CBD5E1]" style={{ fontSize: typography.fontSize.sm }}>
+            {pulse.summary}
+          </p>
+
+          <EvidenceDisclosure evidence={pulse.evidence} />
+        </>
+      )}
+    </div>
+  );
+}
 
 function findAlertSeverity(items: CoachItem[], titlePrefix: string, accountName: string): CoachSeverity | null {
   const item = items.find((i) => i.title === `${titlePrefix} — ${accountName}`);
@@ -200,6 +337,29 @@ export function DetailedAnalysis({
   const [open, setOpen] = useState(false);
   const [selfChecks, setSelfChecks] = useState({ riskWithinPlan: false, maxTradesRespected: false });
   const toggleSelfCheck = (key: keyof typeof selfChecks) => setSelfChecks((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Market Intelligence — fetched from the existing /api/market-intelligence
+  // route (same client used previously by Morning Briefing); never calls
+  // TwelveData/Finnhub directly and never duplicates the backend's history
+  // fetching. Loading/failure never blocks the rest of the page: this
+  // section only mounts once the trader opens "View Detailed Analysis",
+  // and fetchMarketIntelligence() always resolves to a well-formed object
+  // (a clean "unavailable" shape on any failure), so there is no separate
+  // error state to handle here.
+  const [marketIntel, setMarketIntel] = useState<MarketIntelligence>(buildInitialIntelligence);
+  const [marketIntelLoading, setMarketIntelLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMarketIntelligence().then((mi) => {
+      if (!cancelled) {
+        setMarketIntel(mi);
+        setMarketIntelLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div>
@@ -598,6 +758,27 @@ export function DetailedAnalysis({
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* ── Market Intelligence ── */}
+              <div className="rounded-xl p-6" style={CARD}>
+                <SectionHeader icon={Activity} title="Market Intelligence" />
+                {!marketIntelLoading && (
+                  <p className="text-[#64748B] -mt-2 mb-4" style={{ fontSize: typography.fontSize.xs }}>
+                    Updated {formatUpdatedAt(marketIntel.fetchedAt)}
+                  </p>
+                )}
+                {marketIntelLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="w-5 h-5 border-2 border-[#298DFF] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {INSTRUMENT_KEYS.map((key) => (
+                      <MarketIntelligenceCard key={key} instrument={marketIntel.instruments[key]} />
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* ── Ask EdgePilot ── */}
