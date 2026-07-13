@@ -12,7 +12,8 @@ import {
   Settings,
   Shield,
   LineChart,
-  Compass
+  Compass,
+  Activity
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
@@ -35,6 +36,7 @@ export function Sidebar() {
     { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
+    { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
@@ -48,6 +50,7 @@ export function Sidebar() {
     { name: "Portfolio", href: "/portfolio", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
+    { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Analytics", href: "/portfolio-analytics", icon: LineChart },
     { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     { name: "Settings", href: "/settings", icon: Settings },
