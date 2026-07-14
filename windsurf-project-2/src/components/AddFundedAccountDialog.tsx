@@ -48,6 +48,11 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
       maxDrawdown: parseFloat(formData.maxDrawdown),
       remainingDrawdown: parseFloat(formData.maxDrawdown),
       status: "active",
+      // This form doesn't collect an origin — a linked source challenge
+      // means it really did come from an evaluation; otherwise it's a
+      // manually-entered account with no more specific origin to record.
+      fundingPath: formData.sourceChallengeId ? "evaluation" : "internal",
+      payoutRules: { consistency: { required: false }, minimumTradingDays: { required: false } },
     });
     onOpenChange(false);
     setFormData({

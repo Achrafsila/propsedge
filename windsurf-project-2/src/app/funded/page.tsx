@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/table";
 import { Wallet, TrendingUp, DollarSign, Calendar, Plus, Trash2, BarChart3, LayoutGrid, List } from "lucide-react";
 import { useAccounts } from "@/context/AccountsContext";
-import { FundedAccountStatus } from "@/types";
+import { FundedAccountStatus, FundedAccount, FundingPath } from "@/types";
+import { ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
 import { AddFundedAccountDialog } from "@/components/AddFundedAccountDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,6 +33,7 @@ import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradie
 import { computeDrawdown } from "@/lib/drawdown";
 
 type FundedStatusFilter = "all" | FundedAccountStatus;
+type OriginFilter = "all" | FundingPath;
 type ViewMode = "cards" | "table";
 
 const FUNDED_STATUS_COLOR: Record<FundedAccountStatus, string> = {
@@ -39,6 +41,27 @@ const FUNDED_STATUS_COLOR: Record<FundedAccountStatus, string> = {
   breached: "#EF4444",
   closed: "#94A3B8",
 };
+
+// Static payout-eligibility rules from a FundedAccount's own PayoutRules —
+// "what are the rules", not "is the account currently eligible" (that's
+// evaluatePayoutEligibility, used by AI Coach/Risk Center against live
+// trade history). A disabled rule is simply omitted, never shown as "off".
+function getPayoutRuleLines(account: FundedAccount, formatCurrency: (v: number) => string): { label: string; value: string }[] {
+  const lines: { label: string; value: string }[] = [];
+  const { consistency, minimumTradingDays } = account.payoutRules;
+  if (consistency.required && consistency.limitPercent != null) {
+    lines.push({ label: "Consistency", value: `${consistency.limitPercent}% maximum` });
+  }
+  if (minimumTradingDays.required && minimumTradingDays.days != null) {
+    lines.push({ label: "Minimum trading days", value: `${minimumTradingDays.days} day${minimumTradingDays.days === 1 ? "" : "s"}` });
+    const qualifying = minimumTradingDays.qualifyingDailyProfit;
+    if (qualifying) {
+      const amount = qualifying.type === "fixed" ? formatCurrency(qualifying.value) : `${qualifying.value}% of initial balance`;
+      lines.push({ label: "Qualifying day", value: `≥ ${amount} net profit` });
+    }
+  }
+  return lines;
+}
 
 export default function Funded() {
   const router = useRouter();
@@ -100,6 +123,7 @@ export default function Funded() {
   const breachedAccounts = fundedAccounts.filter(a => a.status === 'breached').length;
 
   const [statusFilter, setStatusFilter] = useState<FundedStatusFilter>("all");
+  const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
   const statusCounts = useMemo(() => {
@@ -108,9 +132,18 @@ export default function Funded() {
     return counts;
   }, [fundedAccounts]);
 
+  const originCounts = useMemo(() => {
+    const counts: Record<OriginFilter, number> = { all: fundedAccounts.length, evaluation: 0, instant: 0, giveaway: 0, affiliate: 0, internal: 0 };
+    fundedAccounts.forEach((a) => { counts[a.fundingPath] += 1; });
+    return counts;
+  }, [fundedAccounts]);
+
   const filteredAccounts = useMemo(
-    () => (statusFilter === "all" ? fundedAccounts : fundedAccounts.filter((a) => a.status === statusFilter)),
-    [fundedAccounts, statusFilter]
+    () =>
+      fundedAccounts.filter(
+        (a) => (statusFilter === "all" || a.status === statusFilter) && (originFilter === "all" || a.fundingPath === originFilter)
+      ),
+    [fundedAccounts, statusFilter, originFilter]
   );
 
   const filterOptions: { value: FundedStatusFilter; label: string; color: string }[] = [
@@ -118,6 +151,15 @@ export default function Funded() {
     { value: "active", label: "Active", color: FUNDED_STATUS_COLOR.active },
     { value: "breached", label: "Breached", color: FUNDED_STATUS_COLOR.breached },
     { value: "closed", label: "Closed", color: FUNDED_STATUS_COLOR.closed },
+  ];
+
+  const originFilterOptions: { value: OriginFilter; label: string; color: string }[] = [
+    { value: "all", label: "All origins", color: "#94A3B8" },
+    { value: "evaluation", label: ORIGIN_LABEL.evaluation, color: ORIGIN_COLOR.evaluation },
+    { value: "instant", label: ORIGIN_LABEL.instant, color: ORIGIN_COLOR.instant },
+    { value: "giveaway", label: ORIGIN_LABEL.giveaway, color: ORIGIN_COLOR.giveaway },
+    { value: "affiliate", label: ORIGIN_LABEL.affiliate, color: ORIGIN_COLOR.affiliate },
+    { value: "internal", label: ORIGIN_LABEL.internal, color: ORIGIN_COLOR.internal },
   ];
 
   const chartData = useMemo(
@@ -455,33 +497,66 @@ export default function Funded() {
         initial="hidden"
         animate="visible"
         transition={{ delay: 0.2 }}
-        className="flex flex-wrap items-center justify-between gap-4"
+        className="flex flex-wrap items-start justify-between gap-4"
       >
-        <div className="flex flex-wrap items-center gap-2">
-          {filterOptions.map((option) => {
-            const isActive = statusFilter === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setStatusFilter(option.value)}
-                className="relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 pointer-events-auto"
-                style={{
-                  color: isActive ? '#F8FAFC' : '#94A3B8',
-                  background: isActive ? `${option.color}26` : 'rgba(148, 163, 184, 0.06)',
-                  border: `1px solid ${isActive ? `${option.color}66` : 'rgba(148, 163, 184, 0.12)'}`,
-                }}
-              >
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: option.color }} />
-                  {option.label}
-                  <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: 'rgba(0,0,0,0.25)', color: isActive ? '#F8FAFC' : '#64748B' }}>
-                    {statusCounts[option.value]}
+        <div className="flex flex-col gap-3">
+          {/* Status filter — trading state */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-[#64748B] mr-1">Status</span>
+            {filterOptions.map((option) => {
+              const isActive = statusFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setStatusFilter(option.value)}
+                  className="relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 pointer-events-auto"
+                  style={{
+                    color: isActive ? '#F8FAFC' : '#94A3B8',
+                    background: isActive ? `${option.color}26` : 'rgba(148, 163, 184, 0.06)',
+                    border: `1px solid ${isActive ? `${option.color}66` : 'rgba(148, 163, 184, 0.12)'}`,
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: option.color }} />
+                    {option.label}
+                    <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: 'rgba(0,0,0,0.25)', color: isActive ? '#F8FAFC' : '#64748B' }}>
+                      {statusCounts[option.value]}
+                    </span>
                   </span>
-                </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Origin filter — how the account was obtained, separate from its trading status */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-[#64748B] mr-1">Origin</span>
+            {originFilterOptions.map((option) => {
+              const isActive = originFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setOriginFilter(option.value)}
+                  className="relative px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 pointer-events-auto"
+                  style={{
+                    color: isActive ? '#F8FAFC' : '#94A3B8',
+                    background: isActive ? `${option.color}26` : 'rgba(148, 163, 184, 0.06)',
+                    border: `1px solid ${isActive ? `${option.color}66` : 'rgba(148, 163, 184, 0.12)'}`,
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: option.color }} />
+                    {option.label}
+                    <span className="px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.25)', color: isActive ? '#F8FAFC' : '#64748B' }}>
+                      {originCounts[option.value]}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'rgba(148, 163, 184, 0.06)', border: '1px solid rgba(148, 163, 184, 0.12)' }}>
@@ -585,6 +660,28 @@ export default function Funded() {
                     {sourceChallenge && (
                       <p className="text-xs text-[#64748B] mt-1">From: {sourceChallenge.accountName}</p>
                     )}
+                    {account.fundingPath !== 'evaluation' && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                          style={{
+                            background: `${ORIGIN_COLOR[account.fundingPath]}26`,
+                            color: ORIGIN_COLOR[account.fundingPath],
+                            border: `1px solid ${ORIGIN_COLOR[account.fundingPath]}66`,
+                          }}
+                        >
+                          {ORIGIN_LABEL[account.fundingPath]}
+                        </span>
+                        {account.tradingEnvironment === 'cfd' && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{ background: 'rgba(41,141,255,0.15)', color: '#298DFF', border: '1px solid rgba(41,141,255,0.4)' }}
+                          >
+                            CFD
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -641,6 +738,31 @@ export default function Funded() {
                     <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(drawdown.maxDrawdownPercent)}</p>
                   </div>
                 </div>
+
+                {/* Trading requirements — static payout-eligibility rules,
+                    shown for non-evaluation accounts (their rules live here
+                    natively rather than on a linked Challenge). */}
+                {account.fundingPath !== 'evaluation' && (() => {
+                  const ruleLines = getPayoutRuleLines(account, formatCurrency);
+                  return (
+                    <div
+                      className="mb-6 rounded-lg px-3 py-2.5 space-y-1.5"
+                      style={{ background: 'rgba(148, 163, 184, 0.06)', border: '1px solid rgba(148, 163, 184, 0.1)' }}
+                    >
+                      <p className="text-[11px] uppercase tracking-wider text-[#64748B]">Trading requirements</p>
+                      {ruleLines.length === 0 ? (
+                        <p className="text-xs text-[#94A3B8]">No minimum trading-day or consistency requirement</p>
+                      ) : (
+                        ruleLines.map((line) => (
+                          <div key={line.label} className="flex items-center justify-between text-xs">
+                            <span className="text-[#94A3B8]">{line.label}</span>
+                            <span className="text-[#F8FAFC] font-medium">{line.value}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
@@ -719,7 +841,21 @@ export default function Funded() {
                     <TableCell className="text-right text-[#F8FAFC] font-medium">{formatCurrency(account.currentBalance)}</TableCell>
                     <TableCell className={`text-right font-medium ${accountPnL >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>{formatCurrency(accountPnL)}</TableCell>
                     <TableCell>
-                      <Badge variant="default" className={getStatusColor(account.status)}>{account.status}</Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="default" className={getStatusColor(account.status)}>{account.status}</Badge>
+                        {account.fundingPath !== 'evaluation' && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{
+                              background: `${ORIGIN_COLOR[account.fundingPath]}26`,
+                              color: ORIGIN_COLOR[account.fundingPath],
+                              border: `1px solid ${ORIGIN_COLOR[account.fundingPath]}66`,
+                            }}
+                          >
+                            {ORIGIN_LABEL[account.fundingPath]}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

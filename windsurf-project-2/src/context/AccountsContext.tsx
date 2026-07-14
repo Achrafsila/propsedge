@@ -698,10 +698,17 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   const getROIStats = (): ROIStats => {
     // Step 2 rows are a continuation of their root challenge, not a
     // separate purchase, so only root challenges count toward cost/ROI.
-    const totalChallengeCosts = getRootChallenges(challenges).reduce(
+    const challengeCosts = getRootChallenges(challenges).reduce(
       (sum, c) => sum + c.purchaseCost,
       0
     );
+    // A converted account's cost already lives on its source Challenge row
+    // above — only non-evaluation-path funded accounts (Instant Funded,
+    // giveaway, etc.) have their own purchaseCost, since they never had one.
+    const instantFundedCosts = fundedAccounts
+      .filter((a) => a.fundingPath !== "evaluation")
+      .reduce((sum, a) => sum + (a.purchaseCost ?? 0), 0);
+    const totalChallengeCosts = challengeCosts + instantFundedCosts;
     const totalPayoutsReceived = payouts
       .filter((p) => p.status === "paid")
       .reduce((sum, p) => sum + p.receivedPayoutAmount, 0);

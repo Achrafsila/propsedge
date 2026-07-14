@@ -165,6 +165,8 @@ export default function Challenges() {
       maxDrawdown: challenge.maxDrawdown,
       remainingDrawdown: challenge.remainingDrawdown,
       status: 'active' as const,
+      fundingPath: 'evaluation' as const,
+      payoutRules: { consistency: { required: false }, minimumTradingDays: { required: false } },
     };
     convertChallengeToFunded(challenge.id, fundedAccount);
   };

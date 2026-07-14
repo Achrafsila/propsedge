@@ -13,18 +13,23 @@ export function LifecycleIndicator({
   nodes,
   compact = false,
   className = "",
+  ariaLabel = "Lifecycle progress",
 }: {
   nodes: LifecycleNode[];
   // Always abbreviate (S1/S2) — for dense contexts like the table.
   compact?: boolean;
   className?: string;
+  // Override for non-evaluation variants, e.g. "Instant-funded CFD account"
+  // — the per-node labels alone ("Instant Funded: current") don't convey
+  // that there's no Step 1/Step 2 arc behind it.
+  ariaLabel?: string;
 }) {
   if (nodes.length === 0) return null;
 
   return (
     <span
       role="list"
-      aria-label="Lifecycle progress"
+      aria-label={ariaLabel}
       className={`inline-flex items-center flex-wrap gap-1 text-[11px] font-medium ${className}`}
     >
       {nodes.map((node, i) => {

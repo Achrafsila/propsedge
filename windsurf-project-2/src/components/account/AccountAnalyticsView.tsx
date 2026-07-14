@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { PayoutRules, FundingPath } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +34,7 @@ import {
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
-import { getAccountOptionLabel } from "@/lib/accountLabels";
+import { getAccountOptionLabel, ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AccountAnalyticsViewProps {
@@ -435,6 +436,73 @@ export function AccountAnalyticsView({
         </div>
       </div>
 
+      {/* ── Trading Requirements ──────────────────────────────────────────── */}
+      {/* Static payout-eligibility rules from PayoutRules — funded accounts
+          with their own native rules only (Instant Funded, etc.); a
+          converted account's rules live on its source Challenge instead and
+          are surfaced through AI Coach's payout-readiness checks, not here. */}
+      {accountType === "funded" && account.fundingPath && account.fundingPath !== "evaluation" && (() => {
+        const fundingPath = account.fundingPath as FundingPath;
+        return (
+        <div
+          className="rounded-xl p-5 transition-all duration-300"
+          style={{
+            background: glassmorphism.card.background,
+            backdropFilter: glassmorphism.card.backdropBlur,
+            border: "1px solid rgba(148,163,184,0.08)",
+            borderRadius: borderRadius.xl,
+          }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-[#F8FAFC] font-bold" style={{ fontSize: typography.fontSize.section }}>
+              Trading Requirements
+            </p>
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+              style={{
+                background: `${ORIGIN_COLOR[fundingPath]}26`,
+                color: ORIGIN_COLOR[fundingPath],
+                border: `1px solid ${ORIGIN_COLOR[fundingPath]}66`,
+              }}
+            >
+              {ORIGIN_LABEL[fundingPath]}
+            </span>
+          </div>
+          {(() => {
+            const rules = account.payoutRules as PayoutRules | undefined;
+            const lines: { label: string; value: string }[] = [];
+            if (rules?.consistency.required && rules.consistency.limitPercent != null) {
+              lines.push({ label: "Consistency", value: `${rules.consistency.limitPercent}% maximum` });
+            }
+            if (rules?.minimumTradingDays.required && rules.minimumTradingDays.days != null) {
+              lines.push({
+                label: "Minimum trading days",
+                value: `${rules.minimumTradingDays.days} day${rules.minimumTradingDays.days === 1 ? "" : "s"}`,
+              });
+              const qualifying = rules.minimumTradingDays.qualifyingDailyProfit;
+              if (qualifying) {
+                const amount = qualifying.type === "fixed" ? fmt$(qualifying.value) : `${qualifying.value}% of initial balance`;
+                lines.push({ label: "Qualifying day", value: `≥ ${amount} net profit` });
+              }
+            }
+            if (lines.length === 0) {
+              return <p className="text-xs text-[#94A3B8]">No minimum trading-day or consistency requirement</p>;
+            }
+            return (
+              <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                {lines.map((line) => (
+                  <div key={line.label}>
+                    <p className="text-[#64748B] text-xs mb-0.5">{line.label}</p>
+                    <p className="text-[#F8FAFC] font-medium">{line.value}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+        );
+      })()}
+
       {/* ── Equity Curve ──────────────────────────────────────────────────── */}
       <div
         className="rounded-xl p-6 transition-all duration-300"
@@ -819,6 +887,17 @@ function Header({
           >
             {account.status}
           </Badge>
+          {accountType === "funded" && account.fundingPath && account.fundingPath !== "evaluation" && (() => {
+            const fundingPath = account.fundingPath as FundingPath;
+            return (
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                style={{ background: `${ORIGIN_COLOR[fundingPath]}26`, color: ORIGIN_COLOR[fundingPath], border: `1px solid ${ORIGIN_COLOR[fundingPath]}66` }}
+              >
+                {ORIGIN_LABEL[fundingPath]}
+              </span>
+            );
+          })()}
         </div>
       </div>
 

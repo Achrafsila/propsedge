@@ -1,5 +1,6 @@
 import { Trade, Challenge, FundedAccount, Payout, DashboardKPIs, PersonalAccount } from "@/types";
 import { computeDrawdown, resolveDrawdownDollars } from "@/lib/drawdown";
+import { evaluatePayoutEligibility, parseConsistencyLimitPercent, ConsistencyCheck, MinimumTradingDaysCheck, MinimumPayoutCheck } from "./payoutEligibility";
 import { TraderIdentity } from "./traderIdentity";
 import { TraderHabits } from "./traderHabits";
 import { TraderEdge } from "./traderEdge";
@@ -413,15 +414,8 @@ function buildProfitTargetItem(challenge: Challenge, trades: Trade[]): CoachItem
 }
 
 // ── Rule 4: Consistency Rule ─────────────────────────────────────────────
-// consistencyRule is free text on Challenge (e.g. "40%", "evaluation 50%,
-// funded 30%") — the first percentage found is treated as the max share of
-// total profit a single day is allowed to represent.
-
-function parseConsistencyLimitPercent(text: string | null | undefined): number | null {
-  if (!text) return null;
-  const match = text.match(/(\d{1,3})\s*%/);
-  return match ? Number(match[1]) : null;
-}
+// parseConsistencyLimitPercent now lives in ./payoutEligibility (imported
+// above) since it's shared with the payout-eligibility service below.
 
 function buildConsistencyItem(
   name: string,
@@ -468,12 +462,10 @@ function buildConsistencyItem(
 }
 
 // ── Rule 5: Payout Readiness ─────────────────────────────────────────────
-// FundedAccount itself carries no rule metadata (minTradingDays,
-// consistencyRule, minPayout, ... all live on Challenge — see
-// src/types/index.ts). Readiness therefore resolves the funded account's
-// originating Challenge row via sourceChallengeId to read those rules;
-// an account with no traceable source challenge just skips the checks it
-// has no rule data for.
+// Sources every rule fact from evaluatePayoutEligibility (src/lib/analytics/
+// payoutEligibility.ts) — the single source of truth shared with Dashboard,
+// Risk Center, the Funded page, and Portfolio analytics — and only owns the
+// user-facing coaching copy/severity/tone here.
 
 interface PayoutReadinessResult {
   items: CoachItem[];
@@ -488,71 +480,76 @@ function buildPayoutReadinessItems(
   today: string
 ): PayoutReadinessResult {
   const name = `${account.propFirmName} — ${account.accountName}`;
-  const sourceChallenge = account.sourceChallengeId
-    ? challenges.find((c) => c.id === account.sourceChallengeId)
-    : undefined;
+  const { checks, availableProfit, isEligible } = evaluatePayoutEligibility(account, trades, challenges, payouts);
 
   const items: CoachItem[] = [];
 
-  const accountTrades = trades.filter((t) => t.accountId === account.id && t.accountType === "funded");
-  const byDay = new Map<string, number>();
-  for (const t of accountTrades) byDay.set(t.entryDate, (byDay.get(t.entryDate) ?? 0) + t.pnl);
-  const profitableDays = [...byDay.values()].filter((v) => v > 0).length;
-
-  const minTradingDays = sourceChallenge?.minTradingDays ?? null;
-  let minDaysOk = true;
-  if (minTradingDays != null) {
-    minDaysOk = profitableDays >= minTradingDays;
-    const missing = minTradingDays - profitableDays;
+  const minDaysCheck = checks.find((c): c is MinimumTradingDaysCheck => c.key === "minimumTradingDays");
+  if (minDaysCheck) {
+    const missing = minDaysCheck.requiredDays - minDaysCheck.qualifyingDays;
+    const ok = minDaysCheck.status === "satisfied";
     items.push({
       title: `Minimum Trading Days — ${name}`,
-      severity: minDaysOk ? "positive" : "warning",
-      message: minDaysOk
-        ? `You have met the minimum trading days requirement on ${name} (${profitableDays}/${minTradingDays} profitable days).`
+      severity: ok ? "positive" : "warning",
+      message: ok
+        ? `You have met the minimum trading days requirement on ${name} (${minDaysCheck.qualifyingDays}/${minDaysCheck.requiredDays} profitable days).`
         : `You still need ${missing} more profitable trading day${missing === 1 ? "" : "s"} on ${name} before this account is payout-eligible.`,
-      evidence: `Profitable trading days ${profitableDays} of required ${minTradingDays}`,
-      action: minDaysOk ? "Requirement satisfied." : "Prioritize consistent, quality setups to bank more profitable days.",
+      evidence: `Profitable trading days ${minDaysCheck.qualifyingDays} of required ${minDaysCheck.requiredDays}`,
+      action: ok ? "Requirement satisfied." : "Prioritize consistent, quality setups to bank more profitable days.",
     });
   }
-
-  const alreadyClaimed = payouts
-    .filter((p) => p.fundedAccountId === account.id && (p.status === "paid" || p.status === "pending"))
-    .reduce((s, p) => s + (p.status === "paid" ? p.receivedPayoutAmount : p.requestedPayoutAmount), 0);
-  const profitAvailable = Math.max(0, account.currentProfit - alreadyClaimed);
 
   items.push({
     title: `Profit Available — ${name}`,
-    severity: profitAvailable > 0 ? "positive" : "neutral",
+    severity: availableProfit > 0 ? "positive" : "neutral",
     message:
-      profitAvailable > 0
-        ? `${fmtMoney(profitAvailable)} of unclaimed profit is available for payout on ${name}.`
+      availableProfit > 0
+        ? `${fmtMoney(availableProfit)} of unclaimed profit is available for payout on ${name}.`
         : `No unclaimed profit is currently available for payout on ${name}.`,
-    evidence: `Current profit ${fmtMoney(account.currentProfit)} · Already claimed (paid + pending) ${fmtMoney(alreadyClaimed)}`,
-    action: profitAvailable > 0 ? "Confirm the other payout conditions before requesting." : "Keep trading to build claimable profit.",
+    evidence: `Current profit ${fmtMoney(account.currentProfit)} · Available ${fmtMoney(availableProfit)}`,
+    action: availableProfit > 0 ? "Confirm the other payout conditions before requesting." : "Keep trading to build claimable profit.",
   });
 
-  const minPayout = sourceChallenge?.minPayout ?? null;
-  let minPayoutOk = true;
-  if (minPayout != null) {
-    minPayoutOk = profitAvailable >= minPayout;
+  const minPayoutCheck = checks.find((c): c is MinimumPayoutCheck => c.key === "minimumPayout");
+  if (minPayoutCheck) {
+    const ok = minPayoutCheck.status === "satisfied";
     items.push({
       title: `Minimum Payout Threshold — ${name}`,
-      severity: minPayoutOk ? "positive" : "warning",
-      message: minPayoutOk
-        ? `Available profit meets the ${fmtMoney(minPayout)} minimum payout threshold on ${name}.`
-        : `You need ${fmtMoney(minPayout - profitAvailable)} more available profit on ${name} to clear the ${fmtMoney(minPayout)} minimum payout threshold.`,
-      evidence: `Available ${fmtMoney(profitAvailable)} · Minimum required ${fmtMoney(minPayout)}`,
-      action: minPayoutOk ? "Requirement satisfied." : "Continue trading toward the minimum payout threshold before filing a request.",
+      severity: ok ? "positive" : "warning",
+      message: ok
+        ? `Available profit meets the ${fmtMoney(minPayoutCheck.requiredMinPayout)} minimum payout threshold on ${name}.`
+        : `You need ${fmtMoney(minPayoutCheck.requiredMinPayout - minPayoutCheck.availableProfit)} more available profit on ${name} to clear the ${fmtMoney(minPayoutCheck.requiredMinPayout)} minimum payout threshold.`,
+      evidence: `Available ${fmtMoney(minPayoutCheck.availableProfit)} · Minimum required ${fmtMoney(minPayoutCheck.requiredMinPayout)}`,
+      action: ok ? "Requirement satisfied." : "Continue trading toward the minimum payout threshold before filing a request.",
     });
   }
 
-  const limitPercent = parseConsistencyLimitPercent(sourceChallenge?.consistencyRule ?? null);
-  const consistencyItem = buildConsistencyItem(name, account.id, "funded", trades, account.currentProfit, limitPercent, today);
-  if (consistencyItem) {
-    items.push({ ...consistencyItem, title: `Consistency Rule (Payout) — ${name}` });
+  const consistencyCheck = checks.find((c): c is ConsistencyCheck => c.key === "consistency");
+  if (consistencyCheck) {
+    const isToday = consistencyCheck.bestDayDate === today;
+    const severity: CoachSeverity =
+      consistencyCheck.bestDayConcentrationPercent >= consistencyCheck.limitPercent
+        ? "critical"
+        : consistencyCheck.bestDayConcentrationPercent >= consistencyCheck.limitPercent * 0.8
+          ? "warning"
+          : "positive";
+    const dayPhrase = isToday ? "Today's profit" : `Your best trading day (${consistencyCheck.bestDayDate})`;
+    items.push({
+      title: `Consistency Rule (Payout) — ${name}`,
+      severity,
+      message: `${dayPhrase} already represents ${consistencyCheck.bestDayConcentrationPercent}% of total profit on ${name}, against a ${consistencyCheck.limitPercent}% consistency limit.`,
+      evidence: `Best single-day profit ${fmtMoney(consistencyCheck.bestDayAmount)} on ${consistencyCheck.bestDayDate} · Total profit ${fmtMoney(account.currentProfit)} · Limit ${consistencyCheck.limitPercent}%`,
+      action:
+        severity === "positive"
+          ? "No concentration risk right now — keep spreading profitable trades across multiple days."
+          : "Avoid increasing size on your best-performing day; spread profitable trades across more days to protect payout eligibility.",
+    });
   }
 
-  const isNear = minDaysOk && minPayoutOk && profitAvailable > 0;
+  // Matches prior semantics exactly: eligible on every applicable rule AND
+  // there's actually unclaimed profit to request — a payout-ready account
+  // with $0 available isn't "near" a payout regardless of rule status.
+  const isNear = isEligible && availableProfit > 0;
   return { items, isNear };
 }
 

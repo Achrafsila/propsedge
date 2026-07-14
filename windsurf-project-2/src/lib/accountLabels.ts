@@ -1,4 +1,4 @@
-import { Challenge, FundedAccount, PersonalAccount, PersonalAccountStatus } from "@/types";
+import { Challenge, FundedAccount, PersonalAccount, PersonalAccountStatus, FundingPath } from "@/types";
 import { TradingMode } from "@/context/TradingModeContext";
 
 // Shared account dropdown formatting — used by the Trade Journal account
@@ -66,6 +66,26 @@ export const ACCOUNT_STATUS_BADGE_COLOR: Record<string, string> = {
   Closed: "#94A3B8",
   Inactive: "#94A3B8",
   Archived: "#64748B",
+};
+
+// How a FundedAccount was obtained — shared between the Funded page and
+// AccountAnalyticsView so the badge/filter reads identically everywhere.
+// "evaluation" (the pre-existing, majority case) is intentionally excluded
+// from badge rendering by callers — see funded/page.tsx.
+export const ORIGIN_LABEL: Record<FundingPath, string> = {
+  evaluation: "Evaluation",
+  instant: "Instant",
+  giveaway: "Giveaway",
+  affiliate: "Affiliate",
+  internal: "Internal",
+};
+
+export const ORIGIN_COLOR: Record<FundingPath, string> = {
+  evaluation: "#94A3B8",
+  instant: "#F59E0B",
+  giveaway: "#A855F7",
+  affiliate: "#298DFF",
+  internal: "#64748B",
 };
 
 // DD/MM/YYYY — parsed as UTC so a date-only string ("2026-07-08") or a full

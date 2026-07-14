@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/client";
-import { FundedAccount, FundedAccountStatus } from "@/types";
+import { FundedAccount, FundedAccountStatus, FundingPath, TradingEnvironment, MinimumDailyProfitType, PayoutRules } from "@/types";
 
 // ─── DB row shape ──────────────────────────────────────────────────────────────
+// Payout rules are flat columns at this layer — rowToFundedAccount folds them
+// into the structured PayoutRules object every app-layer caller uses.
 interface FundedAccountRow {
   id: string;
   user_id: string;
@@ -17,8 +19,45 @@ interface FundedAccountRow {
   max_drawdown: number;
   remaining_buffer: number;
   status: string;
+  funding_path: string;
+  trading_environment: string | null;
+  consistency_required: boolean;
+  consistency_limit: number | null;
+  minimum_trading_days_required: boolean;
+  minimum_trading_days: number | null;
+  minimum_daily_profit_type: string | null;
+  minimum_daily_profit_value: number | null;
+  purchase_cost: number | null;
   created_at: string;
   updated_at: string;
+}
+
+function rowToPayoutRules(row: FundedAccountRow): PayoutRules {
+  return {
+    consistency: {
+      required: row.consistency_required,
+      limitPercent: row.consistency_limit ?? undefined,
+    },
+    minimumTradingDays: {
+      required: row.minimum_trading_days_required,
+      days: row.minimum_trading_days ?? undefined,
+      qualifyingDailyProfit:
+        row.minimum_daily_profit_type != null && row.minimum_daily_profit_value != null
+          ? { type: row.minimum_daily_profit_type as MinimumDailyProfitType, value: row.minimum_daily_profit_value }
+          : undefined,
+    },
+  };
+}
+
+function payoutRulesToColumns(rules: PayoutRules) {
+  return {
+    consistency_required: rules.consistency.required,
+    consistency_limit: rules.consistency.required ? (rules.consistency.limitPercent ?? null) : null,
+    minimum_trading_days_required: rules.minimumTradingDays.required,
+    minimum_trading_days: rules.minimumTradingDays.required ? (rules.minimumTradingDays.days ?? null) : null,
+    minimum_daily_profit_type: rules.minimumTradingDays.qualifyingDailyProfit?.type ?? null,
+    minimum_daily_profit_value: rules.minimumTradingDays.qualifyingDailyProfit?.value ?? null,
+  };
 }
 
 // ─── DB → TypeScript ──────────────────────────────────────────────────────────
@@ -37,6 +76,10 @@ function rowToFundedAccount(row: FundedAccountRow): FundedAccount {
     maxDrawdown:       row.max_drawdown,
     remainingDrawdown: row.remaining_buffer,   // DB column: remaining_buffer
     status:            row.status as FundedAccountStatus,
+    fundingPath:       (row.funding_path as FundingPath) ?? "evaluation",
+    tradingEnvironment: (row.trading_environment as TradingEnvironment) ?? undefined,
+    payoutRules:       rowToPayoutRules(row),
+    purchaseCost:      row.purchase_cost ?? undefined,
   };
 }
 
@@ -56,6 +99,10 @@ function accountToInsertRow(account: Omit<FundedAccount, "id">, userId: string) 
     max_drawdown:       account.maxDrawdown,
     remaining_buffer:   account.remainingDrawdown,  // TS: remainingDrawdown → DB: remaining_buffer
     status:             account.status,
+    funding_path:       account.fundingPath,
+    trading_environment: account.tradingEnvironment ?? null,
+    purchase_cost:      account.purchaseCost ?? null,
+    ...payoutRulesToColumns(account.payoutRules),
   };
 }
 
@@ -75,6 +122,10 @@ function accountToUpdateRow(updates: Partial<FundedAccount>): Record<string, unk
   if (updates.maxDrawdown       !== undefined) row.max_drawdown      = updates.maxDrawdown;
   if (updates.remainingDrawdown !== undefined) row.remaining_buffer  = updates.remainingDrawdown;
   if (updates.status            !== undefined) row.status            = updates.status;
+  if (updates.fundingPath       !== undefined) row.funding_path      = updates.fundingPath;
+  if (updates.tradingEnvironment !== undefined) row.trading_environment = updates.tradingEnvironment ?? null;
+  if (updates.purchaseCost      !== undefined) row.purchase_cost     = updates.purchaseCost ?? null;
+  if (updates.payoutRules       !== undefined) Object.assign(row, payoutRulesToColumns(updates.payoutRules));
 
   return row;
 }

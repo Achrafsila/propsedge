@@ -4,6 +4,40 @@ export type PayoutStatus = "pending" | "paid" | "rejected";
 export type TradeStatus = "win" | "loss" | "breakeven";
 export type PersonalAccountStatus = "active" | "inactive" | "archived";
 
+// How a FundedAccount was obtained — a UI/analytics/filtering concern only,
+// never an input to payout-eligibility logic (see PayoutRules below).
+// "evaluation" is every account that passed a Challenge (the only path that
+// existed before Instant Funded); every other path is funded from creation
+// with no evaluation phase and no Challenge row involved at all.
+export type FundingPath = "evaluation" | "instant" | "giveaway" | "affiliate" | "internal";
+export type TradingEnvironment = "cfd" | "futures";
+export type MinimumDailyProfitType = "fixed" | "percentage";
+
+// Structured payout-eligibility rules for a FundedAccount. The DB stores
+// these as flat columns (see src/lib/supabase/funded_accounts.ts), but the
+// application layer always works with this nested shape — never raw
+// booleans scattered across components. See
+// src/lib/analytics/payoutEligibility.ts for the single service that
+// evaluates these against actual trade history.
+export interface ConsistencyRule {
+  required: boolean;
+  limitPercent?: number; // percent, e.g. 20 means 20% — set only when required
+}
+
+export interface MinimumTradingDaysRule {
+  required: boolean;
+  days?: number; // set only when required
+  qualifyingDailyProfit?: {
+    type: MinimumDailyProfitType;
+    value: number;
+  };
+}
+
+export interface PayoutRules {
+  consistency: ConsistencyRule;
+  minimumTradingDays: MinimumTradingDaysRule;
+}
+
 export interface ChallengeType {
   id: string;
   propFirmName: string;
@@ -81,6 +115,17 @@ export interface FundedAccount {
   maxDrawdown: number;
   remainingDrawdown: number;
   status: FundedAccountStatus;
+  // How this account was obtained — defaults to "evaluation" for every
+  // pre-existing row (all of which came from convertChallengeToFunded).
+  fundingPath: FundingPath;
+  tradingEnvironment?: TradingEnvironment;
+  // Always present — "no rule" is `{ required: false }`, not undefined, so
+  // callers never need to null-check the parent object.
+  payoutRules: PayoutRules;
+  // What was paid to obtain a non-evaluation-path account (Instant Funded,
+  // giveaway, etc.). A converted account's cost lives on its source
+  // Challenge row instead — see getROIStats in AccountsContext.tsx.
+  purchaseCost?: number;
 }
 
 // A bring-your-own-capital account with NO prop firm rules — no challenge
