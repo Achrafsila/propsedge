@@ -45,6 +45,14 @@ function tf(timeframe: Timeframe, values: number[]): TimeframeCandles {
 function unavailableTf(timeframe: Timeframe): TimeframeCandles {
   return { timeframe, candles: [], quality: "unavailable" };
 }
+function fullCandle(datetime: string, open: number, high: number, low: number, close: number): MarketCandle {
+  return { datetime, open, high, low, close };
+}
+function tfFromChrono(timeframe: Timeframe, chrono: MarketCandle[]): TimeframeCandles {
+  const lastDate = chrono[chrono.length - 1].datetime;
+  const forming = fullCandle(addDays(lastDate, 1), 99999, 100000, 99998, 99999);
+  return { timeframe, candles: [forming, ...chrono.slice().reverse()], quality: "complete" };
+}
 
 const BULLISH = [100, 102, 106, 103, 100, 104, 108, 112, 109, 106, 110, 114, 118, 115, 112, 116, 120, 124];
 const BEARISH = BULLISH.map((v) => 224 - v);
@@ -120,6 +128,77 @@ scenario("Timeframe with no intraday route (e.g. US30's H4/H1/M15) -> Unavailabl
   assert.deepEqual(h4.latestHH, null);
   // Only Daily (bearish) resolved — no bullish row exists, so no disagreement despite 3 unavailable rows.
   assert.equal(result.disagreement, false);
+});
+
+// ── Sprint 2 / Phase 2 additions: sequence trend, correction, reversal, ──
+// ── phase surfacing, timeframe hierarchy ──────────────────────────────────
+
+const UPTREND_FOR_EVENTS = [90, 95, 100, 92, 88, 96, 104, 112, 102, 94, 106, 116, 126, 112, 98, 110, 124, 138, 148];
+
+scenario("Correction: a 20-50% retracement in an established bullish sequence, no CHoCH yet -> correction=true, bias stays Bullish (not yet a pullback-band retracement)", () => {
+  const correctionValues = [...UPTREND_FOR_EVENTS, 140, 130, 118, 108, 100];
+  const result = computeStructure("XAUUSD", history({ daily: tf("daily", correctionValues) }));
+  const daily = result.rows.find((r) => r.timeframe === "daily")!;
+  assert.equal(daily.sequenceTrend, "bullish");
+  assert.equal(daily.correction, true);
+  assert.equal(daily.lastCHoCH, null);
+});
+
+scenario("Reversal: a confirmed CHoCH followed by a proper bearish zigzag confirms a second opposite swing -> reversal=true, sequenceTrend flips to bearish", () => {
+  const reversalValues = [...UPTREND_FOR_EVENTS, 82, 78, 74, 76, 79, 70, 66, 63, 66, 69, 60, 56, 53, 56, 59, 50, 46, 43, 46, 49];
+  const result = computeStructure("XAUUSD", history({ daily: tf("daily", reversalValues) }));
+  const daily = result.rows.find((r) => r.timeframe === "daily")!;
+  assert.equal(daily.sequenceTrend, "bearish");
+  assert.ok(daily.lastCHoCH);
+  assert.equal(daily.lastCHoCH?.direction, "bearish");
+  assert.equal(daily.reversal, true);
+});
+
+scenario("A CHoCH with no second confirming swing yet (still mid-decline, no new swing low confirmed) -> reversal stays false", () => {
+  // Monotonic crash: no local minimum forms within it, so no NEW swing low ever confirms —
+  // the sequence read still reflects the stale, pre-crash (bullish) swing lows.
+  const monotonicCrash = [...UPTREND_FOR_EVENTS, 98, 82, 78, 74, 70, 66, 62, 58, 54, 50];
+  const result = computeStructure("XAUUSD", history({ daily: tf("daily", monotonicCrash) }));
+  const daily = result.rows.find((r) => r.timeframe === "daily")!;
+  assert.ok(daily.lastCHoCH, "a CHoCH still fires on the initial break");
+  assert.equal(daily.reversal, false, "no second confirming swing has formed yet");
+});
+
+scenario("Compression is now surfaced on the row (previously computed by marketPhase.ts and silently discarded) — same fixture as market-phase-scenarios.ts's 'Clean compression' scenario", () => {
+  const baseline = Array.from({ length: 12 }, (_, i) => fullCandle(addDays("2026-01-01", i), 100, 104, 96, 100));
+  const recent = Array.from({ length: 6 }, (_, i) => fullCandle(addDays("2026-01-01", 12 + i), 100, 101, 99, 100));
+  const result = computeStructure("XAUUSD", history({ daily: tfFromChrono("daily", [...baseline, ...recent]) }));
+  const daily = result.rows.find((r) => r.timeframe === "daily")!;
+  assert.equal(daily.compression, true);
+  assert.equal(daily.expansion, false);
+  assert.equal(daily.rotation, false);
+});
+
+scenario("Expansion is now surfaced on the row — same fixture as market-phase-scenarios.ts's 'Directional breakout candle' scenario", () => {
+  const baseline = Array.from({ length: 12 }, (_, i) => fullCandle(addDays("2026-01-01", i), 100, 102, 98, 100));
+  const recentPrior = Array.from({ length: 5 }, (_, i) => fullCandle(addDays("2026-01-01", 12 + i), 100, 102, 98, 100));
+  const breakoutCandle = fullCandle(addDays("2026-01-01", 17), 100, 118, 100, 116);
+  const result = computeStructure("XAUUSD", history({ daily: tfFromChrono("daily", [...baseline, ...recentPrior, breakoutCandle]) }));
+  const daily = result.rows.find((r) => r.timeframe === "daily")!;
+  assert.equal(daily.expansion, true);
+  assert.equal(daily.compression, false);
+});
+
+scenario("Timeframe hierarchy: Daily and H4 both bullish -> H4 aligned; H1 bearish under a bullish H4 -> conflicting", () => {
+  const bearishTail = BULLISH.map((v) => 224 - v);
+  const result = computeStructure("XAUUSD", history({ h1: tf("h1", bearishTail), m15: tf("m15", bearishTail) }));
+  const daily = result.rows.find((r) => r.timeframe === "daily")!;
+  const h4 = result.rows.find((r) => r.timeframe === "h4")!;
+  const h1 = result.rows.find((r) => r.timeframe === "h1")!;
+  assert.equal(daily.higherTimeframeAlignment, "not_applicable", "Daily has no higher timeframe");
+  assert.equal(h4.higherTimeframeAlignment, "aligned");
+  assert.equal(h1.higherTimeframeAlignment, "conflicting");
+});
+
+scenario("Timeframe hierarchy: an unavailable row never reports aligned/conflicting", () => {
+  const result = computeStructure("US30", history({ h4: unavailableTf("h4") }));
+  const h4 = result.rows.find((r) => r.timeframe === "h4")!;
+  assert.equal(h4.higherTimeframeAlignment, "not_applicable");
 });
 
 console.log(`\n${pass} scenario(s) passed.`);
