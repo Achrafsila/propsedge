@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trophy, Plus, TrendingUp, AlertCircle, DollarSign, ArrowRight, Trash2, BarChart3, LayoutGrid, List } from "lucide-react";
+import { Trophy, Plus, TrendingUp, DollarSign, ArrowRight, Trash2, BarChart3, LayoutGrid, List } from "lucide-react";
 import { useAccounts } from "@/context/AccountsContext";
 import { ChallengeStatus, Challenge } from "@/types";
 import { AddChallengeMarketDialog } from "@/components/AddChallengeMarketDialog";
@@ -28,28 +27,53 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { colors, typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
+import { typography, borderRadius, glassmorphism, gradientBorder, gradientText } from "@/design-system";
 import { computeDrawdown } from "@/lib/drawdown";
+import {
+  is2Step,
+  getCurrentStep,
+  getStepTarget,
+  isChallengeActive,
+  endedWithoutProgress,
+  getChallengeOutcomeLabel,
+  getChallengeOutcomeColor,
+  getLifecycleNodes,
+  getAccountStatusBucket,
+  getAccountLifecycleBucket,
+  AccountStatusBucket,
+  AccountLifecycleBucket,
+} from "@/lib/lifecycle";
+import { LifecycleIndicator } from "@/components/account/LifecycleIndicator";
 
 // Redesigned challenges view: filters, view toggle, progress chart, table
-type StatusFilter = "all" | ChallengeStatus;
+type StatusFilter = "all" | AccountStatusBucket;
+type LifecycleFilter = "all" | AccountLifecycleBucket;
 type ViewMode = "cards" | "table";
 
-const STATUS_COLOR_MAP: Record<ChallengeStatus, string> = {
-  active: "#298DFF",
-  passed: "#10B981",
-  failed: "#EF4444",
-  refunded: "#F59E0B",
-  step1_completed: "#A855F7",
+const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string; color: string }[] = [
+  { value: "all", label: "All", color: "#94A3B8" },
+  { value: "active", label: "Active", color: "#298DFF" },
+  { value: "failed", label: "Failed", color: "#EF4444" },
+  { value: "funded", label: "Funded", color: "#10B981" },
+  { value: "refunded", label: "Refunded", color: "#F59E0B" },
+];
+
+const STATUS_BUCKET_LABEL: Record<AccountStatusBucket, string> = {
+  active: "Active",
+  failed: "Failed",
+  funded: "Funded",
+  refunded: "Refunded",
 };
 
-const STATUS_LABEL_MAP: Record<ChallengeStatus, string> = {
-  active: "active",
-  passed: "passed",
-  failed: "failed",
-  refunded: "refunded",
-  step1_completed: "Step 1 Done",
-};
+// "Step 2 reached" (not "Step 1 Done") — it names the milestone actually
+// crossed (transitioned into Step 2), so it can't be misread as "the whole
+// challenge is done".
+const LIFECYCLE_FILTER_OPTIONS: { value: LifecycleFilter; label: string; color: string }[] = [
+  { value: "all", label: "All stages", color: "#94A3B8" },
+  { value: "step1", label: "Step 1", color: "#298DFF" },
+  { value: "step2", label: "Step 2 reached", color: "#A855F7" },
+  { value: "funded", label: "Funded reached", color: "#10B981" },
+];
 
 export default function Challenges() {
   const router = useRouter();
@@ -57,39 +81,52 @@ export default function Challenges() {
   const stats = getFundingRateStats();
   const [isAddMarketDialogOpen, setIsAddMarketDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
       all: challenges.length,
       active: 0,
-      passed: 0,
       failed: 0,
+      funded: 0,
       refunded: 0,
-      step1_completed: 0,
     };
     challenges.forEach((c) => {
-      counts[c.status] += 1;
+      counts[getAccountStatusBucket(c)] += 1;
+    });
+    return counts;
+  }, [challenges]);
+
+  const lifecycleCounts = useMemo(() => {
+    const counts: Record<LifecycleFilter, number> = {
+      all: challenges.length,
+      step1: 0,
+      step2: 0,
+      funded: 0,
+    };
+    challenges.forEach((c) => {
+      counts[getAccountLifecycleBucket(c)] += 1;
     });
     return counts;
   }, [challenges]);
 
   const filteredChallenges = useMemo(
     () =>
-      statusFilter === "all"
-        ? challenges
-        : challenges.filter((c) => c.status === statusFilter),
-    [challenges, statusFilter]
+      challenges.filter(
+        (c) =>
+          (statusFilter === "all" || getAccountStatusBucket(c) === statusFilter) &&
+          (lifecycleFilter === "all" || getAccountLifecycleBucket(c) === lifecycleFilter)
+      ),
+    [challenges, statusFilter, lifecycleFilter]
   );
 
-  const filterOptions: { value: StatusFilter; label: string; color: string }[] = [
-    { value: "all", label: "All", color: "#94A3B8" },
-    { value: "active", label: "Active", color: STATUS_COLOR_MAP.active },
-    { value: "passed", label: "Passed", color: STATUS_COLOR_MAP.passed },
-    { value: "failed", label: "Failed", color: STATUS_COLOR_MAP.failed },
-    { value: "refunded", label: "Refunded", color: STATUS_COLOR_MAP.refunded },
-    { value: "step1_completed", label: "Step 1 Done", color: STATUS_COLOR_MAP.step1_completed },
-  ];
+  const activeFilterDescription = [
+    statusFilter !== "all" ? STATUS_BUCKET_LABEL[statusFilter].toLowerCase() : null,
+    lifecycleFilter !== "all" ? LIFECYCLE_FILTER_OPTIONS.find((o) => o.value === lifecycleFilter)?.label.toLowerCase() : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -104,46 +141,11 @@ export default function Challenges() {
     return `${value.toFixed(1)}%`;
   };
 
-  const getStatusColor = (status: ChallengeStatus) => {
-    switch (status) {
-      case 'active': return 'bg-[rgba(41,141,255,0.15)] text-[#298DFF] border border-[rgba(41,141,255,0.4)] font-semibold rounded-full';
-      case 'passed': return 'bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.4)] font-semibold rounded-full';
-      case 'failed': return 'bg-[rgba(239,68,68,0.15)] text-[#EF4444] border border-[rgba(239,68,68,0.4)] font-semibold rounded-full';
-      case 'refunded': return 'bg-[rgba(245,158,11,0.15)] text-[#F59E0B] border border-[rgba(245,158,11,0.4)] font-semibold rounded-full';
-      case 'step1_completed': return 'bg-[rgba(168,85,247,0.15)] text-[#A855F7] border border-[rgba(168,85,247,0.4)] font-semibold rounded-full';
-      default: return 'bg-[rgba(148,163,184,0.15)] text-[#94A3B8] border border-[rgba(148,163,184,0.4)] font-semibold rounded-full';
-    }
-  };
-
-  const getStatusLabel = (status: ChallengeStatus) => STATUS_LABEL_MAP[status] ?? status;
-
-  const getStatusBgColor = (status: ChallengeStatus) => {
-    switch (status) {
-      case 'active': return 'bg-[rgba(41,141,255,0.1)]';
-      case 'passed': return 'bg-[rgba(16,185,129,0.1)]';
-      case 'failed': return 'bg-[rgba(239,68,68,0.1)]';
-      case 'refunded': return 'bg-[rgba(245,158,11,0.1)]';
-      case 'step1_completed': return 'bg-[rgba(168,85,247,0.1)]';
-      default: return 'bg-[rgba(148,163,184,0.1)]';
-    }
-  };
-
-  const getStatusTextColor = (status: ChallengeStatus) => {
-    switch (status) {
-      case 'active': return 'text-[#298DFF]';
-      case 'passed': return 'text-[#10B981]';
-      case 'failed': return 'text-[#EF4444]';
-      case 'refunded': return 'text-[#F59E0B]';
-      case 'step1_completed': return 'text-[#A855F7]';
-      default: return 'text-[#94A3B8]';
-    }
-  };
-
   const handleStatusChange = (id: string, newStatus: ChallengeStatus) => {
     updateChallenge(id, { status: newStatus });
   };
 
-  const handleConvertToFunded = (challenge: any) => {
+  const handleConvertToFunded = (challenge: Challenge) => {
     const fundedAccount = {
       propFirmName: challenge.propFirmName,
       accountName: `${challenge.accountName} (Funded)`,
@@ -158,21 +160,6 @@ export default function Challenges() {
       status: 'active' as const,
     };
     convertChallengeToFunded(challenge.id, fundedAccount);
-  };
-
-  // ── 2-step workflow helpers ──────────────────────────────
-  const is2Step = (c: Challenge) => c.challengeKind === "2-step";
-
-  const getCurrentStep = (c: Challenge): "1" | "2" | "instant" =>
-    c.challengeStep ?? (is2Step(c) ? "1" : "instant");
-
-  const getStepTarget = (c: Challenge) => {
-    if (is2Step(c)) {
-      return getCurrentStep(c) === "1"
-        ? (c.step1ProfitTarget ?? c.profitTarget)
-        : (c.step2ProfitTarget ?? c.profitTarget);
-    }
-    return c.profitTarget;
   };
 
   // A 2-step account can only convert to funded once Step 2 is passed —
@@ -222,18 +209,24 @@ export default function Challenges() {
   // currentProfit is derived directly from the trade list (not the
   // account row's own currentProfit field) so the card can never get stuck
   // showing stale data after a trade/import lands.
-  const getChallengeCurrentProfit = (challenge: Challenge) =>
-    trades
-      .filter((t) => t.accountId === challenge.id && t.accountType === "challenge")
-      .reduce((sum, t) => sum + t.pnl, 0);
+  const getChallengeCurrentProfit = useCallback(
+    (challenge: Challenge) =>
+      trades
+        .filter((t) => t.accountId === challenge.id && t.accountType === "challenge")
+        .reduce((sum, t) => sum + t.pnl, 0),
+    [trades]
+  );
 
-  const getChallengeProgress = (challenge: Challenge) => {
-    const currentProfit = getChallengeCurrentProfit(challenge);
-    const target = getStepTarget(challenge);
-    if (!target) return 0;
-    const progress = (currentProfit / target) * 100;
-    return Math.max(0, Math.min(progress, 100));
-  };
+  const getChallengeProgress = useCallback(
+    (challenge: Challenge) => {
+      const currentProfit = getChallengeCurrentProfit(challenge);
+      const target = getStepTarget(challenge);
+      if (!target) return 0;
+      const progress = (currentProfit / target) * 100;
+      return Math.max(0, Math.min(progress, 100));
+    },
+    [getChallengeCurrentProfit]
+  );
 
   const cardVariants = {
     hover: {
@@ -266,9 +259,9 @@ export default function Challenges() {
       filteredChallenges.map((c) => ({
         name: c.accountName.length > 14 ? `${c.accountName.slice(0, 12)}…` : c.accountName,
         progress: Number(getChallengeProgress(c).toFixed(1)),
-        status: c.status,
+        color: getChallengeOutcomeColor(c),
       })),
-    [filteredChallenges]
+    [filteredChallenges, getChallengeProgress]
   );
 
   return (
@@ -621,7 +614,7 @@ export default function Challenges() {
                 />
                 <Bar dataKey="progress" radius={[6, 6, 0, 0]} maxBarSize={64}>
                   {chartData.map((entry, index) => (
-                    <Cell key={index} fill={STATUS_COLOR_MAP[entry.status as ChallengeStatus]} />
+                    <Cell key={index} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
@@ -642,36 +635,72 @@ export default function Challenges() {
         initial="hidden"
         animate="visible"
         transition={{ delay: 0.3 }}
-        className="flex flex-wrap items-center justify-between gap-4"
+        className="flex flex-wrap items-start justify-between gap-4"
       >
-        <div className="flex flex-wrap items-center gap-2">
-          {filterOptions.map((option) => {
-            const isActive = statusFilter === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setStatusFilter(option.value)}
-                className="relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 pointer-events-auto"
-                style={{
-                  color: isActive ? '#F8FAFC' : '#94A3B8',
-                  background: isActive ? `${option.color}26` : 'rgba(148, 163, 184, 0.06)',
-                  border: `1px solid ${isActive ? `${option.color}66` : 'rgba(148, 163, 184, 0.12)'}`,
-                }}
-              >
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: option.color }} />
-                  {option.label}
-                  <span
-                    className="px-1.5 py-0.5 rounded-full text-xs"
-                    style={{ background: 'rgba(0,0,0,0.25)', color: isActive ? '#F8FAFC' : '#64748B' }}
-                  >
-                    {statusCounts[option.value]}
+        <div className="flex flex-col gap-3">
+          {/* Status filter — Active / Failed / Funded / Refunded (terminal outcome) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-[#64748B] mr-1">Status</span>
+            {STATUS_FILTER_OPTIONS.map((option) => {
+              const isActive = statusFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setStatusFilter(option.value)}
+                  className="relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 pointer-events-auto"
+                  style={{
+                    color: isActive ? '#F8FAFC' : '#94A3B8',
+                    background: isActive ? `${option.color}26` : 'rgba(148, 163, 184, 0.06)',
+                    border: `1px solid ${isActive ? `${option.color}66` : 'rgba(148, 163, 184, 0.12)'}`,
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: option.color }} />
+                    {option.label}
+                    <span
+                      className="px-1.5 py-0.5 rounded-full text-xs"
+                      style={{ background: 'rgba(0,0,0,0.25)', color: isActive ? '#F8FAFC' : '#64748B' }}
+                    >
+                      {statusCounts[option.value]}
+                    </span>
                   </span>
-                </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Lifecycle filter — which stage the account has reached, separate from its outcome */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-[#64748B] mr-1">Lifecycle</span>
+            {LIFECYCLE_FILTER_OPTIONS.map((option) => {
+              const isActive = lifecycleFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setLifecycleFilter(option.value)}
+                  className="relative px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 pointer-events-auto"
+                  style={{
+                    color: isActive ? '#F8FAFC' : '#94A3B8',
+                    background: isActive ? `${option.color}26` : 'rgba(148, 163, 184, 0.06)',
+                    border: `1px solid ${isActive ? `${option.color}66` : 'rgba(148, 163, 184, 0.12)'}`,
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: option.color }} />
+                    {option.label}
+                    <span
+                      className="px-1.5 py-0.5 rounded-full"
+                      style={{ background: 'rgba(0,0,0,0.25)', color: isActive ? '#F8FAFC' : '#64748B' }}
+                    >
+                      {lifecycleCounts[option.value]}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div
@@ -727,10 +756,10 @@ export default function Challenges() {
               <Trophy className="w-7 h-7 text-[#298DFF]" />
             </div>
             <p className="text-[#F8FAFC] text-lg font-semibold">
-              {statusFilter === 'all' ? 'No challenges yet' : `No ${statusFilter} challenges`}
+              {activeFilterDescription ? `No ${activeFilterDescription} challenges` : 'No challenges yet'}
             </p>
             <p className="text-[#94A3B8] mt-1" style={{ fontSize: typography.fontSize.sm }}>
-              {statusFilter === 'all' ? 'Create your first challenge to get started' : 'Try a different filter'}
+              {activeFilterDescription ? 'Try a different filter' : 'Create your first challenge to get started'}
             </p>
           </motion.div>
         )
@@ -747,6 +776,11 @@ export default function Challenges() {
           const currentProfit = getChallengeCurrentProfit(challenge);
           const progress = getChallengeProgress(challenge);
           const drawdown = computeDrawdown(challenge.maxDrawdown, challenge.accountSize, currentProfit);
+          const active = isChallengeActive(challenge);
+          const outcomeColor = getChallengeOutcomeColor(challenge);
+          const outcomeLabel = getChallengeOutcomeLabel(challenge);
+          const lifecycleNodes = getLifecycleNodes(challenge);
+          const neutralOutcome = endedWithoutProgress(challenge);
           return (
           <motion.div
             key={challenge.id}
@@ -759,7 +793,7 @@ export default function Challenges() {
             <motion.div
               variants={cardVariants}
               whileHover="hover"
-              className="relative rounded-xl p-6 transition-all duration-300"
+              className="relative rounded-xl p-6 transition-all duration-300 @container"
               style={{
                 background: glassmorphism.card.background,
                 backdropFilter: glassmorphism.card.backdropBlur,
@@ -768,36 +802,44 @@ export default function Challenges() {
                 borderRadius: borderRadius.xl,
               }}
             >
-              {/* Status Badge */}
+              {/* Status Badge — single outcome phrase (e.g. "Failed at Step 1"),
+                  never repeated as text elsewhere on the card. */}
               <div className="absolute top-4 right-4">
-                <Badge variant="default" className={getStatusColor(challenge.status)}>
-                  {getStatusLabel(challenge.status)}
+                <Badge
+                  variant="default"
+                  className="font-semibold rounded-full border"
+                  style={{
+                    background: `${outcomeColor}26`,
+                    color: outcomeColor,
+                    borderColor: `${outcomeColor}66`,
+                  }}
+                >
+                  {outcomeLabel}
                 </Badge>
               </div>
 
-              {/* Account Info */}
-              <div className="flex items-start gap-4 mb-6">
-                <div className={`w-14 h-14 ${getStatusBgColor(challenge.status)} rounded-xl flex items-center justify-center`}>
-                  <Trophy className={`w-7 h-7 ${getStatusTextColor(challenge.status)}`} />
+              {/* Account Info — firm / plan / size stay put; the lifecycle
+                  chain is the only stage indicator (icons, no repeated text). */}
+              <div className="flex items-start gap-4 mb-6 pr-20">
+                <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${outcomeColor}1A` }}>
+                  <Trophy className="w-7 h-7" style={{ color: outcomeColor }} />
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-[#F8FAFC]">{challenge.accountName}</h3>
-                  <p className="text-sm text-[#94A3B8]">{challenge.propFirmName}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-xs text-[#64748B]">{challenge.challengeType}</p>
-                    {is2Step(challenge) && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[rgba(41,141,255,0.12)] text-[#298DFF] border border-[rgba(41,141,255,0.3)]">
-                        Step {getCurrentStep(challenge)} of 2
-                      </span>
-                    )}
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-[#F8FAFC] truncate">{challenge.accountName}</h3>
+                  <p className="text-sm text-[#94A3B8] truncate">{challenge.propFirmName}</p>
+                  <p className="text-xs text-[#64748B] mt-1 truncate">{challenge.challengeType}</p>
+                  {lifecycleNodes.length > 0 && (
+                    <div className="mt-1.5">
+                      <LifecycleIndicator nodes={lifecycleNodes} />
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Account Size */}
               <div className="mb-6">
                 <p className="text-sm text-[#94A3B8] mb-1">Account Size</p>
-                <p 
+                <p
                   className="text-2xl font-bold text-[#F8FAFC]"
                   style={{ fontSize: typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold }}
                 >
@@ -805,29 +847,43 @@ export default function Challenges() {
                 </p>
               </div>
 
-              {/* Progress Bar */}
+              {/* Progress: live percentage while active, a full completion
+                  bar for genuine successes (step completed / funded), and a
+                  neutral summary (no bar) for failed/refunded so a loss is
+                  never shown as "100% complete". */}
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-[#94A3B8]">
-                    {is2Step(challenge) ? `Step ${getCurrentStep(challenge)} Progress` : "Progress"}
-                    <span className="text-[#64748B]"> · {formatCurrency(getStepTarget(challenge))}</span>
-                  </p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(progress)}</p>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(148, 163, 184, 0.1)' }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="h-full rounded-full"
-                    style={{
-                      background: challenge.status === 'active' ? gradientBorder.purpleBlue :
-                             challenge.status === 'passed' ? gradientBorder.success :
-                             challenge.status === 'failed' ? gradientBorder.danger :
-                             gradientBorder.warning,
-                    }}
-                  />
-                </div>
+                {active ? (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-[#94A3B8]">
+                        {is2Step(challenge) ? `Step ${getCurrentStep(challenge)} progress` : "Progress"}
+                        <span className="text-[#64748B]"> · {formatCurrency(currentProfit)} / {formatCurrency(getStepTarget(challenge))}</span>
+                      </p>
+                      <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(progress)}</p>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(148, 163, 184, 0.1)' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                        className="h-full rounded-full"
+                        style={{ background: gradientBorder.purpleBlue }}
+                      />
+                    </div>
+                  </>
+                ) : neutralOutcome ? (
+                  <div className="rounded-lg px-3 py-2.5" style={{ background: 'rgba(148, 163, 184, 0.06)', border: '1px solid rgba(148, 163, 184, 0.1)' }}>
+                    <p className="text-[11px] uppercase tracking-wider text-[#64748B]">Challenge ended</p>
+                    <p className="text-sm font-medium mt-0.5" style={{ color: outcomeColor }}>{outcomeLabel}</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium mb-2" style={{ color: outcomeColor }}>{outcomeLabel}</p>
+                    <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(148, 163, 184, 0.1)' }}>
+                      <div className="h-full rounded-full" style={{ width: '100%', background: outcomeColor }} />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Stats */}
@@ -838,7 +894,7 @@ export default function Challenges() {
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Target</p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(challenge.profitTarget)}</p>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(getStepTarget(challenge))}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Drawdown</p>
@@ -930,17 +986,22 @@ export default function Challenges() {
             <TableHeader>
               <TableRow className="border-b border-[rgba(148,163,184,0.1)] hover:bg-transparent">
                 <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider">Account</TableHead>
-                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider">Prop Firm</TableHead>
-                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider text-right">Size</TableHead>
-                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider w-[180px]">Progress</TableHead>
-                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider text-right">Profit</TableHead>
-                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider">Status</TableHead>
+                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider">Firm</TableHead>
+                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider">Lifecycle</TableHead>
+                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider text-right">Current P&L</TableHead>
+                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider text-right">Drawdown</TableHead>
+                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider text-right">Cost</TableHead>
+                <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider">Outcome</TableHead>
                 <TableHead className="text-[#94A3B8] uppercase text-xs tracking-wider text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredChallenges.map((challenge) => {
-                const progress = getChallengeProgress(challenge);
+                const currentProfit = getChallengeCurrentProfit(challenge);
+                const drawdown = computeDrawdown(challenge.maxDrawdown, challenge.accountSize, currentProfit);
+                const outcomeColor = getChallengeOutcomeColor(challenge);
+                const lifecycleNodes = getLifecycleNodes(challenge);
+                const statusBucket = getAccountStatusBucket(challenge);
                 return (
                   <TableRow
                     key={challenge.id}
@@ -948,37 +1009,33 @@ export default function Challenges() {
                   >
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 ${getStatusBgColor(challenge.status)} rounded-lg flex items-center justify-center`}>
-                          <Trophy className={`w-4 h-4 ${getStatusTextColor(challenge.status)}`} />
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${outcomeColor}1A` }}>
+                          <Trophy className="w-4 h-4" style={{ color: outcomeColor }} />
                         </div>
                         <span className="font-medium text-[#F8FAFC]">{challenge.accountName}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-[#94A3B8]">{challenge.propFirmName}</TableCell>
-                    <TableCell className="text-right text-[#F8FAFC] font-medium">{formatCurrency(challenge.accountSize)}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-24 rounded-full overflow-hidden" style={{ background: 'rgba(148, 163, 184, 0.1)' }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${progress}%`, background: STATUS_COLOR_MAP[challenge.status] }}
-                          />
-                        </div>
-                        <span className="text-xs text-[#94A3B8] w-10">{formatPercentage(progress)}</span>
-                      </div>
+                      <LifecycleIndicator nodes={lifecycleNodes} compact />
                     </TableCell>
-                    <TableCell className="text-right text-[#F8FAFC] font-medium">{formatCurrency(getChallengeCurrentProfit(challenge))}</TableCell>
+                    <TableCell className="text-right text-[#F8FAFC] font-medium">{formatCurrency(currentProfit)}</TableCell>
+                    <TableCell className="text-right text-[#94A3B8]">
+                      {formatPercentage(drawdown.remainingDrawdownPercent)} ({formatCurrency(drawdown.remainingDrawdownDollars)})
+                    </TableCell>
+                    <TableCell className="text-right text-[#94A3B8]">{formatCurrency(challenge.purchaseCost)}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="default" className={getStatusColor(challenge.status)}>
-                          {getStatusLabel(challenge.status)}
-                        </Badge>
-                        {is2Step(challenge) && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[rgba(41,141,255,0.12)] text-[#298DFF] border border-[rgba(41,141,255,0.3)]">
-                            S{getCurrentStep(challenge)}/2
-                          </span>
-                        )}
-                      </div>
+                      <Badge
+                        variant="default"
+                        className="font-semibold rounded-full border"
+                        style={{
+                          background: `${outcomeColor}26`,
+                          color: outcomeColor,
+                          borderColor: `${outcomeColor}66`,
+                        }}
+                      >
+                        {STATUS_BUCKET_LABEL[statusBucket]}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
