@@ -1,4 +1,4 @@
-import { Challenge } from "@/types";
+import { Challenge, ChallengeStatus } from "@/types";
 
 export type LifecycleNodeState = "done" | "current" | "upcoming" | "failed";
 
@@ -155,4 +155,74 @@ export function getAccountStatusBucket(c: Challenge): AccountStatusBucket {
 export function getAccountLifecycleBucket(c: Challenge): AccountLifecycleBucket {
   if (c.convertedToFunded) return "funded";
   return getCurrentStep(c) === "2" ? "step2" : "step1";
+}
+
+export type LifecycleStage = "1" | "2" | "instant";
+
+// One purchased evaluation, normalized from however many DB rows it spans.
+// A 2-step challenge is stored as two linked `Challenge` rows (a Step 1
+// parent, and a Step 2 child created once Step 1 passes) — this collapses
+// that pair back into the single lifecycle a user actually purchased, so
+// the UI renders/counts one card per purchase instead of one per row.
+export interface ChallengeLifecycle {
+  lifecycleId: string;
+  rootChallenge: Challenge;
+  step1Record: Challenge;
+  step2Record?: Challenge;
+  // The row that's currently "live" — Step 2 once it exists, otherwise
+  // Step 1. Status, drawdown, current profit, and target all read from here
+  // since each step carries its own fresh values.
+  latestRecord: Challenge;
+  is2Step: boolean;
+  status: ChallengeStatus;
+  convertedToFunded: boolean;
+  // Only one of these is ever set: currentStage while still progressing,
+  // failedStage once the lifecycle has failed.
+  currentStage?: LifecycleStage;
+  failedStage?: LifecycleStage;
+  // Always the root's purchaseCost — Step 2 rows are created with cost 0,
+  // so summing across rows would still be correct, but reading only the
+  // root is what makes that invariant explicit rather than incidental.
+  totalCost: number;
+  statusBucket: AccountStatusBucket;
+  outcomeLabel: string;
+  outcomeColor: string;
+  lifecycleNodes: LifecycleNode[];
+}
+
+// Pure grouping: does not mutate or delete anything, just re-derives a
+// per-lifecycle view from the flat row list every time `challenges` changes.
+export function groupChallengesIntoLifecycles(challenges: Challenge[]): ChallengeLifecycle[] {
+  const idSet = new Set(challenges.map((c) => c.id));
+  // A row only behaves as a "child" if its declared parent is actually
+  // present in this dataset — an orphaned Step 2 (parent deleted, or
+  // excluded upstream) still gets its own lifecycle card rather than
+  // silently vanishing from the grouped view.
+  const isRoot = (c: Challenge) => !c.parentChallengeId || !idSet.has(c.parentChallengeId);
+
+  return challenges.filter(isRoot).map((root) => {
+    const step2Record = challenges.find((c) => c.parentChallengeId === root.id);
+    const latestRecord = step2Record ?? root;
+    const stage = getCurrentStep(latestRecord);
+    const active = isChallengeActive(latestRecord);
+    const failed = latestRecord.status === "failed";
+
+    return {
+      lifecycleId: root.id,
+      rootChallenge: root,
+      step1Record: root,
+      step2Record,
+      latestRecord,
+      is2Step: is2Step(root),
+      status: latestRecord.status,
+      convertedToFunded: !!latestRecord.convertedToFunded,
+      currentStage: active ? stage : undefined,
+      failedStage: failed ? stage : undefined,
+      totalCost: root.purchaseCost,
+      statusBucket: getAccountStatusBucket(latestRecord),
+      outcomeLabel: getChallengeOutcomeLabel(latestRecord),
+      outcomeColor: getChallengeOutcomeColor(latestRecord),
+      lifecycleNodes: getLifecycleNodes(latestRecord),
+    };
+  });
 }

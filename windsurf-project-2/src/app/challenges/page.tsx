@@ -16,6 +16,7 @@ import { Trophy, Plus, TrendingUp, DollarSign, ArrowRight, Trash2, BarChart3, La
 import { useAccounts } from "@/context/AccountsContext";
 import { ChallengeStatus, Challenge } from "@/types";
 import { AddChallengeMarketDialog } from "@/components/AddChallengeMarketDialog";
+import { DeleteLifecycleDialog } from "@/components/DeleteLifecycleDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart,
@@ -35,13 +36,11 @@ import {
   getStepTarget,
   isChallengeActive,
   endedWithoutProgress,
-  getChallengeOutcomeLabel,
-  getChallengeOutcomeColor,
-  getLifecycleNodes,
-  getAccountStatusBucket,
   getAccountLifecycleBucket,
+  groupChallengesIntoLifecycles,
   AccountStatusBucket,
   AccountLifecycleBucket,
+  ChallengeLifecycle,
 } from "@/lib/lifecycle";
 import { LifecycleIndicator } from "@/components/account/LifecycleIndicator";
 
@@ -83,42 +82,50 @@ export default function Challenges() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [lifecycleToDelete, setLifecycleToDelete] = useState<ChallengeLifecycle | null>(null);
+
+  // Normalized once here — a 2-step evaluation is stored as two linked DB
+  // rows (Step 1 parent + Step 2 child), but it's one purchased lifecycle.
+  // Every count, filter, chart, card, and table row below reads from this,
+  // never from the raw `challenges` row list, so a lifecycle is never
+  // double-rendered or double-counted just because it spans two rows.
+  const lifecycles = useMemo(() => groupChallengesIntoLifecycles(challenges), [challenges]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
-      all: challenges.length,
+      all: lifecycles.length,
       active: 0,
       failed: 0,
       funded: 0,
       refunded: 0,
     };
-    challenges.forEach((c) => {
-      counts[getAccountStatusBucket(c)] += 1;
+    lifecycles.forEach((l) => {
+      counts[l.statusBucket] += 1;
     });
     return counts;
-  }, [challenges]);
+  }, [lifecycles]);
 
   const lifecycleCounts = useMemo(() => {
     const counts: Record<LifecycleFilter, number> = {
-      all: challenges.length,
+      all: lifecycles.length,
       step1: 0,
       step2: 0,
       funded: 0,
     };
-    challenges.forEach((c) => {
-      counts[getAccountLifecycleBucket(c)] += 1;
+    lifecycles.forEach((l) => {
+      counts[getAccountLifecycleBucket(l.latestRecord)] += 1;
     });
     return counts;
-  }, [challenges]);
+  }, [lifecycles]);
 
-  const filteredChallenges = useMemo(
+  const filteredLifecycles = useMemo(
     () =>
-      challenges.filter(
-        (c) =>
-          (statusFilter === "all" || getAccountStatusBucket(c) === statusFilter) &&
-          (lifecycleFilter === "all" || getAccountLifecycleBucket(c) === lifecycleFilter)
+      lifecycles.filter(
+        (l) =>
+          (statusFilter === "all" || l.statusBucket === statusFilter) &&
+          (lifecycleFilter === "all" || getAccountLifecycleBucket(l.latestRecord) === lifecycleFilter)
       ),
-    [challenges, statusFilter, lifecycleFilter]
+    [lifecycles, statusFilter, lifecycleFilter]
   );
 
   const activeFilterDescription = [
@@ -168,6 +175,14 @@ export default function Challenges() {
     (!is2Step(c) || getCurrentStep(c) === "2") &&
     c.status === "passed" &&
     !c.convertedToFunded;
+
+  // A lifecycle card can represent two DB rows — deleting it has to remove
+  // both, otherwise the Step 1 row would resurface as its own orphaned card
+  // right after the Step 2 row it was grouped with disappears.
+  const handleDeleteLifecycle = (lifecycle: ChallengeLifecycle) => {
+    if (lifecycle.step2Record) deleteChallenge(lifecycle.step2Record.id);
+    deleteChallenge(lifecycle.step1Record.id);
+  };
 
   // Step 1 keeps its own id, trades, and history untouched — it's marked
   // done and a brand-new linked Challenge is created for Step 2 so the two
@@ -256,12 +271,12 @@ export default function Challenges() {
 
   const chartData = useMemo(
     () =>
-      filteredChallenges.map((c) => ({
-        name: c.accountName.length > 14 ? `${c.accountName.slice(0, 12)}…` : c.accountName,
-        progress: Number(getChallengeProgress(c).toFixed(1)),
-        color: getChallengeOutcomeColor(c),
+      filteredLifecycles.map((l) => ({
+        name: l.rootChallenge.accountName.length > 14 ? `${l.rootChallenge.accountName.slice(0, 12)}…` : l.rootChallenge.accountName,
+        progress: Number(getChallengeProgress(l.latestRecord).toFixed(1)),
+        color: l.outcomeColor,
       })),
-    [filteredChallenges, getChallengeProgress]
+    [filteredLifecycles, getChallengeProgress]
   );
 
   return (
@@ -735,7 +750,7 @@ export default function Challenges() {
       </motion.div>
 
       {/* Loading / Empty State */}
-      {filteredChallenges.length === 0 && (
+      {filteredLifecycles.length === 0 && (
         challengesLoading ? (
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-[#298DFF] border-t-transparent rounded-full animate-spin" />
@@ -766,24 +781,22 @@ export default function Challenges() {
       )}
 
       {/* Challenge Cards */}
-      {viewMode === "cards" && filteredChallenges.length > 0 && (
+      {viewMode === "cards" && filteredLifecycles.length > 0 && (
       <motion.div
         layout
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       >
         <AnimatePresence mode="popLayout">
-        {filteredChallenges.map((challenge) => {
-          const currentProfit = getChallengeCurrentProfit(challenge);
-          const progress = getChallengeProgress(challenge);
-          const drawdown = computeDrawdown(challenge.maxDrawdown, challenge.accountSize, currentProfit);
-          const active = isChallengeActive(challenge);
-          const outcomeColor = getChallengeOutcomeColor(challenge);
-          const outcomeLabel = getChallengeOutcomeLabel(challenge);
-          const lifecycleNodes = getLifecycleNodes(challenge);
-          const neutralOutcome = endedWithoutProgress(challenge);
+        {filteredLifecycles.map((lifecycle) => {
+          const { rootChallenge, latestRecord, outcomeColor, outcomeLabel, lifecycleNodes } = lifecycle;
+          const currentProfit = getChallengeCurrentProfit(latestRecord);
+          const progress = getChallengeProgress(latestRecord);
+          const drawdown = computeDrawdown(latestRecord.maxDrawdown, latestRecord.accountSize, currentProfit);
+          const active = isChallengeActive(latestRecord);
+          const neutralOutcome = endedWithoutProgress(latestRecord);
           return (
           <motion.div
-            key={challenge.id}
+            key={lifecycle.lifecycleId}
             layout
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -825,9 +838,9 @@ export default function Challenges() {
                   <Trophy className="w-7 h-7" style={{ color: outcomeColor }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-[#F8FAFC] truncate">{challenge.accountName}</h3>
-                  <p className="text-sm text-[#94A3B8] truncate">{challenge.propFirmName}</p>
-                  <p className="text-xs text-[#64748B] mt-1 truncate">{challenge.challengeType}</p>
+                  <h3 className="text-lg font-semibold text-[#F8FAFC] truncate">{rootChallenge.accountName}</h3>
+                  <p className="text-sm text-[#94A3B8] truncate">{rootChallenge.propFirmName}</p>
+                  <p className="text-xs text-[#64748B] mt-1 truncate">{rootChallenge.challengeType}</p>
                   {lifecycleNodes.length > 0 && (
                     <div className="mt-1.5">
                       <LifecycleIndicator nodes={lifecycleNodes} />
@@ -843,7 +856,7 @@ export default function Challenges() {
                   className="text-2xl font-bold text-[#F8FAFC]"
                   style={{ fontSize: typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold }}
                 >
-                  {formatCurrency(challenge.accountSize)}
+                  {formatCurrency(rootChallenge.accountSize)}
                 </p>
               </div>
 
@@ -856,8 +869,8 @@ export default function Challenges() {
                   <>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm text-[#94A3B8]">
-                        {is2Step(challenge) ? `Step ${getCurrentStep(challenge)} progress` : "Progress"}
-                        <span className="text-[#64748B]"> · {formatCurrency(currentProfit)} / {formatCurrency(getStepTarget(challenge))}</span>
+                        {lifecycle.is2Step ? `Step ${getCurrentStep(latestRecord)} progress` : "Progress"}
+                        <span className="text-[#64748B]"> · {formatCurrency(currentProfit)} / {formatCurrency(getStepTarget(latestRecord))}</span>
                       </p>
                       <p className="text-sm font-medium text-[#F8FAFC]">{formatPercentage(progress)}</p>
                     </div>
@@ -894,7 +907,7 @@ export default function Challenges() {
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Target</p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(getStepTarget(challenge))}</p>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(getStepTarget(latestRecord))}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Drawdown</p>
@@ -902,7 +915,7 @@ export default function Challenges() {
                 </div>
                 <div>
                   <p className="text-xs text-[#94A3B8] mb-1">Cost</p>
-                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(challenge.purchaseCost)}</p>
+                  <p className="text-sm font-medium text-[#F8FAFC]">{formatCurrency(lifecycle.totalCost)}</p>
                 </div>
               </div>
 
@@ -911,7 +924,7 @@ export default function Challenges() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push(`/challenges/${challenge.id}`)}
+                  onClick={() => router.push(`/challenges/${latestRecord.id}`)}
                   className="flex-1 border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl pointer-events-auto transition-all duration-300"
                   type="button"
                 >
@@ -919,8 +932,8 @@ export default function Challenges() {
                   Analytics
                 </Button>
                 <select
-                  value={challenge.status}
-                  onChange={(e) => handleStatusChange(challenge.id, e.target.value as ChallengeStatus)}
+                  value={latestRecord.status}
+                  onChange={(e) => handleStatusChange(latestRecord.id, e.target.value as ChallengeStatus)}
                   className="bg-[rgba(11,18,32,0.5)] text-[#F8FAFC] text-sm rounded-lg px-3 py-2 border border-[rgba(148,163,184,0.2)] focus:border-[#298DFF] focus:outline-none focus:ring-2 focus:ring-[rgba(41,141,255,0.2)] transition-all"
                 >
                   <option value="active">Active</option>
@@ -928,9 +941,9 @@ export default function Challenges() {
                   <option value="failed">Failed</option>
                   <option value="refunded">Refunded</option>
                 </select>
-                {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status === 'active' && !challenge.convertedToFunded && (
+                {lifecycle.is2Step && !lifecycle.step2Record && latestRecord.status === 'active' && !lifecycle.convertedToFunded && (
                   <Button
-                    onClick={() => handleCompleteStep1(challenge)}
+                    onClick={() => handleCompleteStep1(latestRecord)}
                     className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl text-sm"
                     type="button"
                   >
@@ -938,9 +951,9 @@ export default function Challenges() {
                     Complete Step 1
                   </Button>
                 )}
-                {isReadyToConvert(challenge) && (
+                {isReadyToConvert(latestRecord) && (
                   <Button
-                    onClick={() => handleConvertToFunded(challenge)}
+                    onClick={() => handleConvertToFunded(latestRecord)}
                     className="bg-gradient-to-r from-[#10B981] to-[#059669] hover:shadow-lg hover:shadow-[rgba(16,185,129,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl text-sm"
                     type="button"
                   >
@@ -948,13 +961,13 @@ export default function Challenges() {
                     Convert
                   </Button>
                 )}
-                {challenge.convertedToFunded && (
+                {lifecycle.convertedToFunded && (
                   <Badge variant="outline" className="border-[#10B981] text-[#10B981]">Converted</Badge>
                 )}
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => deleteChallenge(challenge.id)}
+                  onClick={() => setLifecycleToDelete(lifecycle)}
                   className="text-[#EF4444] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] transition-all duration-300"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -969,7 +982,7 @@ export default function Challenges() {
       )}
 
       {/* Challenge Table */}
-      {viewMode === "table" && filteredChallenges.length > 0 && (
+      {viewMode === "table" && filteredLifecycles.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -996,15 +1009,13 @@ export default function Challenges() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredChallenges.map((challenge) => {
-                const currentProfit = getChallengeCurrentProfit(challenge);
-                const drawdown = computeDrawdown(challenge.maxDrawdown, challenge.accountSize, currentProfit);
-                const outcomeColor = getChallengeOutcomeColor(challenge);
-                const lifecycleNodes = getLifecycleNodes(challenge);
-                const statusBucket = getAccountStatusBucket(challenge);
+              {filteredLifecycles.map((lifecycle) => {
+                const { rootChallenge, latestRecord, outcomeColor, lifecycleNodes, statusBucket } = lifecycle;
+                const currentProfit = getChallengeCurrentProfit(latestRecord);
+                const drawdown = computeDrawdown(latestRecord.maxDrawdown, latestRecord.accountSize, currentProfit);
                 return (
                   <TableRow
-                    key={challenge.id}
+                    key={lifecycle.lifecycleId}
                     className="border-b border-[rgba(148,163,184,0.06)] hover:bg-[rgba(41,141,255,0.06)] transition-colors"
                   >
                     <TableCell>
@@ -1012,10 +1023,10 @@ export default function Challenges() {
                         <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${outcomeColor}1A` }}>
                           <Trophy className="w-4 h-4" style={{ color: outcomeColor }} />
                         </div>
-                        <span className="font-medium text-[#F8FAFC]">{challenge.accountName}</span>
+                        <span className="font-medium text-[#F8FAFC]">{rootChallenge.accountName}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-[#94A3B8]">{challenge.propFirmName}</TableCell>
+                    <TableCell className="text-[#94A3B8]">{rootChallenge.propFirmName}</TableCell>
                     <TableCell>
                       <LifecycleIndicator nodes={lifecycleNodes} compact />
                     </TableCell>
@@ -1023,7 +1034,7 @@ export default function Challenges() {
                     <TableCell className="text-right text-[#94A3B8]">
                       {formatPercentage(drawdown.remainingDrawdownPercent)} ({formatCurrency(drawdown.remainingDrawdownDollars)})
                     </TableCell>
-                    <TableCell className="text-right text-[#94A3B8]">{formatCurrency(challenge.purchaseCost)}</TableCell>
+                    <TableCell className="text-right text-[#94A3B8]">{formatCurrency(lifecycle.totalCost)}</TableCell>
                     <TableCell>
                       <Badge
                         variant="default"
@@ -1042,17 +1053,17 @@ export default function Challenges() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => router.push(`/challenges/${challenge.id}`)}
+                          onClick={() => router.push(`/challenges/${latestRecord.id}`)}
                           className="text-[#94A3B8] hover:text-[#298DFF] hover:bg-[rgba(41,141,255,0.1)] transition-all duration-300"
                           type="button"
                         >
                           <BarChart3 className="w-4 h-4" />
                         </Button>
-                        {is2Step(challenge) && getCurrentStep(challenge) === '1' && challenge.status === 'active' && !challenge.convertedToFunded && (
+                        {lifecycle.is2Step && !lifecycle.step2Record && latestRecord.status === 'active' && !lifecycle.convertedToFunded && (
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleCompleteStep1(challenge)}
+                            onClick={() => handleCompleteStep1(latestRecord)}
                             className="text-[#298DFF] hover:text-[#298DFF] hover:bg-[rgba(41,141,255,0.1)] transition-all duration-300"
                             type="button"
                             title="Complete Step 1"
@@ -1060,11 +1071,11 @@ export default function Challenges() {
                             <ArrowRight className="w-4 h-4" />
                           </Button>
                         )}
-                        {isReadyToConvert(challenge) && (
+                        {isReadyToConvert(latestRecord) && (
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleConvertToFunded(challenge)}
+                            onClick={() => handleConvertToFunded(latestRecord)}
                             className="text-[#10B981] hover:text-[#10B981] hover:bg-[rgba(16,185,129,0.1)] transition-all duration-300"
                             type="button"
                             title="Convert to Funded"
@@ -1075,7 +1086,7 @@ export default function Challenges() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteChallenge(challenge.id)}
+                          onClick={() => setLifecycleToDelete(lifecycle)}
                           className="text-[#EF4444] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] transition-all duration-300"
                           type="button"
                         >
@@ -1092,6 +1103,17 @@ export default function Challenges() {
       )}
 
       <AddChallengeMarketDialog open={isAddMarketDialogOpen} onOpenChange={setIsAddMarketDialogOpen} />
+      <DeleteLifecycleDialog
+        open={!!lifecycleToDelete}
+        onOpenChange={(open) => !open && setLifecycleToDelete(null)}
+        onConfirm={() => {
+          if (lifecycleToDelete) handleDeleteLifecycle(lifecycleToDelete);
+          setLifecycleToDelete(null);
+        }}
+        accountName={lifecycleToDelete?.rootChallenge.accountName ?? ""}
+        propFirmName={lifecycleToDelete?.rootChallenge.propFirmName ?? ""}
+        is2Step={lifecycleToDelete?.is2Step ?? false}
+      />
     </div>
   );
 }
