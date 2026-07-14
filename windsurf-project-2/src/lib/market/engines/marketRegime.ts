@@ -1,4 +1,12 @@
-import type { InstrumentMarketHistory, MarketCandle } from "../types";
+import type { InstrumentMarketHistory } from "../types";
+import {
+  detectSwings,
+  detectBreakout,
+  isCompleteCandle,
+  classifyDirection,
+  DEFAULT_FRACTAL_WING,
+  type CompletedCandle,
+} from "./swingDetection";
 
 // ============================================================
 // PropEdge — Market Regime Engine (deterministic)
@@ -42,8 +50,10 @@ const MIN_COMPLETED_CANDLES = 10;
 // unique extreme among itself and 2 candles on each side (classic
 // Williams-fractal window — small enough to resolve within the multi-week
 // history depth this engine gets, large enough to reject single-candle
-// noise).
-const FRACTAL_WING = 2;
+// noise). Swing detection itself lives in swingDetection.ts (shared with
+// Edge Pulse's multi-timeframe engines); this engine always uses the
+// default wing size.
+const FRACTAL_WING = DEFAULT_FRACTAL_WING;
 
 // At least 2 confirmed swing highs AND 2 confirmed swing lows are required
 // before a "latest vs previous" direction can be compared at all.
@@ -60,60 +70,6 @@ const SWINGS_FOR_HIGH_CONFIDENCE = 3;
 // not "unknown".
 const COMPRESSION_LOOKBACK = 6;
 const COMPRESSION_OVERLAP_RATIO = 0.6; // >=60% of consecutive pairs must overlap
-
-interface CompletedCandle {
-  datetime: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
-
-interface SwingPoint {
-  type: "high" | "low";
-  index: number; // position within the chronological completed-candle array
-  price: number;
-  datetime: string;
-}
-
-type Direction = "higher" | "lower" | "equal";
-
-function isCompleteCandle(c: MarketCandle): c is CompletedCandle {
-  return typeof c.open === "number" && typeof c.high === "number" && typeof c.low === "number" && typeof c.close === "number";
-}
-
-function classifyDirection(prev: number, curr: number): Direction {
-  if (curr > prev) return "higher";
-  if (curr < prev) return "lower";
-  return "equal";
-}
-
-// 5-bar fractal swing detection. A candle at i is a swing high iff its
-// high is the strict, unique maximum among [i-2, i+2]; the symmetric rule
-// applies to swing lows on the low field. A tie within the window never
-// produces a swing point — an ambiguous extreme is not a confirmed pivot
-// (this is what makes "equal highs" / "equal lows" fixtures resolve
-// deterministically instead of arbitrarily picking one candle).
-function detectSwings(chrono: CompletedCandle[]): SwingPoint[] {
-  const swings: SwingPoint[] = [];
-  for (let i = FRACTAL_WING; i < chrono.length - FRACTAL_WING; i++) {
-    const window = chrono.slice(i - FRACTAL_WING, i + FRACTAL_WING + 1);
-    const center = chrono[i];
-
-    const highs = window.map((c) => c.high);
-    const maxHigh = Math.max(...highs);
-    if (center.high === maxHigh && highs.filter((h) => h === maxHigh).length === 1) {
-      swings.push({ type: "high", index: i, price: center.high, datetime: center.datetime });
-    }
-
-    const lows = window.map((c) => c.low);
-    const minLow = Math.min(...lows);
-    if (center.low === minLow && lows.filter((l) => l === minLow).length === 1) {
-      swings.push({ type: "low", index: i, price: center.low, datetime: center.datetime });
-    }
-  }
-  return swings;
-}
 
 // Range-compression fallback: how many consecutive completed-candle ranges
 // (high/low) overlap with the one before them, over the last
@@ -135,56 +91,6 @@ function detectCompression(chrono: CompletedCandle[]): { isCompressed: boolean; 
     isCompressed: ratio >= COMPRESSION_OVERLAP_RATIO,
     detail: `${overlapCount}/${pairs} consecutive candle range(s) overlapped in the last ${recent.length} completed candles (ratio ${ratio.toFixed(2)}).`,
   };
-}
-
-interface BreakoutSignal {
-  direction: "bullish" | "bearish" | null;
-  failed: boolean;
-  detail: string;
-}
-
-// Breakout / failed-breakout of the latest completed candle against the
-// nearest confirmed swing level before it. A breakout is a CLOSE beyond
-// the level; a pierce that closes back inside the level is a failed
-// breakout. Deliberately looks only at the single latest completed
-// candle — one candle can signal a breakout attempt, but (per the combine
-// step in computeMarketRegime) it can never by itself promote a fresh
-// regime past "transition".
-function detectBreakout(chrono: CompletedCandle[], swingHighs: SwingPoint[], swingLows: SwingPoint[]): BreakoutSignal {
-  const lastIndex = chrono.length - 1;
-  const last = chrono[lastIndex];
-  const priorHigh = swingHighs.filter((s) => s.index < lastIndex).pop() ?? null;
-  const priorLow = swingLows.filter((s) => s.index < lastIndex).pop() ?? null;
-
-  if (priorHigh && last.close > priorHigh.price) {
-    return {
-      direction: "bullish",
-      failed: false,
-      detail: `Latest completed close ${last.close} broke above the prior swing high ${priorHigh.price} (${priorHigh.datetime}).`,
-    };
-  }
-  if (priorHigh && last.high > priorHigh.price && last.close <= priorHigh.price) {
-    return {
-      direction: null,
-      failed: true,
-      detail: `Latest completed high ${last.high} pierced the prior swing high ${priorHigh.price} but closed back below it — failed breakout.`,
-    };
-  }
-  if (priorLow && last.close < priorLow.price) {
-    return {
-      direction: "bearish",
-      failed: false,
-      detail: `Latest completed close ${last.close} broke below the prior swing low ${priorLow.price} (${priorLow.datetime}).`,
-    };
-  }
-  if (priorLow && last.low < priorLow.price && last.close >= priorLow.price) {
-    return {
-      direction: null,
-      failed: true,
-      detail: `Latest completed low ${last.low} pierced the prior swing low ${priorLow.price} but closed back above it — failed breakout.`,
-    };
-  }
-  return { direction: null, failed: false, detail: "No breakout beyond the nearest confirmed swing level on the latest completed candle." };
 }
 
 export function computeMarketRegime(history: InstrumentMarketHistory): MarketRegimeResult {

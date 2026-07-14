@@ -18,7 +18,11 @@ const PUBLIC_ROUTES = new Set([
 // data, not account data) and its actual API keys never leave the route
 // handler, so it's safe to exempt from the session redirect rather than
 // forcing it to 307 like a page route.
-const PUBLIC_API_ROUTES = new Set(["/api/market-intelligence"]);
+// Edge Pulse carries the same category of data as market-intelligence
+// (market structure/liquidity/levels/catalyst — no user-specific/account
+// data, and its API keys never leave the route handler either), so it's
+// exempt for the same reason.
+const PUBLIC_API_ROUTES = new Set(["/api/market-intelligence", "/api/edge-pulse"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

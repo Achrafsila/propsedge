@@ -25,6 +25,7 @@ import { buildMarketContext } from "./marketContext";
 import { buildInstrumentMarketHistory } from "./marketHistory";
 import { computeMarketPulse } from "./marketPulse";
 import { getMarketDataFromGateway, MarketDataGatewayResult, MarketDataProviderId } from "./marketDataGateway";
+import { RELEVANCE_RULES, keywordHit } from "./relevanceRules";
 
 // ============================================================
 // PropEdge — Market Intelligence orchestrator (SERVER-ONLY)
@@ -45,33 +46,6 @@ const MAX_INSTRUMENT_NEWS = 2;
 // "nasdaq") so an unrelated company article that merely mentions it's
 // Nasdaq-listed is NOT tagged as NDX market news (spec §4). "euro" alone is
 // avoided for the same reason (ambiguous) in favour of eur/usd, ecb, etc.
-
-interface RelevanceRule {
-  keywords: string[];
-  instruments: InstrumentKey[];
-  weight: number;
-}
-
-const RELEVANCE_RULES: RelevanceRule[] = [
-  // Macro USD — moves every USD-quoted instrument.
-  {
-    keywords: ["federal reserve", "fomc", "interest rate", "interest rates", "rate cut", "rate hike", "rate decision", "inflation", "treasury yield", "treasury yields", "u.s. dollar", "us dollar", "dollar index", "dxy", "nonfarm", "payrolls", "jobs report"],
-    instruments: ["XAUUSD", "NDX", "US30", "EURUSD"],
-    weight: 2,
-  },
-  { keywords: ["gold", "xau", "bullion"], instruments: ["XAUUSD"], weight: 3 },
-  { keywords: ["nasdaq 100", "nasdaq-100", "nasdaq composite", "nasdaq index", "ndx"], instruments: ["NDX"], weight: 3 },
-  { keywords: ["dow jones", "dow 30", "djia", "dow industrials", "us30"], instruments: ["US30"], weight: 3 },
-  { keywords: ["eur/usd", "eurusd", "ecb", "european central bank", "eurozone", "euro zone", "lagarde"], instruments: ["EURUSD"], weight: 3 },
-];
-
-// Single alphanumeric tokens (gold, xau, ndx, djia, us30, eurusd…) match on
-// a word boundary so "gold" doesn't hit "Goldman"; multi-word / symbol
-// phrases ("nasdaq 100", "eur/usd") match as substrings.
-function keywordHit(haystack: string, keyword: string): boolean {
-  if (/^[a-z0-9]+$/.test(keyword)) return new RegExp(`\\b${keyword}\\b`, "i").test(haystack);
-  return haystack.includes(keyword);
-}
 
 export function scoreNewsRelevance(headline: string, summary: string): { score: number; instruments: InstrumentKey[] } {
   const haystack = `${headline} ${summary}`.toLowerCase();

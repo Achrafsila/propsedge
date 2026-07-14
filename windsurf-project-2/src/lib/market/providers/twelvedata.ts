@@ -13,6 +13,17 @@ import { MarketError } from "../types";
 //   NDX / DJI (indices)                            -> 404 "available on
 //                                                      Grow/Venture plan"
 // So indices return an explicit unavailable state, never a substituted ETF.
+//
+// Confirmed again for the Edge Pulse multi-timeframe build (2026-07-14, via
+// scripts/verify-twelvedata-intraday.ts against the live API):
+//   /time_series EUR/USD, XAU/USD, interval=4h/1h/15min -> 200, real OHLC
+// So intraday IS available on this plan for forex/gold (unlike the indices
+// above) — Edge Pulse's Structure/Liquidity/Supply-Demand engines can use
+// real H4/H1/M15 candles for EURUSD/XAUUSD. Observed rate limit: 8
+// api-credits/minute, 1 credit per call regardless of outputsize — a
+// single instrument's full 5-interval fetch (daily/weekly/4h/1h/15min)
+// costs 5 of that 8/minute budget, so callers should fetch one instrument
+// at a time, not burst multiple instruments in parallel.
 
 const TWELVEDATA_BASE_URL = "https://api.twelvedata.com";
 const TIMEOUT_MS = 12_000;
@@ -40,6 +51,20 @@ export const HISTORY_DAILY_OUTPUTSIZE = 100;
 export const HISTORY_WEEKLY_OUTPUTSIZE = 50;
 export const DAILY_HISTORY_REVALIDATE_SECONDS = PRICES_REVALIDATE_SECONDS; // 5 min — matches the live daily-price cadence it now also serves
 export const WEEKLY_HISTORY_REVALIDATE_SECONDS = WEEKLY_REVALIDATE_SECONDS; // 30 min — matches the live weekly-price cadence it now also serves
+
+// Intraday history — Edge Pulse only (never fetched by the shared
+// marketIntelligence.ts orchestrator). Depths are sized for enough
+// completed-candle context for fractal swing detection at each timeframe
+// (roughly: H4 ~30 days, H1 ~8 days, M15 ~2 days) — outputsize does not
+// change the 1-credit-per-call cost (confirmed via the same probe), so
+// these are set generously rather than minimally.
+export const HISTORY_H4_OUTPUTSIZE = 180;
+export const HISTORY_H1_OUTPUTSIZE = 200;
+export const HISTORY_M15_OUTPUTSIZE = 200;
+// All three intraday intervals share the same 5-min cadence as the daily
+// live-price path — none of them need to be fresher than that for a
+// trader-facing structure read, and it keeps the credit budget predictable.
+export const INTRADAY_HISTORY_REVALIDATE_SECONDS = PRICES_REVALIDATE_SECONDS;
 
 function getApiKey(): string {
   const key = process.env.TWELVEDATA_API_KEY;
@@ -88,7 +113,7 @@ interface RawTimeSeries {
   values?: Array<{ datetime?: string; open?: string; high?: string; low?: string; close?: string }>;
 }
 
-type Interval = "1day" | "1week";
+type Interval = "1day" | "1week" | "4h" | "1h" | "15min";
 
 // Shared fetch/parse for both daily and weekly series — same endpoint,
 // same response shape, only the interval and outputsize differ.
@@ -159,4 +184,19 @@ export async function fetchTwelveDataDailyHistory(symbol: string): Promise<Twelv
 // ordering rules as fetchTwelveDataDailyHistory, one interval up.
 export async function fetchTwelveDataWeeklyHistory(symbol: string): Promise<TwelveDataResult> {
   return fetchTwelveDataSeries(symbol, "1week", WEEKLY_HISTORY_REVALIDATE_SECONDS, HISTORY_WEEKLY_OUTPUTSIZE);
+}
+
+// Intraday history fetchers — Edge Pulse's multi-timeframe Structure/
+// Liquidity/Supply-Demand engines only. Same "index 0 is the
+// currently-forming candle" convention as daily/weekly (reconfirmed for
+// these intervals by scripts/verify-twelvedata-intraday.ts before this was
+// written).
+export async function fetchTwelveDataH4History(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "4h", INTRADAY_HISTORY_REVALIDATE_SECONDS, HISTORY_H4_OUTPUTSIZE);
+}
+export async function fetchTwelveDataH1History(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "1h", INTRADAY_HISTORY_REVALIDATE_SECONDS, HISTORY_H1_OUTPUTSIZE);
+}
+export async function fetchTwelveDataM15History(symbol: string): Promise<TwelveDataResult> {
+  return fetchTwelveDataSeries(symbol, "15min", INTRADAY_HISTORY_REVALIDATE_SECONDS, HISTORY_M15_OUTPUTSIZE);
 }
