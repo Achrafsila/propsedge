@@ -86,6 +86,14 @@ scenario("All 4 timeframes bullish and aligned -> Strongly Bullish/Bullish overa
     [...brief.outlookNarrative, brief.executionPosture, ...brief.marketContext, ...brief.sessionPlaybook, ...brief.warnings],
     "generated copy"
   );
+
+  // Sprint 2 / Phase 4 — the CALIBRATED headline. All 4 timeframes are a
+  // clean ascending sequence -> strongly_bullish, fully_aligned, exactly 3
+  // narrative sentences, no session posture needed (nothing to watch for).
+  assert.equal(brief.structureInterpretation.overall, "strongly_bullish");
+  assert.equal(brief.structureInterpretation.alignment, "fully_aligned");
+  assert.equal(brief.structureNarrative.length, 3);
+  assert.equal(brief.structureSessionPosture, null);
 });
 
 scenario("Daily bullish, H1 bearish -> execution posture fires, Weak structure alignment", () => {
@@ -104,6 +112,11 @@ scenario("Daily bullish, H1 bearish -> execution posture fires, Weak structure a
   assert.ok(brief.executionPosture !== null);
   assert.ok(brief.executionPosture?.includes("H1"));
   assert.equal(brief.marketQuality.structureAlignment, "Weak");
+
+  // Sprint 2 / Phase 4 — the calibrated read flags this as a genuine
+  // cross-timeframe conflict, same underlying disagreement the legacy
+  // executionPosture already caught, now surfaced through the new field too.
+  assert.equal(brief.structureInterpretation.alignment, "conflicting");
 });
 
 scenario("Unavailable intraday timeframes (e.g. US30) -> Structure/Supply-Demand degrade honestly, brief still composes", () => {

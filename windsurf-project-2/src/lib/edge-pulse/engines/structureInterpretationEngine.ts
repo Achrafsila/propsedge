@@ -1,4 +1,5 @@
 import type { TimeframeStructureRow, StructureResult } from "./structureEngine";
+import type { StructuralEvent } from "./structuralEventEngine";
 
 // ============================================================
 // Edge Pulse — Structure Interpretation Engine (Sprint 2 / Phase 3)
@@ -25,6 +26,7 @@ export type StructureCondition =
   | "mixed_bearish_pressure"
   | "balanced_range"
   | "compression_before_break"
+  | "two_sided_rotation"
   | "bullish_reversal_attempt"
   | "bearish_reversal_attempt"
   | "corrective_bullish_move"
@@ -80,6 +82,12 @@ export function classifyStructureCondition(row: TimeframeStructureRow): Structur
     return row.sequenceTrend === "bearish" ? "corrective_bearish_move" : "corrective_bullish_move";
   }
 
+  // Rotation and compression are mutually exclusive phase reads
+  // (marketPhase.ts only ever returns one phase per call), so checking
+  // both here never double-fires — rotation gets its own, more specific
+  // label (two-sided movement inside stable boundaries) rather than being
+  // folded into the generic "coiling" compression language.
+  if (row.rotation) return "two_sided_rotation";
   if (row.compression) return "compression_before_break";
 
   if (row.sequenceTrend === "bullish" || row.sequenceTrend === "bearish") return null; // existing bias label already captures this cleanly
@@ -102,6 +110,7 @@ const CONDITION_LABEL: Record<StructureCondition, string> = {
   mixed_bearish_pressure: "mixed structure with a bearish lean",
   balanced_range: "a balanced range",
   compression_before_break: "compressing, direction not yet resolved",
+  two_sided_rotation: "rotating two-sided inside stable boundaries",
   bullish_reversal_attempt: "an unconfirmed bullish reversal attempt",
   bearish_reversal_attempt: "an unconfirmed bearish reversal attempt",
   corrective_bullish_move: "a corrective move within a bullish sequence",
@@ -109,6 +118,17 @@ const CONDITION_LABEL: Record<StructureCondition, string> = {
   conflicting_timeframes: "conflicting with the higher timeframe",
   unresolved: "not enough confirmed structure to classify",
 };
+
+// The single most recent structural event on a row (BOS or CHoCH,
+// whichever has the later confirmedAt) — the same recency comparison
+// classifyStructureCondition already applies for the reversal-attempt
+// check, exposed here so any consumer (e.g. the Market Structure UI's
+// "latest structural event" field) doesn't have to re-derive it.
+export function mostRecentStructuralEvent(row: TimeframeStructureRow): StructuralEvent | null {
+  if (!row.lastBOS) return row.lastCHoCH;
+  if (!row.lastCHoCH) return row.lastBOS;
+  return row.lastCHoCH.confirmedAt > row.lastBOS.confirmedAt ? row.lastCHoCH : row.lastBOS;
+}
 
 // One-line, template-built description — never fabricated prose, always a
 // direct readout of the row's own bias/condition.
@@ -122,6 +142,18 @@ export function describeStructureCondition(row: TimeframeStructureRow): string {
 // ── Part 2: overall multi-timeframe interpretation ────────────────────────
 
 export type OverallStructureInterpretation = "strongly_bullish" | "slightly_bullish" | "neutral" | "slightly_bearish" | "strongly_bearish" | "unresolved";
+
+// Trader-facing headline text for each bucket — the ONLY labels the
+// Market Outlook hero is allowed to show as its primary headline (never
+// the legacy MarketPulse-derived OverallBiasLabel, never a raw enum).
+export const OVERALL_INTERPRETATION_LABEL: Record<OverallStructureInterpretation, string> = {
+  strongly_bullish: "Strongly Bullish",
+  slightly_bullish: "Slightly Bullish",
+  neutral: "Neutral",
+  slightly_bearish: "Slightly Bearish",
+  strongly_bearish: "Strongly Bearish",
+  unresolved: "Structure Unresolved",
+};
 
 export type StructureAlignment = "fully_aligned" | "mostly_aligned" | "mixed" | "conflicting" | "unknown";
 

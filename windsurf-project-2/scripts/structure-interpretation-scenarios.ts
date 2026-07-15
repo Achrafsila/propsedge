@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { computeStructure } from "../src/lib/edge-pulse/engines/structureEngine";
 import type { TimeframeStructureRow } from "../src/lib/edge-pulse/engines/structureEngine";
-import { classifyStructureCondition, composeStructureInterpretation } from "../src/lib/edge-pulse/engines/structureInterpretationEngine";
+import { classifyStructureCondition, composeStructureInterpretation, mostRecentStructuralEvent } from "../src/lib/edge-pulse/engines/structureInterpretationEngine";
 import { MarketCandle } from "../src/lib/market/types";
 import { MultiTimeframeHistory, TimeframeCandles, Timeframe } from "../src/lib/edge-pulse/types";
 
@@ -138,6 +138,27 @@ scenario("Correction takes priority over compression when both happen to be true
 scenario("Compression alone -> compression_before_break", () => {
   const row = baseRow({ sequenceTrend: "mixed", compression: true });
   assert.equal(classifyStructureCondition(row), "compression_before_break");
+});
+
+scenario("Rotation takes its own distinct label, not folded into compression", () => {
+  const row = baseRow({ sequenceTrend: "mixed", rotation: true, compression: false });
+  assert.equal(classifyStructureCondition(row), "two_sided_rotation");
+});
+
+scenario("mostRecentStructuralEvent picks whichever of lastBOS/lastCHoCH has the later confirmedAt", () => {
+  const bos: NonNullable<TimeframeStructureRow["lastBOS"]> = { type: "BOS", direction: "bullish", price: 100, brokenSwingDatetime: "d1", confirmedAt: "2026-06-01", status: "confirmed" };
+  const choch: NonNullable<TimeframeStructureRow["lastCHoCH"]> = { type: "CHoCH", direction: "bearish", price: 90, brokenSwingDatetime: "d2", confirmedAt: "2026-07-01", status: "confirmed" };
+  const rowChochLater = baseRow({ lastBOS: bos, lastCHoCH: choch });
+  assert.equal(mostRecentStructuralEvent(rowChochLater)?.type, "CHoCH");
+
+  const rowBosLater = baseRow({ lastBOS: { ...bos, confirmedAt: "2026-08-01" }, lastCHoCH: choch });
+  assert.equal(mostRecentStructuralEvent(rowBosLater)?.type, "BOS");
+
+  const rowOnlyChoch = baseRow({ lastBOS: null, lastCHoCH: choch });
+  assert.equal(mostRecentStructuralEvent(rowOnlyChoch)?.type, "CHoCH");
+
+  const rowNeither = baseRow({ lastBOS: null, lastCHoCH: null });
+  assert.equal(mostRecentStructuralEvent(rowNeither), null);
 });
 
 scenario("Unavailable row -> no classification (null), never fabricated", () => {

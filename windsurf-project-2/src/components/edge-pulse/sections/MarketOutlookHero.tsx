@@ -1,34 +1,40 @@
 import { typography, gradientText } from "@/design-system";
 import { CARD, formatPrice } from "./shared";
-import type { OverallBiasLabel } from "@/lib/edge-pulse/copy";
+import { OVERALL_INTERPRETATION_LABEL, type OverallStructureInterpretation } from "@/lib/edge-pulse/engines/structureInterpretationEngine";
 
-const BIAS_COLOR: Record<OverallBiasLabel, string> = {
-  "Strongly Bullish": "#10B981",
-  Bullish: "#10B981",
-  Neutral: "#298DFF",
-  Bearish: "#EF4444",
-  "Strongly Bearish": "#EF4444",
-  Transitional: "#F59E0B",
-  Unclear: "#64748B",
+// Sprint 2 / Phase 4 — the CALIBRATED headline. Colors keyed by the new
+// OverallStructureInterpretation (multi-timeframe sequence/BOS/CHoCH read),
+// never the legacy single-timeframe MarketPulse regime/conviction label.
+const OVERALL_COLOR: Record<OverallStructureInterpretation, string> = {
+  strongly_bullish: "#10B981",
+  slightly_bullish: "#10B981",
+  neutral: "#298DFF",
+  slightly_bearish: "#EF4444",
+  strongly_bearish: "#EF4444",
+  unresolved: "#64748B",
 };
 
-// Section 1 — MARKET OUTLOOK. Very large hero: symbol, overall bias
-// headline, 2-3 sentence narrative, one execution-posture line. Every
-// value is read straight from EdgePulseBrief — no recomputation here.
+// Section 1 — MARKET OUTLOOK. Very large hero: symbol, the calibrated
+// overall structure interpretation as the headline, exactly 3 narrative
+// sentences, one session-posture line. Every value is read straight from
+// EdgePulseBrief (composeEdgePulse.ts) — no recomputation here. Never
+// shows the legacy overallBias (MarketPulse-derived) as the primary
+// headline — that field is kept on the payload only for backward
+// compatibility with any other consumer.
 export function MarketOutlookHero({
   symbol,
   currentPrice,
-  overallBias,
-  outlookNarrative,
-  executionPosture,
+  overall,
+  narrative,
+  sessionPosture,
 }: {
   symbol: string;
   currentPrice: number | null;
-  overallBias: OverallBiasLabel;
-  outlookNarrative: string[];
-  executionPosture: string | null;
+  overall: OverallStructureInterpretation;
+  narrative: string[];
+  sessionPosture: string | null;
 }) {
-  const color = BIAS_COLOR[overallBias];
+  const color = OVERALL_COLOR[overall];
   return (
     <div className="rounded-2xl p-8" style={{ ...CARD, boxShadow: `0 0 40px ${color}14` }}>
       <div className="flex items-baseline justify-between flex-wrap gap-3 mb-2">
@@ -54,24 +60,24 @@ export function MarketOutlookHero({
       </div>
 
       <p className="font-extrabold mb-5" style={{ fontSize: typography.fontSize["3xl"], color, letterSpacing: typography.letterSpacing.section }}>
-        {overallBias}
+        {OVERALL_INTERPRETATION_LABEL[overall]}
       </p>
 
       <div className="space-y-1.5 mb-5">
-        {outlookNarrative.map((sentence, i) => (
+        {narrative.map((sentence, i) => (
           <p key={i} className="text-[#CBD5E1]" style={{ fontSize: typography.fontSize.lg, lineHeight: typography.lineHeight.relaxed }}>
             {sentence}
           </p>
         ))}
       </div>
 
-      {executionPosture && (
+      {sessionPosture && (
         <div className="pt-5" style={{ borderTop: "1px solid rgba(148,163,184,0.1)" }}>
           <p className="text-[#64748B] uppercase mb-1.5" style={{ fontSize: "0.625rem", letterSpacing: typography.letterSpacing.label }}>
-            Execution Posture
+            Session Posture
           </p>
           <p className="text-[#F8FAFC] font-medium" style={{ fontSize: typography.fontSize.base }}>
-            {executionPosture}
+            {sessionPosture}
           </p>
         </div>
       )}

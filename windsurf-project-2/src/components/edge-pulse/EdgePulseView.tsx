@@ -44,15 +44,13 @@ interface EdgePulseInstrumentDef {
 // DJI's backend key is "US30" (same convention as the Gateway's DJI
 // route) — labelled "DJI" per the product spec while reading the real
 // "US30" payload key underneath.
+//
+// Sprint 2 / Phase 5 — only instruments with usable Edge Pulse data are
+// shown at all (never a disabled pill for an unsupported instrument).
 const EDGE_PULSE_INSTRUMENTS: EdgePulseInstrumentDef[] = [
   { label: "EURUSD", backendKey: "EURUSD" },
-  { label: "USDJPY", backendKey: null },
   { label: "XAUUSD", backendKey: "XAUUSD" },
-  { label: "BTCUSD", backendKey: null },
-  { label: "ETHUSD", backendKey: null },
-  { label: "SP500", backendKey: null },
   { label: "DJI", backendKey: "US30" },
-  { label: "NDX", backendKey: "NDX" },
 ];
 
 function isBriefUsable(brief: EdgePulseBrief | null): brief is EdgePulseBrief {
@@ -199,11 +197,11 @@ export function EdgePulseView() {
           <MarketOutlookHero
             symbol={brief.symbol}
             currentPrice={brief.currentPrice}
-            overallBias={brief.overallBias}
-            outlookNarrative={brief.outlookNarrative}
-            executionPosture={brief.executionPosture}
+            overall={brief.structureInterpretation.overall}
+            narrative={brief.structureNarrative}
+            sessionPosture={brief.structureSessionPosture}
           />
-          <MarketStructureSection structure={brief.structure} />
+          <MarketStructureSection structure={brief.structure} structureInterpretation={brief.structureInterpretation} />
           <LiquidityMapSection liquidity={brief.liquidity} />
           <SupplyDemandSection supplyDemandByTimeframe={brief.supplyDemandByTimeframe} />
           <InstitutionalLevelsSection institutionalLevels={brief.institutionalLevels} />
