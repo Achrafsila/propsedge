@@ -74,7 +74,7 @@ create policy challenge_team_read on public.challenge_accounts for select to aut
 create policy funded_team_read on public.funded_accounts for select to authenticated
  using(private.has_shared_account('funded',id,user_id));
 create policy trades_team_read on public.trades for select to authenticated
- using(private.has_shared_account('challenge',account_id,user_id)
-    or private.has_shared_account('funded',account_id,user_id));
+ using((account_type='challenge' and private.has_shared_account('challenge',account_id,user_id))
+    or (account_type='funded' and private.has_shared_account('funded',account_id,user_id)));
 create policy payouts_team_read on public.payouts for select to authenticated
  using(private.has_shared_account('funded',funded_account_id,user_id));
