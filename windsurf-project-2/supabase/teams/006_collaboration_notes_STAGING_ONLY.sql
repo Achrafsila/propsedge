@@ -14,7 +14,9 @@ create index if not exists team_notes_account_idx
   on public.team_notes(team_id,account_type,account_id,created_at desc);
 alter table public.team_notes enable row level security;
 revoke all on public.team_notes from public,anon,authenticated;
-grant select,insert,update,delete on public.team_notes to authenticated;
+-- V1 UI supports creating and deleting notes only. No UPDATE permission: prevents
+-- changing an existing note's account/team reference or author identity.
+grant select,insert,delete on public.team_notes to authenticated;
 
 -- Only members of the team may read/write notes for an ACTIVE share in that team.
 -- Membership alone never grants visibility to unrelated private accounts.
@@ -35,12 +37,5 @@ create policy team_notes_insert on public.team_notes for insert to authenticated
        and s.account_id=team_notes.account_id and s.revoked_at is null
    )
  );
-create policy team_notes_update on public.team_notes for update to authenticated
- using (author_user_id=(select auth.uid()) and private.is_team_member(team_id)
-   and exists (select 1 from public.team_account_shares s where s.team_id=team_notes.team_id
-     and s.account_type=team_notes.account_type and s.account_id=team_notes.account_id and s.revoked_at is null))
- with check (author_user_id=(select auth.uid()) and private.is_team_member(team_id)
-   and exists (select 1 from public.team_account_shares s where s.team_id=team_notes.team_id
-     and s.account_type=team_notes.account_type and s.account_id=team_notes.account_id and s.revoked_at is null));
 create policy team_notes_delete on public.team_notes for delete to authenticated
  using (author_user_id=(select auth.uid()) and private.is_team_member(team_id));
