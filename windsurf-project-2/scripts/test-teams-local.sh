@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-P=(psql -X -v ON_ERROR_STOP=1 -At -d teams_test)
+P=(psql -q -X -v ON_ERROR_STOP=1 -At -d teams_test)
 "${P[@]}" -f "$ROOT/scripts/teams-local-fixture.sql" >/dev/null
 for f in "$ROOT"/supabase/teams/00{1,2,3,4,5,6}_*.sql; do
   echo "Applying $(basename "$f")"
