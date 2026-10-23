@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import { useTeams } from "@/lib/teams/useTeams";
+import { useTeamMembers } from "@/lib/teams/useTeamMembers";
 
 export default function TeamsPage() {
   const { teams, loading, error, createTeam } = useTeams();
   const [name, setName] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const { members, loading: membersLoading, error: membersError } = useTeamMembers(selectedTeamId);
+  const selectedTeam = teams.find(team => team.id === selectedTeamId);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -34,7 +38,13 @@ export default function TeamsPage() {
           {error && <p role="alert" className="text-red-300">{error}</p>}
           {!loading && !error && teams.length === 0 && <p className="text-slate-400">No teams yet.</p>}
           <ul className="space-y-3">
-            {teams.map(team => <li key={team.id} className="rounded-lg bg-white/5 p-3">{team.name}</li>)}
+            {teams.map(team => <li key={team.id}>
+              <button type="button" onClick={() => setSelectedTeamId(team.id)}
+                aria-pressed={selectedTeamId === team.id}
+                className={`w-full rounded-lg border p-3 text-left transition-colors ${selectedTeamId === team.id ? "border-blue-400 bg-blue-500/15" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+                {team.name}
+              </button>
+            </li>)}
           </ul>
         </section>
         <section className="rounded-xl border border-white/10 bg-slate-900 p-6">
@@ -52,6 +62,23 @@ export default function TeamsPage() {
           </form>
         </section>
       </div>
+      {selectedTeam && (
+        <section className="mt-6 rounded-xl border border-white/10 bg-slate-900 p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">{selectedTeam.name} — Members</h2>
+            <button type="button" onClick={() => setSelectedTeamId(null)} className="text-sm text-slate-400 hover:text-white">Close</button>
+          </div>
+          <p className="mt-2 text-sm text-slate-400">Team membership is read-only until invitation and role management permissions are validated.</p>
+          {membersLoading && <p className="mt-4 text-sm" role="status">Loading members…</p>}
+          {membersError && <p className="mt-4 text-sm text-red-300" role="alert">{membersError}</p>}
+          {!membersLoading && !membersError && <ul className="mt-4 space-y-2">
+            {members.map(member => <li key={member.userId} className="flex justify-between gap-4 rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
+              <span className="truncate font-mono text-slate-300">{member.userId}</span>
+              <span className="capitalize text-blue-300">{member.role}</span>
+            </li>)}
+          </ul>}
+        </section>
+      )}
     </main>
   );
 }
