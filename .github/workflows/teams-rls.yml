@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - "windsurf-project-2/supabase/teams/**"
+      - "windsurf-project-2/src/app/teams/**"
+      - "windsurf-project-2/src/lib/teams/**"
+      - "windsurf-project-2/src/components/sidebar.tsx"
+      - "windsurf-project-2/src/app/teams/page.tsx"
+      - "windsurf-project-2/package.json"
+      - "windsurf-project-2/package-lock.json"
       - "windsurf-project-2/scripts/teams-local-fixture.sql"
       - "windsurf-project-2/scripts/test-teams-local.sh"
       - ".github/workflows/teams-rls.yml"
