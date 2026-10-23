@@ -36,7 +36,8 @@ actor "$B" "insert into public.team_notes(team_id,account_type,account_id,author
 eq 1 "$(actor "$A" "select count(*) from public.team_notes;")" team_note
 eq 0 "$(actor "$C" "select count(*) from public.team_notes;")" outsider_note
 actor "$A" "insert into public.team_notes(team_id,account_type,account_id,author_user_id,body) values('$T','challenge','$C1','$A','Owner note');" >/dev/null
-eq 0 "$(actor "$B" "with changed as (update public.team_notes set body='Tampered' where author_user_id='$A' returning id) select count(*) from changed;")" cannot_edit_other_note
+deny "$B" note_update_not_granted "update public.team_notes set body='Edited' where author_user_id='$B';"
+deny "$B" cannot_edit_other_note "update public.team_notes set body='Tampered' where author_user_id='$A';"
 eq 0 "$(actor "$B" "with deleted as (delete from public.team_notes where author_user_id='$A' returning id) select count(*) from deleted;")" cannot_delete_other_note
 deny "$B" forged_note_author "insert into public.team_notes(team_id,account_type,account_id,author_user_id,body) values('$T','challenge','$C1','$A','Forged');"
 eq 0 "$(actor "$B" "with changed as (delete from public.funded_accounts where id='$F' returning id) select count(*) from changed;")" cannot_delete_unshared_funded
