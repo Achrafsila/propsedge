@@ -19,11 +19,11 @@ revoke all on public.team_invitations from public,anon,authenticated;
 -- Membership lookup helper used by invitation RPCs.
 create or replace function private.is_team_manager(p_team_id uuid)
 returns boolean language sql stable security definer set search_path = ''
-as $
+as '
  select auth.uid() is not null and exists (
   select 1 from public.team_members where team_id=p_team_id and user_id=auth.uid()
-  and role in ('owner','admin'))
-$;
+  and role in (''owner'',''admin''))
+';
 revoke all on function private.is_team_manager(uuid) from public,anon;
 grant execute on function private.is_team_manager(uuid) to authenticated;
 
