@@ -24,6 +24,11 @@ export default function TeamsPage() {
     return () => { active = false; };
   }, []);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!loading && teams.length > 0 && !teams.some(team => team.id === selectedTeamId)) {
+      setSelectedTeamId(teams[0].id);
+    }
+  }, [loading, teams, selectedTeamId]);
   const { members, loading: membersLoading, error: membersError, refresh: refreshMembers } = useTeamMembers(selectedTeamId);
   const selectedTeam = teams.find(team => team.id === selectedTeamId);
   const { changeRole, removeMember, busy: memberBusy } = useTeamMemberActions(selectedTeamId);
@@ -119,6 +124,8 @@ export default function TeamsPage() {
           </form>
         </section>
       </div>
+      {inviteFailure && !canManage && <p role="alert" className="mt-4 text-sm text-red-300">{inviteFailure}</p>}
+      {invitationsError && !canManage && <p role="alert" className="mt-4 text-sm text-red-300">{invitationsError}</p>}
       {incoming.length > 0 && (
         <section className="mt-6 rounded-xl border border-blue-400/30 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold">Invitations for you</h2>
@@ -138,12 +145,12 @@ export default function TeamsPage() {
             <h2 className="text-lg font-semibold">{selectedTeam.name} — Members</h2>
             <button type="button" onClick={() => setSelectedTeamId(null)} className="text-sm text-slate-400 hover:text-white">Close</button>
           </div>
-          <p className="mt-2 text-sm text-slate-400">Team membership is read-only until invitation and role management permissions are validated.</p>
+          <p className="mt-2 text-sm text-slate-400">Manage access to shared trading accounts. Financial records remain editable only by their owner.</p>
           {membersLoading && <p className="mt-4 text-sm" role="status">Loading members…</p>}
           {membersError && <p className="mt-4 text-sm text-red-300" role="alert">{membersError}</p>}
           {!membersLoading && !membersError && <ul className="mt-4 space-y-2">
             {members.map(member => <li key={member.userId} className="flex justify-between gap-4 rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
-              <span className="truncate font-mono text-slate-300">{member.userId}</span>
+              <span className="truncate text-slate-300">{member.userId === userId ? "You" : `Member ${member.userId.slice(0, 8)}`}</span>
               <span className="flex flex-wrap items-center justify-end gap-3">
                 <span className="capitalize text-blue-300">{member.role}</span>
                 {member.role !== "owner" && (currentRole === "owner" || (currentRole === "admin" && member.role === "member")) && (
