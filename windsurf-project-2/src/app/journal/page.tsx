@@ -266,14 +266,8 @@ export default function Journal() {
               }}
               className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 border focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             >
-              {tradingMode === "prop-firm" ? (
-                <>
-                  <option value="challenge">Challenge</option>
+              <option value="challenge">Challenge</option>
                   <option value="funded">Funded</option>
-                </>
-              ) : (
-                <option value="personal">Personal Account</option>
-              )}
             </select>
           </div>
           <div className="space-y-2">
