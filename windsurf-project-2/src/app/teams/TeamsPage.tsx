@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useTeamInvitations } from "@/lib/teams/useTeamInvitations";
 import { useTeamMemberActions } from "@/lib/teams/useTeamMemberActions";
+import { TeamAccounts } from "./TeamAccounts";
 import { useTeams } from "@/lib/teams/useTeams";
 import { useTeamMembers } from "@/lib/teams/useTeamMembers";
 
@@ -130,6 +131,7 @@ export default function TeamsPage() {
           </ul>
         </section>
       )}
+      {selectedTeam && <TeamAccounts teamId={selectedTeam.id} currentUserId={userId} />}
       {selectedTeam && (
         <section className="mt-6 rounded-xl border border-white/10 bg-slate-900 p-6">
           <div className="flex items-center justify-between gap-3">
