@@ -45,7 +45,7 @@ const itemVariants = {
 };
 
 export default function GlobalAnalyticsPage() {
-  const { challenges, fundedAccounts, personalAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
+  const { challenges, fundedAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
   const { tradingMode } = useTradingMode();
   const [filters, setFilters] = useState<GlobalFilters>(DEFAULT_GLOBAL_FILTERS);
 
@@ -82,8 +82,8 @@ export default function GlobalAnalyticsPage() {
   // collapsed into one root — that collapsing only happens in the Business
   // Metrics engine (src/lib/challenges.ts) used by Dashboard/Challenges.
   const accountIndex = useMemo(
-    () => buildAccountIndex(challenges, fundedAccounts, personalAccounts),
-    [challenges, fundedAccounts, personalAccounts]
+    () => buildAccountIndex(challenges, fundedAccounts, []),
+    [challenges, fundedAccounts]
   );
 
   const filteredTrades = useMemo(
