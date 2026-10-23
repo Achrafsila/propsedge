@@ -129,7 +129,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   // any changes on their end.
   const [dbTrades, setDbTrades] = useState<Trade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(true);
-  const trades = useMemo(() => [...dbTrades, ...personalTrades], [dbTrades, personalTrades]);
+  const trades = dbTrades; // Prop Firm only; legacy broker trades remain safely in localStorage.
 
   // ── Load challenges from Supabase whenever the authenticated user changes ──
   // authLoading: stay in loading state until Supabase session is resolved so we
