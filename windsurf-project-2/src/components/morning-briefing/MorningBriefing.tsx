@@ -72,7 +72,7 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
         },
         objective ?? undefined
       ),
-    [trades, challenges, fundedAccounts, personalAccounts: [], payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
+    [trades, challenges, fundedAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
   );
 
   const riskStates = useMemo(
