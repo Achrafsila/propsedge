@@ -65,6 +65,14 @@ export function TeamAccounts({ teamId, currentUserId }: { teamId: string; curren
                 onClick={() => void handleRevoke(shareRow.id)}
                 className="text-sm text-red-300 disabled:opacity-50">Stop sharing</button>}
             </div>
+            {a.trades.length > 0 && <div className="mt-3 border-t border-white/10 pt-3">
+              <p className="text-sm font-medium">Trade history (read-only)</p>
+              <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                {a.trades.map(t => <p key={t.id} className="text-sm text-slate-300">
+                  {t.date} · {t.symbol} · {t.status} · P&amp;L ${t.pnl.toLocaleString()}
+                </p>)}
+              </div>
+            </div>}
             {a.payouts.length > 0 && <div className="mt-3 border-t border-white/10 pt-3">
               <p className="text-sm font-medium">Payout history</p>
               {a.payouts.map(p => <p key={p.id} className="mt-1 text-sm text-slate-300">
