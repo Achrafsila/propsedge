@@ -36,6 +36,10 @@ begin
  if v_email is null or length(v_email)>320 or v_email !~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
  then raise exception 'Invalid email' using errcode='22023'; end if;
  if p_role not in ('admin','member') then raise exception 'Invalid role' using errcode='22023'; end if;
+ if exists(
+  select 1 from public.team_members m join auth.users u on u.id=m.user_id
+  where m.team_id=p_team_id and lower(u.email)=v_email
+ ) then raise exception 'Already a member' using errcode='23505'; end if;
  if p_role='admin' and not exists(select 1 from public.team_members where team_id=p_team_id and user_id=auth.uid() and role='owner')
  then raise exception 'Only owner can invite admins' using errcode='42501'; end if;
  update public.team_invitations set revoked_at=now()
