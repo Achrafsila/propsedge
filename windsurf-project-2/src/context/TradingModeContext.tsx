@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useEffect, ReactNode } from "react";
 
 export type TradingMode = "prop-firm" | "personal-capital";
 
@@ -18,37 +18,26 @@ const TradingModeContext = createContext<TradingModeContextType | undefined>(und
 const TRADING_MODE_STORAGE_KEY = "prop_firm_trading_mode";
 const DEFAULT_TRADING_MODE: TradingMode = "prop-firm";
 
-function isTradingMode(value: string | null): value is TradingMode {
-  return value === "prop-firm" || value === "personal-capital";
-}
-
+// Compatibility adapter during T0.5: personal-capital is disabled, but the
+// existing consumers keep their stable API until the dependency cleanup.
 export function TradingModeProvider({ children }: { children: ReactNode }) {
-  const [tradingMode, setTradingModeState] = useState<TradingMode>(DEFAULT_TRADING_MODE);
-
-  // Same "default first, hydrate from localStorage on mount" pattern as
-  // AdminContext — server render and first client render both start on
-  // Prop Firm, so there's no SSR/client markup mismatch.
   useEffect(() => {
-    const stored = localStorage.getItem(TRADING_MODE_STORAGE_KEY);
-    if (isTradingMode(stored)) {
-      setTradingModeState(stored);
-    }
+    // Preserve personal portfolio/account storage. Only normalize the mode preference.
+    localStorage.setItem(TRADING_MODE_STORAGE_KEY, DEFAULT_TRADING_MODE);
   }, []);
 
-  const setTradingMode = (mode: TradingMode) => {
-    setTradingModeState(mode);
-    localStorage.setItem(TRADING_MODE_STORAGE_KEY, mode);
+  const setTradingMode = (_mode: TradingMode) => {
+    // Never activate broker mode while the deprecated UI is being retired.
+    localStorage.setItem(TRADING_MODE_STORAGE_KEY, DEFAULT_TRADING_MODE);
   };
 
   return (
-    <TradingModeContext.Provider
-      value={{
-        tradingMode,
-        setTradingMode,
-        isPropFirmMode: tradingMode === "prop-firm",
-        isPersonalCapitalMode: tradingMode === "personal-capital",
-      }}
-    >
+    <TradingModeContext.Provider value={{
+      tradingMode: DEFAULT_TRADING_MODE,
+      setTradingMode,
+      isPropFirmMode: true,
+      isPersonalCapitalMode: false,
+    }}>
       {children}
     </TradingModeContext.Provider>
   );
