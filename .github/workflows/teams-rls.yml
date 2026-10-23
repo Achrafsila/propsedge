@@ -39,3 +39,22 @@ jobs:
         run: createdb teams_test
       - name: Run multi-identity RLS checks
         run: bash windsurf-project-2/scripts/test-teams-local.sh
+
+  nextjs-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: windsurf-project-2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: windsurf-project-2/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npm run build
