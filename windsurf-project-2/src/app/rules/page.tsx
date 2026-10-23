@@ -75,7 +75,7 @@ interface DatedDeviation extends Deviation {
 }
 
 export default function Rules() {
-  const { challenges, fundedAccounts, personalAccounts, trades, payouts, challengesLoading, fundedAccountsLoading, tradesLoading } =
+  const { challenges, fundedAccounts, trades, payouts, challengesLoading, fundedAccountsLoading, tradesLoading } =
     useAccounts();
   const { objective } = useTodayObjective();
   const { getContract, contracts, contractsLoading } = useDailyContracts();
@@ -99,7 +99,7 @@ export default function Rules() {
           trades,
           challenges,
           fundedAccounts,
-          personalAccounts,
+          personalAccounts: [],
           payouts,
           traderIdentity: identity,
           traderHabits: habits,
@@ -111,7 +111,7 @@ export default function Rules() {
         },
         objective ?? undefined
       ),
-    [trades, challenges, fundedAccounts, personalAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
+    [trades, challenges, fundedAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
   );
 
   const accountRows = useMemo(

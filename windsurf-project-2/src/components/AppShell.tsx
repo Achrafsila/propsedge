@@ -8,21 +8,15 @@ import { TopNav } from "@/components/top-nav";
 import { Footer } from "@/components/Footer";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { MorningBriefing } from "@/components/morning-briefing/MorningBriefing";
-import { useTradingMode } from "@/context/TradingModeContext";
 
 const CHROMELESS_ROUTES = ["/welcome", "/login", "/signup", "/forgot-password"];
 
-// Routes that only make sense in Prop Firm mode — hidden from the Personal
-// Capital nav (see src/components/sidebar.tsx). If the user switches to
-// Personal Capital while already sitting on one of these (or a subroute,
-// e.g. /challenges/[id]), bounce them to /dashboard rather than leaving
-// them on a page their current mode's nav no longer links to.
-const PROP_FIRM_ONLY_ROUTES = ["/challenges", "/funded", "/payouts", "/admin"];
+// Broker-only routes are deprecated; never clear their stored data during navigation.
+const BROKER_ONLY_ROUTES = ["/portfolio", "/portfolio-analytics"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isPersonalCapitalMode } = useTradingMode();
   const isChromeless = CHROMELESS_ROUTES.includes(pathname);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -39,14 +33,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [isChromeless]);
 
   useEffect(() => {
-    if (!isPersonalCapitalMode) return;
-    const onHiddenRoute = PROP_FIRM_ONLY_ROUTES.some(
-      (route) => pathname === route || pathname.startsWith(`${route}/`)
-    );
-    if (onHiddenRoute) {
+    if (BROKER_ONLY_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
       router.replace("/dashboard");
     }
-  }, [isPersonalCapitalMode, pathname, router]);
+  }, [pathname, router]);
 
   const handleLoadComplete = () => {
     setIsLoading(false);

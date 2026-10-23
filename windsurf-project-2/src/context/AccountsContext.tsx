@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Challenge,
@@ -18,7 +18,6 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { usePersonalAccounts } from "@/context/PersonalAccountsContext";
 import { getRootChallenges, getEffectiveStatus, getEffectiveConvertedToFunded, getEffectiveStartDate, getEffectiveFundedDate } from "@/lib/challenges";
-import { buildAccountIndex, getOrphanedTrades } from "@/lib/analytics/globalAnalytics";
 import {
   fetchChallenges,
   insertChallenge,
@@ -130,7 +129,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   // any changes on their end.
   const [dbTrades, setDbTrades] = useState<Trade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(true);
-  const trades = useMemo(() => [...dbTrades, ...personalTrades], [dbTrades, personalTrades]);
+  const trades = dbTrades; // Prop Firm only; legacy broker trades remain safely in localStorage.
 
   // ── Load challenges from Supabase whenever the authenticated user changes ──
   // authLoading: stay in loading state until Supabase session is resolved so we
@@ -206,41 +205,12 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       .finally(() => setPayoutsLoading(false));
   }, [user?.id, authLoading]);
 
-  // ── Orphan trade auto-cleanup ──────────────────────────────────────────────
-  // Runs once per login, after challenges/funded accounts/trades have all
-  // loaded. If any trade's accountId/accountType no longer resolves to a
-  // live account (e.g. left over from an account deleted before the
-  // delete-trades-first cascade below existed), delete it automatically —
-  // no manual Supabase SQL required.
-  const orphanCleanupRanForUserRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (authLoading || !user) return;
-    if (challengesLoading || fundedAccountsLoading || tradesLoading) return;
-    if (orphanCleanupRanForUserRef.current === user.id) return;
-    orphanCleanupRanForUserRef.current = user.id;
-
-    // Only ever inspects dbTrades (Supabase-backed challenge/funded trades)
-    // — personal trades never have a DB row to be "orphaned" from, so they
-    // structurally can't appear here and must never be scanned by this effect.
-    const accountIndex = buildAccountIndex(challenges, fundedAccounts);
-    const orphans = getOrphanedTrades(dbTrades, accountIndex);
-    if (orphans.length === 0) return;
-
-    const orphanIds = orphans.map((t) => t.id);
-    deleteTradesByIdsDb(orphanIds)
-      .then(() => {
-        setDbTrades((prev) => prev.filter((t) => !orphanIds.includes(t.id)));
-        console.warn(
-          `[AccountsContext] Auto-cleaned ${orphanIds.length} orphaned trade(s) linked to deleted accounts.`
-        );
-      })
-      .catch((err) => {
-        console.error("Failed to auto-clean orphaned trades:", err);
-        // Allow a retry on the next load instead of silently giving up.
-        orphanCleanupRanForUserRef.current = null;
-      });
-  }, [user, authLoading, challengesLoading, fundedAccountsLoading, tradesLoading, challenges, fundedAccounts, dbTrades]);
+  // ── Orphan trade safety ──────────────────────────────────────────────────
+  // Never auto-delete trades merely because their account is absent from
+  // this user's loaded account list. In the future, Team Workspace will load
+  // shared accounts separately; a temporary fetch failure or revoked share
+  // must never trigger destructive cleanup. Reconciliation is a separate,
+  // explicit, owner-confirmed operation with an audit trail.
 
   // ── Challenge CRUD (Supabase-backed) ──────────────────────────────────────
 

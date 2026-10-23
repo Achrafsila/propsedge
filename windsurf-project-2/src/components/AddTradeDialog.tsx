@@ -135,14 +135,8 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
               onChange={(e) => setFormData({ ...formData, accountType: e.target.value as AccountKind, accountId: "" })}
               className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             >
-              {tradingMode === "prop-firm" ? (
-                <>
-                  <option value="challenge">Challenge</option>
+              <option value="challenge">Challenge</option>
                   <option value="funded">Funded Account</option>
-                </>
-              ) : (
-                <option value="personal">Personal Account</option>
-              )}
             </select>
           </div>
           <div className="space-y-2">

@@ -36,7 +36,6 @@ export default function EdgePilotPage() {
   const {
     challenges,
     fundedAccounts,
-    personalAccounts,
     trades,
     payouts,
     getDashboardKPIs,
@@ -65,7 +64,7 @@ export default function EdgePilotPage() {
         trades,
         challenges,
         fundedAccounts,
-        personalAccounts,
+        personalAccounts: [],
         payouts,
         dashboardKPIs,
         traderIdentity: identity,
@@ -76,12 +75,12 @@ export default function EdgePilotPage() {
         traderEvolution: evolution,
         dataConfidence,
       }),
-    [trades, challenges, fundedAccounts, personalAccounts, payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
+    [trades, challenges, fundedAccounts, payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
   );
 
   const riskStates = useMemo(
-    () => getAccountRiskStates(challenges, fundedAccounts, trades, personalAccounts),
-    [challenges, fundedAccounts, trades, personalAccounts]
+    () => getAccountRiskStates(challenges, fundedAccounts, trades, []),
+    [challenges, fundedAccounts, trades]
   );
 
   const briefings: AccountBriefing[] = useMemo(
@@ -91,7 +90,7 @@ export default function EdgePilotPage() {
           trades,
           challenges,
           fundedAccounts,
-          personalAccounts,
+          personalAccounts: [],
           payouts,
           traderIdentity: identity,
           traderHabits: habits,
@@ -103,7 +102,7 @@ export default function EdgePilotPage() {
         },
         objective ?? undefined
       ),
-    [trades, challenges, fundedAccounts, personalAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
+    [trades, challenges, fundedAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
   );
 
   // One Decision Engine + Accountability Engine pass per active account —
@@ -181,7 +180,7 @@ export default function EdgePilotPage() {
         coach={coach}
         challenges={challenges}
         fundedAccounts={fundedAccounts}
-        personalAccounts={personalAccounts}
+        personalAccounts={[]}
         trades={trades}
         discipline={discipline}
         edge={edge}
