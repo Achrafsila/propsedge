@@ -12,7 +12,8 @@ import {
   Settings,
   Shield,
   Compass,
-  Activity
+  Activity,
+  Users
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
@@ -29,6 +30,7 @@ export function Sidebar() {
   // Prop Firm nav — unchanged from before Personal Capital mode existed.
   const propFirmItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ...(process.env.NEXT_PUBLIC_TEAMS_ENABLED === "true" ? [{ name: "Team Workspace", href: "/teams", icon: Users }] : []),
     { name: "Challenges", href: "/challenges", icon: Trophy },
     { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
