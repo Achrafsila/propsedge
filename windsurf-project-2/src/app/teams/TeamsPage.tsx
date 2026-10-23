@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useTeamInvitations } from "@/lib/teams/useTeamInvitations";
+import { useTeamMemberActions } from "@/lib/teams/useTeamMemberActions";
 import { useTeams } from "@/lib/teams/useTeams";
 import { useTeamMembers } from "@/lib/teams/useTeamMembers";
 
@@ -22,12 +23,25 @@ export default function TeamsPage() {
     return () => { active = false; };
   }, []);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const { members, loading: membersLoading, error: membersError } = useTeamMembers(selectedTeamId);
+  const { members, loading: membersLoading, error: membersError, refresh: refreshMembers } = useTeamMembers(selectedTeamId);
   const selectedTeam = teams.find(team => team.id === selectedTeamId);
+  const { changeRole, removeMember, busy: memberBusy } = useTeamMemberActions(selectedTeamId);
   const currentRole = members.find(member => member.userId === userId)?.role;
   const canManage = currentRole === "owner" || currentRole === "admin";
   const { incoming, outgoing, error: invitationsError, invite, accept, revoke, refresh: refreshInvitations } =
     useTeamInvitations(selectedTeamId, canManage);
+
+  async function updateMember(action: "remove" | "promote" | "demote", memberId: string) {
+    setInviteFailure(null);
+    if (action === "remove" && !window.confirm("Remove this member from the team?")) return;
+    try {
+      if (action === "remove") await removeMember(memberId);
+      else await changeRole(memberId, action === "promote" ? "admin" : "member");
+      await refreshMembers();
+    } catch (err) {
+      setInviteFailure(err instanceof Error ? err.message : "Unable to update member");
+    }
+  }
 
   async function sendInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,7 +142,20 @@ export default function TeamsPage() {
           {!membersLoading && !membersError && <ul className="mt-4 space-y-2">
             {members.map(member => <li key={member.userId} className="flex justify-between gap-4 rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
               <span className="truncate font-mono text-slate-300">{member.userId}</span>
-              <span className="capitalize text-blue-300">{member.role}</span>
+              <span className="flex flex-wrap items-center justify-end gap-3">
+                <span className="capitalize text-blue-300">{member.role}</span>
+                {member.role !== "owner" && (currentRole === "owner" || (currentRole === "admin" && member.role === "member")) && (
+                  <button type="button" disabled={memberBusy} onClick={() => void updateMember("remove", member.userId)}
+                    className="text-red-300 hover:text-red-200 disabled:opacity-50">Remove</button>
+                )}
+                {currentRole === "owner" && member.role !== "owner" && (
+                  <button type="button" disabled={memberBusy}
+                    onClick={() => void updateMember(member.role === "admin" ? "demote" : "promote", member.userId)}
+                    className="text-blue-300 hover:text-blue-200 disabled:opacity-50">
+                    {member.role === "admin" ? "Make member" : "Make admin"}
+                  </button>
+                )}
+              </span>
             </li>)}
           </ul>}
           {canManage && (
