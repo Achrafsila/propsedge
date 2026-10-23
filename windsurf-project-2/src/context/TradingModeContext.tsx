@@ -26,7 +26,8 @@ export function TradingModeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(TRADING_MODE_STORAGE_KEY, DEFAULT_TRADING_MODE);
   }, []);
 
-  const setTradingMode = (_mode: TradingMode) => {
+  const setTradingMode = (mode: TradingMode) => {
+    void mode;
     // Never activate broker mode while the deprecated UI is being retired.
     localStorage.setItem(TRADING_MODE_STORAGE_KEY, DEFAULT_TRADING_MODE);
   };
