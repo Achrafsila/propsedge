@@ -75,7 +75,7 @@ export default function EdgePilotPage() {
         traderEvolution: evolution,
         dataConfidence,
       }),
-    [trades, challenges, fundedAccounts, personalAccounts: [], payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
+    [trades, challenges, fundedAccounts, payouts, dashboardKPIs, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence]
   );
 
   const riskStates = useMemo(
@@ -102,7 +102,7 @@ export default function EdgePilotPage() {
         },
         objective ?? undefined
       ),
-    [trades, challenges, fundedAccounts, personalAccounts: [], payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
+    [trades, challenges, fundedAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
   );
 
   // One Decision Engine + Accountability Engine pass per active account —
