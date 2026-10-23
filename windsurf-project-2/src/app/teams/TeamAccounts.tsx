@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAccounts } from "@/context/AccountsContext";
 import { useTeamShares } from "@/lib/teams/useTeamShares";
 import { useSharedAccountSummaries } from "@/lib/teams/useSharedAccountSummaries";
+import { TeamAccountNotes } from "./TeamAccountNotes";
 import type { TeamAccountType } from "@/lib/teams/types";
 
 export function TeamAccounts({ teamId, currentUserId }: { teamId: string; currentUserId: string | null }) {
@@ -73,6 +74,7 @@ export function TeamAccounts({ teamId, currentUserId }: { teamId: string; curren
                 </p>)}
               </div>
             </div>}
+            <TeamAccountNotes teamId={teamId} accountType={a.type} accountId={a.id} userId={currentUserId} />
             {a.payouts.length > 0 && <div className="mt-3 border-t border-white/10 pt-3">
               <p className="text-sm font-medium">Payout history</p>
               {a.payouts.map(p => <p key={p.id} className="mt-1 text-sm text-slate-300">
