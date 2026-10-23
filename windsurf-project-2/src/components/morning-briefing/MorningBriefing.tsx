@@ -37,7 +37,7 @@ const STORAGE_KEY_PREFIX = "pe_morning_briefing_";
 // computation from re-running on every route navigation for the rest of the
 // day; MorningBriefing itself only ever runs the cheap loading-flag checks.
 function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: () => void }) {
-  const { challenges, fundedAccounts, personalAccounts, trades, payouts } = useAccounts();
+  const { challenges, fundedAccounts, trades, payouts } = useAccounts();
   const { objective, setObjective } = useTodayObjective();
   const { commitContract } = useDailyContracts();
 
@@ -60,7 +60,7 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
           trades,
           challenges,
           fundedAccounts,
-          personalAccounts,
+          personalAccounts: [],
           payouts,
           traderIdentity: identity,
           traderHabits: habits,
@@ -72,12 +72,12 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
         },
         objective ?? undefined
       ),
-    [trades, challenges, fundedAccounts, personalAccounts, payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
+    [trades, challenges, fundedAccounts, personalAccounts: [], payouts, identity, habits, edge, blindSpots, discipline, evolution, dataConfidence, objective]
   );
 
   const riskStates = useMemo(
-    () => getAccountRiskStates(challenges, fundedAccounts, trades, personalAccounts),
-    [challenges, fundedAccounts, trades, personalAccounts]
+    () => getAccountRiskStates(challenges, fundedAccounts, trades, []),
+    [challenges, fundedAccounts, trades]
   );
 
   const today = todayDateString();
