@@ -1,0 +1,41 @@
+name: Teams RLS tests
+
+on:
+  pull_request:
+    paths:
+      - "windsurf-project-2/supabase/teams/**"
+      - "windsurf-project-2/scripts/teams-local-fixture.sql"
+      - "windsurf-project-2/scripts/test-teams-local.sh"
+      - ".github/workflows/teams-rls.yml"
+  workflow_dispatch:
+
+jobs:
+  postgres-rls:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Create isolated test database
+        run: createdb teams_test
+      - name: Run multi-identity RLS checks
+        run: bash windsurf-project-2/scripts/test-teams-local.sh
