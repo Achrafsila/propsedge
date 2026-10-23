@@ -1,6 +1,6 @@
 -- Local PostgreSQL-only test fixture, never run on production.
-create role authenticated nologin;
-create role anon nologin;
+do $ begin create role authenticated nologin; exception when duplicate_object then null; end $;
+do $ begin create role anon nologin; exception when duplicate_object then null; end $;
 create schema auth;
 create table auth.users (
  id uuid primary key,
