@@ -24,11 +24,12 @@ export default function TeamsPage() {
     return () => { active = false; };
   }, []);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectionDismissed, setSelectionDismissed] = useState(false);
   useEffect(() => {
-    if (!loading && teams.length > 0 && !teams.some(team => team.id === selectedTeamId)) {
+    if (!loading && !selectionDismissed && teams.length > 0 && !teams.some(team => team.id === selectedTeamId)) {
       setSelectedTeamId(teams[0].id);
     }
-  }, [loading, teams, selectedTeamId]);
+  }, [loading, teams, selectedTeamId, selectionDismissed]);
   const { members, loading: membersLoading, error: membersError, refresh: refreshMembers } = useTeamMembers(selectedTeamId);
   const selectedTeam = teams.find(team => team.id === selectedTeamId);
   const { changeRole, removeMember, busy: memberBusy } = useTeamMemberActions(selectedTeamId);
@@ -101,7 +102,7 @@ export default function TeamsPage() {
           {!loading && !error && teams.length === 0 && <p className="text-slate-400">No teams yet.</p>}
           <ul className="space-y-3">
             {teams.map(team => <li key={team.id}>
-              <button type="button" onClick={() => setSelectedTeamId(team.id)}
+              <button type="button" onClick={() => { setSelectionDismissed(false); setSelectedTeamId(team.id); }}
                 aria-pressed={selectedTeamId === team.id}
                 className={`w-full rounded-lg border p-3 text-left transition-colors ${selectedTeamId === team.id ? "border-blue-400 bg-blue-500/15" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
                 {team.name}
@@ -143,7 +144,7 @@ export default function TeamsPage() {
         <section className="mt-6 rounded-xl border border-white/10 bg-slate-900 p-6">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">{selectedTeam.name} — Members</h2>
-            <button type="button" onClick={() => setSelectedTeamId(null)} className="text-sm text-slate-400 hover:text-white">Close</button>
+            <button type="button" onClick={() => { setSelectionDismissed(true); setSelectedTeamId(null); }} className="text-sm text-slate-400 hover:text-white">Close</button>
           </div>
           <p className="mt-2 text-sm text-slate-400">Manage access to shared trading accounts. Financial records remain editable only by their owner.</p>
           {membersLoading && <p className="mt-4 text-sm" role="status">Loading members…</p>}
