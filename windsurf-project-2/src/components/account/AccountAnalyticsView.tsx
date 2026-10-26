@@ -958,7 +958,7 @@ function Header({
           variant="outline"
           size="sm"
           className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl pointer-events-auto transition-all duration-300"
-          onClick={() => setIsImportTradeDialogOpen(true)}
+          onClick={() => setIsAddTradeDialogOpen(true)}
           type="button"
         >
           <Plus className="w-4 h-4 mr-2" />
