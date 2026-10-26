@@ -32,7 +32,7 @@ interface ImportTradesDialogProps {
   defaultAccountId?: string;
 }
 
-const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv"];
+const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv", ".jpg", ".jpeg", ".png", ".webp"];
 
 export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: ImportTradesDialogProps) {
   const { addTradesBatch, challenges, fundedAccounts, personalAccounts } = useAccounts();
@@ -43,6 +43,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   const [accountId, setAccountId] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isImageImport, setIsImageImport] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [parsedTrades, setParsedTrades] = useState<ParsedTrade[] | null>(null);
@@ -85,6 +86,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     setAccountId("");
     setIsDragActive(false);
     setFileName(null);
+    setIsImageImport(false);
     setIsParsing(false);
     setIsImporting(false);
     setParsedTrades(null);
@@ -102,18 +104,32 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     return ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext));
   };
 
-  const processFile = async (file: File) => {
-    if (!isSupportedFile(file)) {
-      toast.error("Unsupported file type. Please upload a .xlsx, .xls, or .csv file.");
+  const processFiles = async (files: File[]) => {
+    if (!files.length) return;
+    const image = files.every(f=>/\.(jpg|jpeg|png|webp)$/i.test(f.name));
+    if (files.some(f=>!isSupportedFile(f)) || (!image && files.length!==1) || files.length>4) {
+      toast.error("Choose one Excel/CSV file or up to 4 trade screenshots.");
       return;
     }
 
-    setFileName(file.name);
+    setFileName(files.length===1?files[0].name:`${files.length} screenshots selected`);
+    setIsImageImport(image);
     setParsedTrades(null);
     setSkippedRows([]);
     setIsParsing(true);
     try {
-      const { trades, skippedRows: skipped } = await parseTradeFile(file);
+      let trades: ParsedTrade[], skipped: SkippedRow[];
+      if(image){
+        const payload = new FormData();
+        files.forEach(file=>payload.append("file",file));
+        const response=await fetch("/api/import-trades-image",{method:"POST",body:payload});
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.error || "Image recognition failed");
+        trades=data.trades as ParsedTrade[];
+        skipped=[];
+        if(data.duplicatesRemoved>0) toast.info(`${data.duplicatesRemoved} overlapping rows removed`);
+        if(Array.isArray(data.warnings)&&data.warnings.length) toast.warning("Review image recognition", {description:data.warnings.slice(0,2).join(" · ")});
+      } else ({ trades, skippedRows: skipped } = await parseTradeFile(files[0]));
       setParsedTrades(trades);
       setSkippedRows(skipped);
       if (trades.length === 0) {
@@ -133,13 +149,13 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) processFile(file);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    void processFiles(files);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
+    const files = Array.from(e.target.files ?? []);
+    void processFiles(files);
   };
 
   const handleImport = async () => {
@@ -279,7 +295,8 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.xls,.csv"
+              multiple
+              accept=".xlsx,.xls,.csv,image/jpeg,image/png,image/webp"
               onChange={handleFileInputChange}
               className="hidden"
             />
@@ -293,6 +310,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                   onClick={(e) => {
                     e.stopPropagation();
                     setFileName(null);
+                    setIsImageImport(false);
                     setParsedTrades(null);
                     setSkippedRows([]);
                     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -306,16 +324,26 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
               <>
                 <UploadCloud className="w-8 h-8 text-[#8B97A8]" />
                 <p className="text-sm text-[#F8FAFC]">Drag & drop your trade file here</p>
-                <p className="text-xs text-[#8B97A8]">or click to browse — .xlsx, .xls, .csv</p>
+                <p className="text-xs text-[#8B97A8]">Choose one Excel/CSV file or up to 4 screenshots of the same trade list</p>
               </>
             )}
           </div>
 
+          {parsedTrades !== null && <p className="text-xs leading-relaxed text-amber-200">Review recognised trades, prices, dates and P&L carefully before importing. Screenshots may be misread; incomplete rows are not imported.</p>}
           {parsedTrades !== null && (
             <div
               className="rounded-xl p-4 space-y-2 text-sm"
               style={{ background: "rgba(11, 18, 32, 0.5)", border: "1px solid rgba(148, 163, 184, 0.08)" }}
             >
+              {isImageImport && (
+                <div className="max-h-52 overflow-y-auto rounded-lg border border-white/10">
+                  <div className="sticky top-0 bg-[#111C33] px-3 py-2 text-xs font-semibold text-white">Image recognition · trade preview</div>
+                  {parsedTrades.map((t,i)=><div key={i} className="flex items-center justify-between gap-3 border-t border-white/10 px-3 py-2 text-xs text-[#C6D5E5]">
+                    <span>{t.symbol} · {t.direction} · {t.entryDate}</span>
+                    <span className={t.pnl>=0?"text-emerald-300":"text-red-300"}>{formatCurrency(t.pnl)}</span>
+                  </div>)}
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-[#8B97A8]">Trades detected</span>
                 <span className="text-[#F8FAFC] font-medium">{parsedTrades.length}</span>
