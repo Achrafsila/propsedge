@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   DollarSign, TrendingUp, TrendingDown, Target, Activity,
   Clock, CheckCircle, AlertCircle, Award, BarChart3,
-  ArrowUpRight, Trophy, AlertTriangle, Zap, ArrowRight
+  ArrowUpRight, Trophy, AlertTriangle, Zap, ArrowRight, Trash2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -182,7 +182,7 @@ export default function Dashboard() {
     fundedAccounts, fundedAccountsLoading,
     trades, tradesLoading,
     payouts, payoutsLoading,
-    getDashboardKPIs,
+    getDashboardKPIs, deleteChallenge, deleteFundedAccount,
   } = useAccounts();
 
   const [accountFilter, setAccountFilter] = useState<"all" | "challenge" | "funded" | "instant" | "archived">("all");
@@ -190,6 +190,8 @@ export default function Dashboard() {
   const [openTrade, setOpenTrade]         = useState(false);
   const [openPayout, setOpenPayout]       = useState(false);
   const [openFunded, setOpenFunded]       = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<{id:string;name:string;kind:"challenge"|"funded"} | null>(null);
+  const [deleteText, setDeleteText] = useState("");
 
   const isLoading = challengesLoading || fundedAccountsLoading || tradesLoading || payoutsLoading;
   const kpis = getDashboardKPIs();
@@ -421,12 +423,44 @@ export default function Dashboard() {
                     className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-[#298DFF]/30 bg-[#298DFF]/15 px-2 py-2.5 text-xs sm:text-sm font-semibold text-[#8FC2FF] transition group-hover:bg-[#298DFF] group-hover:text-white">
                     Manage Account <ArrowRight className="h-4 w-4" />
                   </button>
+                  <button type="button"
+                    onClick={() => {setDeleteCandidate({id:account.data.id,name,kind:account.kind});setDeleteText("");}}
+                    aria-label={`Delete ${name}`}
+                    className="mt-1.5 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg text-[11px] font-medium text-rose-300/80 transition hover:bg-rose-500/10 hover:text-rose-200">
+                    <Trash2 className="h-3.5 w-3.5" /> Delete Account
+                  </button>
                 </motion.article>
               );
             })}
           </div>
         )}
       </section>
+
+      {deleteCandidate && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3" role="alertdialog" aria-modal="true" aria-labelledby="delete-account-title">
+          <div className="w-full max-w-sm rounded-2xl border border-rose-500/25 bg-[#101A2B] p-4 text-white shadow-2xl sm:p-5">
+            <h3 id="delete-account-title" className="text-lg font-bold">Delete account?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              Permanently delete <strong className="text-white">{deleteCandidate.name}</strong> and its linked trade history.
+              This action cannot be undone.
+            </p>
+            <label className="mt-4 block text-xs text-slate-300">
+              Type <strong>DELETE</strong> to confirm
+              <input autoFocus value={deleteText} onChange={e=>setDeleteText(e.target.value)} placeholder="DELETE"
+                className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-[#080D1B] px-3 text-base text-white outline-none focus:border-rose-400" />
+            </label>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" className="min-h-11 rounded-xl border border-white/15 text-sm font-semibold" onClick={()=>setDeleteCandidate(null)}>Cancel</button>
+              <button type="button" disabled={deleteText !== "DELETE"} onClick={()=>{
+                if(!deleteCandidate || deleteText !== "DELETE") return;
+                if(deleteCandidate.kind==="challenge") deleteChallenge(deleteCandidate.id);
+                else deleteFundedAccount(deleteCandidate.id);
+                setDeleteCandidate(null);setDeleteText("");
+              }} className="min-h-11 rounded-xl bg-rose-600 px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40">Delete permanently</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── SECTION 3+4+5 — Activity | Best Account + Quick Actions ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
