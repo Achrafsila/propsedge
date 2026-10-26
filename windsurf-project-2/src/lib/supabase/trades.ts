@@ -122,6 +122,23 @@ export async function insertTradesBatch(
   return (data as TradeRow[]).map(rowToTrade);
 }
 
+export async function updateTradeDb(id: string, accountId: string, accountType: "challenge" | "funded", patch: Partial<Trade>): Promise<Trade> {
+  const fields: Record<string, unknown> = {};
+  if (patch.entryDate !== undefined) fields.entry_date = patch.entryDate;
+  if (patch.exitDate !== undefined) fields.exit_date = patch.exitDate;
+  if (patch.symbol !== undefined) fields.symbol = patch.symbol;
+  if (patch.direction !== undefined) fields.direction = patch.direction;
+  if (patch.entryPrice !== undefined) fields.entry_price = patch.entryPrice;
+  if (patch.exitPrice !== undefined) fields.exit_price = patch.exitPrice;
+  if (patch.quantity !== undefined) fields.quantity = patch.quantity;
+  if (patch.pnl !== undefined) { fields.pnl = patch.pnl; fields.status = patch.pnl > 0 ? "win" : patch.pnl < 0 ? "loss" : "breakeven"; }
+  if (patch.notes !== undefined) fields.notes = patch.notes;
+  const { data, error } = await createClient().from("trades").update(fields)
+    .eq("id", id).eq("account_id", accountId).eq("account_type", accountType).select().single();
+  if (error) throw error;
+  return rowToTrade(data as TradeRow);
+}
+
 export async function deleteTradeDb(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase

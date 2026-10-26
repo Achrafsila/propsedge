@@ -19,6 +19,7 @@ import {
   Activity,
   Award,
   AlertTriangle,
+  Pencil, Trash2, X, Save,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -31,6 +32,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { useAccounts } from "@/context/AccountsContext";
+import { toast } from "sonner";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
@@ -123,6 +126,32 @@ export function AccountAnalyticsView({
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
   const [isImportTradeDialogOpen, setIsImportTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
+  const { updateTrade, deleteTrade } = useAccounts();
+  const [editingTrade, setEditingTrade] = useState<any | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<any | null>(null);
+  const [isSavingTrade, setIsSavingTrade] = useState(false);
+  const saveTrade = async () => {
+    if (!editingTrade || isSavingTrade) return;
+    if (!editingTrade.symbol?.trim() || !editingTrade.entryDate || !editingTrade.exitDate || editingTrade.exitDate < editingTrade.entryDate
+      || ![editingTrade.entryPrice, editingTrade.exitPrice, editingTrade.quantity, editingTrade.pnl].every((v:number)=>Number.isFinite(v))
+      || editingTrade.quantity <= 0) {
+      toast.error("Check dates, prices, quantity and P&L");
+      return;
+    }
+    setIsSavingTrade(true);
+    try {
+      await updateTrade(editingTrade.id, {
+        symbol: editingTrade.symbol.trim(), direction: editingTrade.direction,
+        entryDate: editingTrade.entryDate, exitDate: editingTrade.exitDate,
+        entryPrice: editingTrade.entryPrice, exitPrice: editingTrade.exitPrice,
+        quantity: editingTrade.quantity, pnl: editingTrade.pnl,
+        notes: editingTrade.notes ?? ""
+      });
+      toast.success("Trade updated"); setEditingTrade(null);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to update trade"); }
+    finally { setIsSavingTrade(false); }
+  };
+
 
   // ── Defensive trade filtering ───────────────────────────────────────────────
   // Callers already filter by accountId/accountType, but this view re-verifies
@@ -868,10 +897,50 @@ export function AccountAnalyticsView({
                 <p className="hidden text-xs text-slate-400 sm:block">{trade.entryDate}</p>
                 <p className="hidden text-xs text-slate-400 sm:block">{trade.status || "—"}</p>
                 <div className="text-right"><p className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt$(trade.pnl)}</p><p className="text-[11px] text-slate-400 sm:hidden">{trade.entryDate}</p></div>
+                <div className="col-span-2 flex justify-end gap-2 sm:col-span-4">
+                  <button type="button" onClick={() => setEditingTrade({...trade})} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-white/15 px-3 text-xs text-slate-200"><Pencil className="h-3.5 w-3.5"/> Edit</button>
+                  <button type="button" onClick={() => setDeleteCandidate(trade)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-rose-500/30 px-3 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5"/> Delete</button>
+                </div>
               </div>
             ))}
         </div>
       </details>
+
+      {editingTrade && (
+        <div role="dialog" aria-modal="true" aria-label="Edit trade" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/15 bg-[#101A2B] p-4 text-white">
+            <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Edit trade</h3><button aria-label="Close" onClick={()=>setEditingTrade(null)}><X className="h-5 w-5"/></button></div>
+            <div className="grid grid-cols-2 gap-3">
+              {(["symbol","entryDate","exitDate","entryPrice","exitPrice","quantity","pnl"] as const).map(field => (
+                <label key={field} className={field==="symbol"?"col-span-2 text-xs text-slate-300":"min-w-0 text-xs text-slate-300"}>{field.replace(/([A-Z])/g," $1")}
+                  <input type={field.toLowerCase().includes("date")?"date":["symbol"].includes(field)?"text":"number"} step="any"
+                    value={editingTrade[field] ?? ""} onChange={e=>setEditingTrade((current:any)=>({...current,[field]:["entryPrice","exitPrice","quantity","pnl"].includes(field)?Number(e.target.value):e.target.value}))}
+                    className="mt-1 block w-full min-w-0 rounded-lg border border-white/20 bg-[#080D1B] px-2 py-2.5 text-sm text-white [color-scheme:dark]" />
+                </label>
+              ))}
+              <label className="col-span-2 text-xs text-slate-300">Direction
+                <select value={editingTrade.direction} onChange={e=>setEditingTrade((t:any)=>({...t,direction:e.target.value}))} className="mt-1 w-full rounded-lg bg-[#080D1B] p-2.5"><option value="long">Buy / Long</option><option value="short">Sell / Short</option></select>
+              </label>
+              <label className="col-span-2 text-xs text-slate-300">Notes
+                <textarea value={editingTrade.notes ?? ""} onChange={e=>setEditingTrade((t:any)=>({...t,notes:e.target.value}))} className="mt-1 w-full rounded-lg bg-[#080D1B] p-2.5" rows={2}/>
+              </label>
+            </div>
+            <button onClick={saveTrade} disabled={isSavingTrade} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-semibold disabled:opacity-50"><Save className="h-4 w-4"/> Save changes</button>
+          </div>
+        </div>
+      )}
+      {deleteCandidate && (
+        <div role="alertdialog" aria-modal="true" aria-label="Delete trade confirmation" className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-3">
+          <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#101A2B] p-5 text-white">
+            <h3 className="font-semibold">Delete this trade?</h3>
+            <p className="my-3 text-sm text-slate-300">{deleteCandidate.symbol} · {deleteCandidate.entryDate} · {fmt$(deleteCandidate.pnl)}. This action cannot be undone.</p>
+            <div className="flex gap-2">
+              <button className="min-h-11 flex-1 rounded-xl border border-white/20" onClick={()=>setDeleteCandidate(null)}>Cancel</button>
+              <button className="min-h-11 flex-1 rounded-xl bg-rose-600 font-semibold" onClick={()=>{deleteTrade(deleteCandidate.id);setDeleteCandidate(null);toast.success("Trade deletion requested");}}>Delete trade</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Dialogs ───────────────────────────────────────────────────────── */}
       <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} />

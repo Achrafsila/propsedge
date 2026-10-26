@@ -36,6 +36,7 @@ import {
   insertTrade,
   insertTradesBatch,
   deleteTradeDb,
+  updateTradeDb,
   deleteTradesByAccountDb,
   deleteTradesByIdsDb,
 } from "@/lib/supabase/trades";
@@ -86,6 +87,7 @@ interface AccountsContextType {
   addTrade: (trade: Omit<Trade, "id">) => Promise<Trade | null>;
   addTradesBatch: (trades: Omit<Trade, "id">[]) => Promise<TradeImportResult>;
   deleteTrade: (id: string) => void;
+  updateTrade: (id: string, patch: Partial<Trade>) => Promise<void>;
   deleteTradesForAccount: (accountId: string, accountType: "challenge" | "funded" | "personal") => Promise<void>;
   getAccountPnL: (accountId: string, accountType: "challenge" | "funded" | "personal") => number;
   convertChallengeToFunded: (challengeId: string, fundedAccount: Omit<FundedAccount, "id">) => void;
@@ -549,6 +551,15 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     };
   };
 
+  const updateTrade = async (id: string, patch: Partial<Trade>) => {
+    const original = dbTrades.find(t => t.id === id);
+    if (!original || !user) throw new Error("Trade not found");
+    const updated = await updateTradeDb(id, original.accountId, original.accountType as "challenge" | "funded", patch);
+    const next = dbTrades.map(t => t.id === id ? updated : t);
+    setDbTrades(next);
+    recalcAccount(original.accountId, original.accountType, next);
+  };
+
   const deleteTrade = (id: string) => {
     const tradeToDelete = trades.find((t) => t.id === id);
     if (!tradeToDelete) return;
@@ -802,6 +813,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         addTrade,
         addTradesBatch,
         deleteTrade,
+        updateTrade,
         deleteTradesForAccount,
         getAccountPnL,
         convertChallengeToFunded,
