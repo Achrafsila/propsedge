@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
-import { Menu, X, LayoutDashboard, BookOpen, Fingerprint, Compass } from "lucide-react";
+import { Menu, X, LayoutDashboard, BookOpen, Wallet, Fingerprint, Compass } from "lucide-react";
 import Link from "next/link";
 import { Sidebar } from "@/components/sidebar";
 import { TopNav } from "@/components/top-nav";
@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
           <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-[#298DFF]/20 bg-[#071121]/95 px-2 pt-2 backdrop-blur-2xl lg:hidden" style={{paddingBottom:"max(8px, env(safe-area-inset-bottom))"}}>
             <nav aria-label="Mobile primary navigation" className="mx-auto grid max-w-lg grid-cols-4 gap-1">
-              {[{href:"/dashboard",label:"Home",Icon:LayoutDashboard},{href:"/journal",label:"Journal",Icon:BookOpen},{href:"/analytics",label:"Trader DNA",Icon:Fingerprint},{href:"/edgepilot",label:"EdgePilot",Icon:Compass}].map(item=><Link key={item.href} href={item.href} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors ${pathname===item.href?"bg-[#298DFF]/20 text-[#90C8FF]":"text-[#91A5BD]"}`} aria-current={pathname===item.href?"page":undefined}><item.Icon className="h-5 w-5"/><span>{item.label}</span></Link>)}
+              {[{href:"/dashboard",label:"Home",Icon:LayoutDashboard},{href:"/payouts",label:"Payouts",Icon:Wallet},{href:"/analytics",label:"Trader DNA",Icon:Fingerprint},{href:"/edgepilot",label:"EdgePilot",Icon:Compass}].map(item=><Link key={item.href} href={item.href} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors ${pathname===item.href?"bg-[#298DFF]/20 text-[#90C8FF]":"text-[#91A5BD]"}`} aria-current={pathname===item.href?"page":undefined}><item.Icon className="h-5 w-5"/><span>{item.label}</span></Link>)}
             </nav>
           </div>
           <div className="hidden lg:block"><Footer /></div>

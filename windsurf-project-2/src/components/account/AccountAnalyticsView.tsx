@@ -857,6 +857,22 @@ export function AccountAnalyticsView({
         </div>
       </div>
 
+      {/* Account-scoped trade history; journal is no longer a primary navigation destination. */}
+      <details className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-5">
+        <summary className="cursor-pointer select-none text-sm font-semibold text-white">Trade History · {trades.length} trades <span className="ml-2 text-xs font-normal text-slate-400">View account journal</span></summary>
+        <div className="mt-4 max-h-[55dvh] space-y-2 overflow-y-auto overscroll-contain">
+          {trades.length === 0 ? <p className="py-5 text-sm text-slate-400">No trades recorded for this account.</p> :
+            [...trades].sort((a,b) => String(b.entryDate).localeCompare(String(a.entryDate))).map(trade => (
+              <div key={trade.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                <div className="min-w-0"><p className="truncate text-sm font-medium text-white">{trade.symbol || "Trade"}</p><p className="text-[11px] text-slate-400">{trade.direction || "—"}</p></div>
+                <p className="hidden text-xs text-slate-400 sm:block">{trade.entryDate}</p>
+                <p className="hidden text-xs text-slate-400 sm:block">{trade.status || "—"}</p>
+                <div className="text-right"><p className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt$(trade.pnl)}</p><p className="text-[11px] text-slate-400 sm:hidden">{trade.entryDate}</p></div>
+              </div>
+            ))}
+        </div>
+      </details>
+
       {/* ── Dialogs ───────────────────────────────────────────────────────── */}
       <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} />
         <ImportTradesDialog open={isImportTradeDialogOpen} onOpenChange={setIsImportTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} lockAccount />

@@ -347,7 +347,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── SECTION 2 — Account command center ── */}
-      <section className="space-y-5">
+      <section id="your-accounts" className="space-y-3 sm:space-y-5 scroll-mt-20">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -383,7 +383,7 @@ export default function Dashboard() {
               className="mt-5 rounded-xl bg-[#298DFF] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1D74D9]">+ New Challenge</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-3">
             {filteredAccounts.map((account, index) => {
               const isChallenge = account.kind === "challenge";
               const name = account.data.accountName;
@@ -398,31 +398,29 @@ export default function Dashboard() {
               return (
                 <motion.article key={account.kind + account.data.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(index * 0.05, 0.3) }}
-                  className="group rounded-2xl border border-white/[0.09] bg-[#0D121C] p-5 transition-all duration-200 hover:border-[#298DFF]/40 hover:bg-[#101925]">
+                  className="group min-w-0 rounded-2xl border border-white/[0.09] bg-[#0D121C] p-2.5 sm:p-4 transition-all duration-200 hover:bg-[#101925]" style={{ borderTop: "3px solid " + (phase.toLowerCase().includes("instant") ? "#A78BFA" : isChallenge ? "#E7AD4E" : "#20B99B") }}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-medium uppercase tracking-wider text-[#64748B]">{firm}</p>
-                      <h3 className="mt-1 truncate text-lg font-semibold text-[#F8FAFC]">{name}</h3>
-                      <p className="mt-1 text-xs text-[#94A3B8]">{phase} · {isChallenge ? "Evaluation" : "Funded Account"}</p>
+                      <h3 className="mt-1 truncate text-sm sm:text-base font-semibold text-[#F8FAFC]">{name}</h3>
+                      <p className="mt-1 text-[10px] sm:text-xs font-semibold" style={{color:phase.toLowerCase().includes("instant") ? "#A78BFA" : isChallenge ? "#E7AD4E" : "#20B99B"}}>{phase} · {isChallenge ? "Evaluation" : "Funded Account"}</p>
                     </div>
                     <span className="rounded-full px-3 py-1 text-xs font-semibold capitalize" style={{ color: statusColor, background: statusColor + "19", border: "1px solid " + statusColor + "35" }}>{status.replaceAll("_", " ")}</span>
                   </div>
-                  <div className="my-5 h-px bg-white/[0.07]" />
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
-                    <div><p className="text-xs text-[#94A3B8]">Starting Capital</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(size)}</p></div>
-                    <div><p className="text-xs text-[#94A3B8]">Current Balance</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(equity)}</p></div>
-                    <div><p className="text-xs text-[#94A3B8]">Net P&L</p><p className="mt-1 text-lg font-bold tabular-nums" style={{ color: profit >= 0 ? "#10B981" : "#EF4444" }}>{profit > 0 ? "+" : ""}{fmt$(profit)}</p></div>
-                    <div className="col-span-2 sm:col-span-3">
+                  <div className="my-3 h-px bg-white/[0.07]" />
+                  <div className="grid grid-cols-3 gap-x-1.5 gap-y-2 sm:gap-x-3 sm:gap-y-3">
+                    <div><p className="text-[9px] sm:text-xs text-[#94A3B8]">Starting Capital</p><p className="mt-1 text-xs sm:text-base font-bold tabular-nums text-white">{fmt$(size)}</p></div>
+                    <div><p className="text-[9px] sm:text-xs text-[#94A3B8]">Current Balance</p><p className="mt-1 text-xs sm:text-base font-bold tabular-nums text-white">{fmt$(equity)}</p></div>
+                    <div><p className="text-[9px] sm:text-xs text-[#94A3B8]">Net P&L</p><p className="mt-1 text-xs sm:text-base font-bold tabular-nums" style={{ color: profit >= 0 ? "#10B981" : "#EF4444" }}>{profit > 0 ? "+" : ""}{fmt$(profit)}</p></div>
+                    <div className="col-span-3">
                       <div className="flex justify-between gap-3 text-xs"><span className="text-[#94A3B8]">Remaining drawdown</span><span className="font-semibold tabular-nums" style={{ color: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#CBD5E1" }}>{fmt$(remaining)}</span></div>
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full" style={{ width: Math.max(0, Math.min(100, remaining / (account.data.maxDrawdown || 1) * 100)) + "%", background: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#10B981" }} /></div>
                     </div>
                   </div>
                   <button type="button" onClick={() => router.push(isChallenge ? `/challenges/${account.data.id}` : `/funded/${account.data.id}`)}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#298DFF]/30 bg-[#298DFF]/15 px-4 py-3 text-sm font-semibold text-[#8FC2FF] transition group-hover:bg-[#298DFF] group-hover:text-white">
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl border border-[#298DFF]/30 bg-[#298DFF]/15 px-2 py-2.5 text-xs sm:text-sm font-semibold text-[#8FC2FF] transition group-hover:bg-[#298DFF] group-hover:text-white">
                     Manage Account <ArrowRight className="h-4 w-4" />
                   </button>
-                  <button type="button" onClick={() => router.push(isChallenge ? "/challenges" : "/funded")}
-                    className="mt-2 w-full py-1.5 text-xs font-medium text-[#64748B] hover:text-[#CBD5E1]">Advanced account management</button>
                 </motion.article>
               );
             })}
@@ -530,7 +528,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-2">
               {([
                 { label: "+ New Challenge",    color: "#298DFF", bg: "rgba(41,141,255,0.1)",  border: "rgba(41,141,255,0.25)",  Icon: Target,     action: () => setOpenChallenge(true) },
-                { label: "+ Add Trade",        color: "#10B981", bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.25)",  Icon: TrendingUp, action: () => setOpenTrade(true)     },
+                { label: "Your Accounts",       color: "#10B981", bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.25)",  Icon: TrendingUp, action: () => document.getElementById("your-accounts")?.scrollIntoView({behavior:"smooth"}) },
                 { label: "+ Request Payout",   color: "#F59E0B", bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.25)",  Icon: DollarSign, action: () => setOpenPayout(true)    },
                 { label: "+ Add Funded",       color: "#A855F7", bg: "rgba(168,85,247,0.1)",  border: "rgba(168,85,247,0.25)",  Icon: Activity,   action: () => setOpenFunded(true)    },
               ] as const).map(({ label, color, bg, border, Icon, action }) => (

@@ -34,9 +34,6 @@ export function Sidebar() {
   const propFirmItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
 
-    { name: "Challenges", href: "/challenges", icon: Trophy },
-    { name: "Funded Accounts", href: "/funded", icon: Wallet },
-    { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
