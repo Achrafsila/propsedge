@@ -65,6 +65,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
       fundingDate: new Date().toISOString().split('T')[0],
       initialBalance: "",
       maxDrawdown: "",
+      purchaseCost: "",
     });
   };
 
