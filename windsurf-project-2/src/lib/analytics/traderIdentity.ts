@@ -363,7 +363,7 @@ export function getTraderIdentity(trades: Trade[]): TraderIdentity {
   } else {
     const holdingTimes = sorted.map(getHoldingMinutes).filter((m): m is number => m !== null);
     medianHoldingMinutes = median(holdingTimes);
-    tradingStyle = classifyTradingStyle(medianHoldingMinutes);
+    tradingStyle = holdingTimes.length === 0 ? "Not enough data" : classifyTradingStyle(medianHoldingMinutes);
   }
 
   const marketSpecialization = determineMarketSpecialization(sorted);

@@ -165,7 +165,9 @@ export function AccountAnalyticsView({
   const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
   const avgWin  = winningTrades.length > 0 ? winningTrades.reduce((s, t) => s + t.pnl, 0) / winningTrades.length : 0;
   const avgLoss = losingTrades.length  > 0 ? losingTrades.reduce((s, t) => s + t.pnl, 0) / losingTrades.length : 0;
-  const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
+  const grossWin = winningTrades.reduce((sum, trade) => sum + trade.pnl, 0);
+  const grossLoss = Math.abs(losingTrades.reduce((sum, trade) => sum + trade.pnl, 0));
+  const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null;
 
   // ── Drawdown (dollar figure first, percentages derived from it) ────────────
   const maxDDDollars = resolveDrawdownDollars(account.maxDrawdown, account.accountSize);
@@ -224,7 +226,7 @@ export function AccountAnalyticsView({
   const winningDays  = dailyEntries.filter(([, d]) => d.pnl > 0);
   const losingDays   = dailyEntries.filter(([, d]) => d.pnl < 0);
   const bestDay  = dailyEntries.length > 0 ? dailyEntries.reduce((a, b) => (b[1].pnl > a[1].pnl ? b : a)) : null;
-  const worstDay = dailyEntries.length > 0 ? dailyEntries.reduce((a, b) => (b[1].pnl < a[1].pnl ? b : a)) : null;
+  const worstDay = losingDays.length > 0 ? losingDays.reduce((a, b) => (b[1].pnl < a[1].pnl ? b : a)) : null;
   const avgDailyPnL = dailyEntries.length > 0 ? totalPnL / dailyEntries.length : 0;
 
   // ── Target progress ────────────────────────────────────────────────────────
@@ -374,7 +376,7 @@ export function AccountAnalyticsView({
 
   // ─── Main view ──────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Header
         account={account}
         accountType={accountType}
@@ -387,7 +389,7 @@ export function AccountAnalyticsView({
 
       {/* ── Account Data Strip ────────────────────────────────────────────── */}
       <div
-        className="rounded-xl p-5 transition-all duration-300"
+        className="rounded-xl p-3 sm:p-4 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -395,7 +397,7 @@ export function AccountAnalyticsView({
           borderRadius: borderRadius.xl,
         }}
       >
-        <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 xl:grid-cols-6">
           <DataField label="Prop Firm" value={account.propFirmName} />
           <DataField
             label="Type"
@@ -436,6 +438,7 @@ export function AccountAnalyticsView({
         </div>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2">
       {/* ── Trading Requirements ──────────────────────────────────────────── */}
       {/* Static payout-eligibility rules from PayoutRules — funded accounts
           with their own native rules only (Instant Funded, etc.); a
@@ -503,9 +506,53 @@ export function AccountAnalyticsView({
         );
       })()}
 
+        <div className="rounded-xl border border-white/10 bg-[#0D1420] p-5 text-sm text-[#94A3B8]">
+          <h3 className="mb-3 font-semibold text-white">Risk guardrails</h3>
+          <p>Maximum drawdown: <strong className="text-white">{fmt$(maxDDDollars)}</strong></p>
+          <p className="mt-2">Remaining buffer: <strong className={remainingDDDollars > 0 ? "text-emerald-400" : "text-red-400"}>{fmt$(remainingDDDollars)}</strong></p>
+          <p className="mt-2">Drawdown floor: <strong className="text-white">{fmt$(drawdownFloor)}</strong></p>
+          <p className="mt-3 text-xs">Verify daily-loss, trailing and consistency rules in your prop firm agreement before placing trades.</p>
+        </div>
+      <div className="relative flex h-full min-w-0 flex-col justify-between overflow-hidden rounded-xl border border-[#298DFF]/20 bg-[#0B1422] p-5">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-[#298DFF]/10 blur-3xl" />
+        <div className="relative">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#298DFF]/15"><Activity className="h-5 w-5 text-[#68B5FF]" /></div>
+              <div><p className="text-sm font-bold tracking-tight text-white">EdgePilot <span className="text-[#7ABEFF]">Insights</span></p><p className="text-[10px] text-[#94A3B8]">ACCOUNT INTELLIGENCE · RULE-BASED</p></div>
+            </div>
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${remainingDDDollars <= 0 ? "border-red-500/30 bg-red-500/10 text-red-400" : remainingDDDollars < maxDDDollars * 0.3 ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"}`}>
+              {remainingDDDollars <= 0 ? "Buffer exhausted" : remainingDDDollars < maxDDDollars * 0.3 ? "Buffer low" : "Buffer available"}
+            </span>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">DD buffer*</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(remainingDDDollars)}</p></div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">{accountType === "challenge" ? "Target progress" : "Net P&L"}</p><p className="mt-1 text-lg font-bold tabular-nums text-[#7ABEFF]">{accountType === "challenge" ? fmtPct(targetProgress) : fmt$(totalPnL)}</p></div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">Trade sample</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{trades.length} <span className="text-xs font-normal text-[#94A3B8]">trades</span></p></div>
+          </div>
+          <div className="mt-4 border-l-2 border-[#298DFF] pl-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#75B8FF]">Trading desk brief</p>
+            <p className="mt-1 text-sm font-medium leading-relaxed text-[#E2E8F0]">
+              {remainingDDDollars <= 0
+                ? "Estimated drawdown buffer is exhausted. Review account rules and balances before trading."
+                : remainingDDDollars < maxDDDollars * 0.3
+                ? "Drawdown buffer is limited. Prioritize capital preservation before new exposure."
+                : trades.length < 10
+                ? "Early trading sample. Protect the available drawdown buffer and build a consistent track record."
+                : "Keep position sizing aligned with the remaining drawdown buffer and account objectives."}
+            </p>
+          </div>
+        </div>
+        <div className="relative mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-white/[0.08] pt-3">
+          <p className="max-w-[230px] text-[10px] leading-relaxed text-[#64748B]">*Simplified estimate, not a live daily or trailing drawdown check.</p>
+          <button type="button" onClick={() => router.push("/edgepilot")} className="rounded-lg bg-[#298DFF] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#1D74D9]">Ask EdgePilot →</button>
+        </div>
+      </div>
+      </div>
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-5">
       {/* ── Equity Curve ──────────────────────────────────────────────────── */}
       <div
-        className="rounded-xl p-6 transition-all duration-300"
+        className="xl:col-span-3 rounded-xl p-4 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -513,7 +560,7 @@ export function AccountAnalyticsView({
           borderRadius: borderRadius.xl,
         }}
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -531,7 +578,7 @@ export function AccountAnalyticsView({
               <p className="text-[#94A3B8] text-xs mt-0.5">Cumulative balance over time</p>
             </div>
           </div>
-          <div className="flex gap-6 text-sm">
+          <div className="flex flex-wrap gap-3 text-xs">
             <div className="text-right">
               <p className="text-[#64748B] text-xs mb-0.5">Net P&L</p>
               <p className={`font-bold ${totalPnL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
@@ -566,7 +613,7 @@ export function AccountAnalyticsView({
           </span>
         </div>
 
-        <div className="h-[360px]">
+        <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={equityCurveData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
@@ -634,7 +681,7 @@ export function AccountAnalyticsView({
 
       {/* ── Trading Calendar ──────────────────────────────────────────────── */}
       <div
-        className="rounded-xl p-6 transition-all duration-300"
+        className="xl:col-span-2 rounded-xl p-4 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -642,7 +689,7 @@ export function AccountAnalyticsView({
           borderRadius: borderRadius.xl,
         }}
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -669,7 +716,7 @@ export function AccountAnalyticsView({
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span
-              className="text-[#F8FAFC] font-medium min-w-[160px] text-center"
+              className="text-[#F8FAFC] font-medium min-w-[115px] text-center"
               style={{ fontSize: typography.fontSize.sm }}
             >
               {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
@@ -685,7 +732,7 @@ export function AccountAnalyticsView({
         </div>
 
         {/* Day headers */}
-        <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+        <div className="grid grid-cols-7 gap-1 mb-1.5">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
             <div
               key={d}
@@ -698,15 +745,15 @@ export function AccountAnalyticsView({
         </div>
 
         {/* Day cells */}
-        <div className="grid grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-7 gap-1">
           {monthDays.map((date, idx) => {
-            if (!date) return <div key={idx} className="aspect-square" />;
+            if (!date) return <div key={idx} className="h-11 sm:h-12" />;
             const data = getDayData(date);
             const today = isToday(date);
             return (
               <div
                 key={idx}
-                className="aspect-square rounded-lg p-1.5 flex flex-col transition-all duration-200 hover:scale-[1.04]"
+                className="h-11 sm:h-12 min-w-0 rounded-lg p-1.5 flex flex-col transition-colors duration-200 hover:bg-white/[0.06]"
                 style={{
                   background: data
                     ? data.pnl >= 0
@@ -757,7 +804,7 @@ export function AccountAnalyticsView({
         </div>
 
         {/* Calendar legend */}
-        <div className="flex gap-4 mt-4 text-xs text-[#64748B]">
+        <div className="flex flex-wrap gap-2 mt-3 text-[10px] text-[#64748B]">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded bg-[rgba(16,185,129,0.3)]" /> Profitable day
           </span>
@@ -770,6 +817,7 @@ export function AccountAnalyticsView({
         </div>
       </div>
 
+      </div>
       {/* ── Statistics Grid ───────────────────────────────────────────────── */}
       <div>
         <h3
@@ -778,7 +826,7 @@ export function AccountAnalyticsView({
         >
           Performance Statistics
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           <StatCard icon={BarChart3} label="Total Trades" value={trades.length.toString()} color="#298DFF" sub={`${winningTrades.length}W · ${losingTrades.length}L`} />
           <StatCard icon={TrendingUp} label="Win Rate" value={fmtPct(winRate)} color="#10B981" sub={`${winningTrades.length} winning trades`} />
           <StatCard icon={Calendar} label="Winning Days" value={winningDays.length.toString()} color="#10B981" sub={`of ${dailyEntries.length} trading days`} />
@@ -793,12 +841,12 @@ export function AccountAnalyticsView({
           <StatCard
             icon={AlertTriangle}
             label="Worst Day"
-            value={worstDay ? fmt$(worstDay[1].pnl) : "$0"}
+            value={worstDay ? fmt$(worstDay[1].pnl) : "—"}
             color="#EF4444"
             sub={worstDay ? worstDay[0] : "—"}
           />
           <StatCard icon={DollarSign} label="Avg Daily P&L" value={fmt$(avgDailyPnL)} color={avgDailyPnL >= 0 ? "#10B981" : "#EF4444"} sub="Per trading day" />
-          <StatCard icon={Target} label="Profit Factor" value={profitFactor.toFixed(2)} color="#D4AF37" sub={`${fmt$(avgWin)} avg win`} />
+          <StatCard icon={Target} label="Profit Factor" value={profitFactor === null ? "—" : Number.isFinite(profitFactor) ? profitFactor.toFixed(2) : "∞"} color="#D4AF37" sub={`${fmt$(avgWin)} avg win`} />
           <StatCard icon={TrendingUp} label="Best Trade" value={winningTrades.length > 0 ? fmt$(Math.max(...winningTrades.map((t) => t.pnl))) : "$0"} color="#10B981" />
           <StatCard icon={TrendingDown} label="Worst Trade" value={losingTrades.length > 0 ? fmt$(Math.min(...losingTrades.map((t) => t.pnl))) : "$0"} color="#EF4444" />
           <StatCard icon={TrendingUp} label="Avg Win" value={fmt$(avgWin)} color="#10B981" sub={`${winningTrades.length} trades`} />
@@ -859,7 +907,7 @@ function Header({
                 color: "transparent",
               }}
             >
-              Analytics
+              Manage Account
             </h1>
             <p className="text-[#94A3B8] mt-0.5" style={{ fontSize: typography.fontSize.sm }}>
               {account.accountName} ·{" "}

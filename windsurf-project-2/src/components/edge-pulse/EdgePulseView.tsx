@@ -80,6 +80,7 @@ export function EdgePulseView() {
   // inside the effect) avoids the cascading-render anti-pattern.
   const [briefsByLabel, setBriefsByLabel] = useState<Record<string, EdgePulseBrief | null | undefined>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const selectedDef = EDGE_PULSE_INSTRUMENTS.find((d) => d.label === selectedLabel) ?? EDGE_PULSE_INSTRUMENTS[0];
   const briefState = briefsByLabel[selectedLabel];
@@ -202,15 +203,26 @@ export function EdgePulseView() {
             sessionPosture={brief.structureSessionPosture}
           />
           <MarketStructureSection structure={brief.structure} structureInterpretation={brief.structureInterpretation} />
-          <LiquidityMapSection liquidity={brief.liquidity} />
-          <SupplyDemandSection supplyDemandByTimeframe={brief.supplyDemandByTimeframe} />
-          <InstitutionalLevelsSection institutionalLevels={brief.institutionalLevels} />
-          <MarketCatalystSection catalyst={brief.catalyst} />
-          <MarketContextSection marketContext={brief.marketContext} />
-          <SessionPlaybookSection sessionPlaybook={brief.sessionPlaybook} />
-          <MarketQualitySection marketQuality={brief.marketQuality} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <MarketContextSection marketContext={brief.marketContext} />
+            <MarketCatalystSection catalyst={brief.catalyst} />
+          </div>
           <InstitutionalWarningsSection warnings={brief.warnings} />
-          <TechnicalReasoningSection technicalReasoning={brief.technicalReasoning} />
+          <button type="button" onClick={() => setShowAdvanced(v => !v)} aria-expanded={showAdvanced}
+            className="flex w-full items-center justify-between rounded-xl border border-[#298DFF]/20 bg-[#0D1523] px-5 py-4 text-left transition-colors hover:bg-[#112039]">
+            <span><strong className="block text-sm text-white">Advanced Market Structure</strong><span className="mt-1 block text-xs text-[#94A3B8]">Liquidity · Supply & Demand · Institutional levels · Session playbook · Technical reasoning</span></span>
+            <span className="text-sm font-semibold text-[#80BFFF]">{showAdvanced ? "Collapse −" : "Explore +"}</span>
+          </button>
+          {showAdvanced && (
+            <div className="space-y-4">
+              <LiquidityMapSection liquidity={brief.liquidity} />
+              <SupplyDemandSection supplyDemandByTimeframe={brief.supplyDemandByTimeframe} />
+              <InstitutionalLevelsSection institutionalLevels={brief.institutionalLevels} />
+              <SessionPlaybookSection sessionPlaybook={brief.sessionPlaybook} />
+              <MarketQualitySection marketQuality={brief.marketQuality} />
+              <TechnicalReasoningSection technicalReasoning={brief.technicalReasoning} />
+            </div>
+          )}
         </motion.div>
       )}
     </div>

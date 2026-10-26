@@ -11,11 +11,9 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell,
+  PieChart, Pie, Cell,
 } from "recharts";
 import { useAccounts } from "@/context/AccountsContext";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { getRootChallenges } from "@/lib/challenges";
 import { groupByNormalizedFirm } from "@/lib/propFirms";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
@@ -29,13 +27,6 @@ const fmt$ = (v: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
 
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
-
-const fmtShort = (v: number) => {
-  const abs = Math.abs(v);
-  if (abs >= 1_000_000) return `${v < 0 ? "-" : ""}$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${v < 0 ? "-" : ""}$${(abs / 1_000).toFixed(0)}K`;
-  return fmt$(v);
-};
 
 // ─── Shared card style ────────────────────────────────────────────────────────
 import type { CSSProperties } from "react";
@@ -151,18 +142,6 @@ function DonutChart({ title, data }: { title: string; data: { name: string; valu
   );
 }
 
-// ─── Chart types ──────────────────────────────────────────────────────────────
-// Three business views only — no generic Equity/Cumulative Profit/ROI. Each
-// tracks the combined equity (or withdrawals) of a single account family, so
-// this reads as a portfolio dashboard rather than a trading analytics report.
-type ChartMetric = "challengeCapital" | "fundedCapital" | "payouts";
-
-const METRIC_META: Record<ChartMetric, { label: string; color: string; format: (v: number) => string }> = {
-  challengeCapital: { label: "Challenge Capital",   color: "#298DFF", format: fmt$ },
-  fundedCapital:    { label: "Funded Capital",       color: "#10B981", format: fmt$ },
-  payouts:          { label: "Cumulative Payouts",   color: "#F59E0B", format: fmt$ },
-};
-
 // ─── Activity event ───────────────────────────────────────────────────────────
 interface ActivityEvent {
   id: string;
@@ -206,9 +185,7 @@ export default function Dashboard() {
     getDashboardKPIs,
   } = useAccounts();
 
-  const [metric, setMetric] = useState<ChartMetric>("challengeCapital");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [accountFilter, setAccountFilter] = useState<"all" | "challenge" | "funded" | "instant" | "archived">("all");
   const [openChallenge, setOpenChallenge] = useState(false);
   const [openTrade, setOpenTrade]         = useState(false);
   const [openPayout, setOpenPayout]       = useState(false);
@@ -222,65 +199,6 @@ export default function Dashboard() {
     () => fundedAccounts.reduce((s, a) => s + a.currentProfit, 0),
     [fundedAccounts]
   );
-
-  // ── Chart series ───────────────────────────────────────────────────────────
-  // Three independent equity/withdrawal walks, one per business view — each
-  // account family's trades feed only its own series, so Challenge Capital
-  // and Funded Capital never mix (unlike the old single "equity" line).
-  const allChartData = useMemo(() => {
-    const activeChallengeIds = new Set(challenges.filter((c) => c.status === "active").map((c) => c.id));
-
-    const challengePnlByDate: Record<string, number> = {};
-    const fundedPnlByDate: Record<string, number> = {};
-    trades.forEach((t) => {
-      if (t.accountType === "challenge" && activeChallengeIds.has(t.accountId)) {
-        challengePnlByDate[t.entryDate] = (challengePnlByDate[t.entryDate] || 0) + t.pnl;
-      } else if (t.accountType === "funded") {
-        fundedPnlByDate[t.entryDate] = (fundedPnlByDate[t.entryDate] || 0) + t.pnl;
-      }
-    });
-
-    const paidByDate: Record<string, number> = {};
-    payouts.filter((p) => p.status === "paid").forEach((p) => {
-      paidByDate[p.payoutDate] = (paidByDate[p.payoutDate] || 0) + p.receivedPayoutAmount;
-    });
-
-    const dates = [...new Set([...Object.keys(challengePnlByDate), ...Object.keys(fundedPnlByDate), ...Object.keys(paidByDate)])].sort();
-
-    const challengeBase = challenges.filter((c) => c.status === "active").reduce((s, c) => s + c.accountSize, 0);
-    const fundedBase = fundedAccounts.reduce((s, a) => s + a.initialBalance, 0);
-
-    let challengeCapital = challengeBase;
-    let fundedCapital = fundedBase;
-    let cumPayouts = 0;
-
-    return dates.map((date) => {
-      challengeCapital += challengePnlByDate[date] || 0;
-      fundedCapital    += fundedPnlByDate[date] || 0;
-      cumPayouts       += paidByDate[date] || 0;
-      return { date, challengeCapital, fundedCapital, payouts: cumPayouts };
-    });
-  }, [trades, payouts, fundedAccounts, challenges]);
-
-  const chartData = useMemo(() => {
-    if (!dateFrom && !dateTo) return allChartData;
-    return allChartData.filter((d) => (!dateFrom || d.date >= dateFrom) && (!dateTo || d.date <= dateTo));
-  }, [allChartData, dateFrom, dateTo]);
-
-  // Smart reset: once trades finish loading with zero rows (e.g. right
-  // after "Delete All Trades" in the Journal), snap the chart's date range
-  // back to "All Time" so this page reads like a brand-new account. See
-  // src/app/analytics/page.tsx for why this is done during render rather
-  // than in a useEffect.
-  const tradesEmpty = !tradesLoading && trades.length === 0;
-  const [wasTradesEmpty, setWasTradesEmpty] = useState(false);
-  if (tradesEmpty !== wasTradesEmpty) {
-    setWasTradesEmpty(tradesEmpty);
-    if (tradesEmpty) {
-      setDateFrom("");
-      setDateTo("");
-    }
-  }
 
   // ── Activity feed ──────────────────────────────────────────────────────────
   const activity = useMemo((): ActivityEvent[] => {
@@ -359,7 +277,26 @@ export default function Dashboard() {
     [payouts]
   );
 
-  const cfg = METRIC_META[metric];
+  const currentAccounts = useMemo(() => [
+    ...challenges.filter(c => !c.parentChallengeId && !c.convertedToFunded).map(data => ({ kind: "challenge" as const, data })),
+    ...fundedAccounts.map(data => ({ kind: "funded" as const, data })),
+  ].sort((a, b) => {
+    const priority = (s: string) => s === "active" ? 0 : s === "step1_completed" ? 1 : s === "passed" ? 2 : 3;
+    return priority(a.data.status) - priority(b.data.status);
+  }), [challenges, fundedAccounts]);
+
+
+  const filteredAccounts = currentAccounts.filter((account) => {
+    const archived = account.kind === "challenge"
+      ? ["failed", "refunded"].includes(account.data.status)
+      : ["breached", "closed"].includes(account.data.status);
+    if (accountFilter === "archived") return archived;
+    if (archived) return accountFilter === "all";
+    if (accountFilter === "challenge") return account.kind === "challenge" && account.data.challengeKind !== "instant";
+    if (accountFilter === "funded") return account.kind === "funded" && account.data.fundingPath !== "instant";
+    if (accountFilter === "instant") return account.kind === "funded" && account.data.fundingPath === "instant" || account.kind === "challenge" && account.data.challengeKind === "instant";
+    return true;
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -409,72 +346,89 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* ── SECTION 2 — Performance Chart ── */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}
-        className="relative rounded-xl p-6" style={CARD}>
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-[#298DFF]" />
-            <h3 className="text-[#F8FAFC] font-semibold" style={{ fontSize: typography.fontSize.section }}>Performance</h3>
+      {/* ── SECTION 2 — Account command center ── */}
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-[#298DFF]" />
+              <h2 className="text-xl font-bold text-[#F8FAFC]">Your Accounts</h2>
+              <span className="rounded-full bg-white/[0.07] px-2.5 py-1 text-xs text-[#94A3B8]">{currentAccounts.length}</span>
+            </div>
+            <p className="mt-1 text-sm text-[#94A3B8]">Your challenges and funded accounts, ready to manage.</p>
           </div>
-          {/* Metric tabs */}
-          <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.12)" }}>
-            {(["challengeCapital", "fundedCapital", "payouts"] as ChartMetric[]).map((m) => (
-              <button key={m} type="button" onClick={() => setMetric(m)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 pointer-events-auto"
-                style={{ color: metric === m ? "#F8FAFC" : "#94A3B8", background: metric === m ? `${METRIC_META[m].color}28` : "transparent" }}>
-                {METRIC_META[m].label}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setOpenChallenge(true)} className="rounded-lg bg-[#298DFF] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1D74D9]">+ Add Challenge</button>
+            <button type="button" onClick={() => setOpenFunded(true)} className="rounded-lg border border-[#298DFF]/40 bg-[#298DFF]/10 px-3 py-2 text-xs font-semibold text-[#91C5FF] hover:bg-[#298DFF]/20">+ Add Funded</button>
           </div>
         </div>
-
-        <DateRangeFilter
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          onChange={(range) => { setDateFrom(range.dateFrom); setDateTo(range.dateTo); }}
-          className="mb-6"
-        />
-
-        {/* Chart or empty state */}
-        {allChartData.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-center">
-            <BarChart3 className="w-10 h-10 text-[#475569] mb-3" />
-            <p className="text-[#94A3B8]">No trade data yet</p>
-            <p className="text-[#64748B] text-xs mt-1">Add trades to see performance</p>
-          </div>
-        ) : chartData.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-center">
-            <BarChart3 className="w-10 h-10 text-[#475569] mb-3" />
-            <p className="text-[#94A3B8]">No data in selected period</p>
-            <p className="text-[#64748B] text-xs mt-1">Try "All Time" or a wider range</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Account filters">
+          {([
+            ["all", "All Accounts"], ["challenge", "Challenges"], ["funded", "Funded"],
+            ["instant", "Instant"], ["archived", "Archived"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setAccountFilter(id)}
+              aria-pressed={accountFilter === id}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${accountFilter === id ? "border-[#298DFF]/60 bg-[#298DFF]/20 text-[#91C5FF]" : "border-white/10 text-[#94A3B8] hover:bg-white/5 hover:text-white"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {filteredAccounts.length === 0 ? (
+          <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-[#0B111D] px-6 py-14 text-center">
+            <Target className="mb-4 h-10 w-10 text-[#64748B]" />
+            <h3 className="text-lg font-semibold text-white">{currentAccounts.length ? "No accounts in this category" : "Your account journey starts here"}</h3>
+            <p className="mt-2 max-w-md text-sm text-[#94A3B8]">Add a challenge or funded account to see its progress and risk position at a glance.</p>
+            <button type="button" onClick={() => setOpenChallenge(true)}
+              className="mt-5 rounded-xl bg-[#298DFF] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1D74D9]">+ New Challenge</button>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-              <defs>
-                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={cfg.color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={cfg.color} stopOpacity={0}   />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.07)" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false}
-                tickFormatter={(v: string) => v.slice(5)} />
-              <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false}
-                tickFormatter={(v: number) => fmtShort(v)} />
-              <Tooltip
-                contentStyle={{ background: "rgba(11,18,32,0.95)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: "12px", color: "#F8FAFC" }}
-                formatter={((value: number) => [cfg.format(value), cfg.label]) as never}
-              />
-              <ReferenceLine y={0} stroke="rgba(148,163,184,0.2)" strokeDasharray="3 3" />
-              <Area type="monotone" dataKey={metric} stroke={cfg.color} strokeWidth={2}
-                fill="url(#areaGrad)" dot={false} activeDot={{ r: 4, fill: cfg.color }} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {filteredAccounts.map((account, index) => {
+              const isChallenge = account.kind === "challenge";
+              const name = account.data.accountName;
+              const firm = account.data.propFirmName;
+              const size = account.data.accountSize;
+              const profit = account.data.currentProfit;
+              const remaining = account.data.remainingDrawdown;
+              const status = account.data.status;
+              const statusColor = status === "active" ? "#10B981" : status === "passed" || status === "step1_completed" ? "#60A5FA" : status === "failed" || status === "breached" ? "#EF4444" : "#94A3B8";
+              const phase = isChallenge ? (account.data.challengeKind === "instant" ? "Instant" : account.data.challengeStep === "2" ? "Phase 2" : account.data.challengeKind === "2-step" ? "Phase 1" : "Challenge") : (account.data.fundingPath === "instant" ? "Instant Funded" : "Funded");
+              const equity = isChallenge ? size + profit : account.data.currentBalance;
+              return (
+                <motion.article key={account.kind + account.data.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.05, 0.3) }}
+                  className="group rounded-2xl border border-white/[0.09] bg-[#0D121C] p-5 transition-all duration-200 hover:border-[#298DFF]/40 hover:bg-[#101925]">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[#64748B]">{firm}</p>
+                      <h3 className="mt-1 truncate text-lg font-semibold text-[#F8FAFC]">{name}</h3>
+                      <p className="mt-1 text-xs text-[#94A3B8]">{phase} · {isChallenge ? "Evaluation" : "Funded Account"}</p>
+                    </div>
+                    <span className="rounded-full px-3 py-1 text-xs font-semibold capitalize" style={{ color: statusColor, background: statusColor + "19", border: "1px solid " + statusColor + "35" }}>{status.replaceAll("_", " ")}</span>
+                  </div>
+                  <div className="my-5 h-px bg-white/[0.07]" />
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
+                    <div><p className="text-xs text-[#94A3B8]">Starting Capital</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(size)}</p></div>
+                    <div><p className="text-xs text-[#94A3B8]">Current Balance</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(equity)}</p></div>
+                    <div><p className="text-xs text-[#94A3B8]">Net P&L</p><p className="mt-1 text-lg font-bold tabular-nums" style={{ color: profit >= 0 ? "#10B981" : "#EF4444" }}>{profit > 0 ? "+" : ""}{fmt$(profit)}</p></div>
+                    <div className="col-span-2 sm:col-span-3">
+                      <div className="flex justify-between gap-3 text-xs"><span className="text-[#94A3B8]">Remaining drawdown</span><span className="font-semibold tabular-nums" style={{ color: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#CBD5E1" }}>{fmt$(remaining)}</span></div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full" style={{ width: Math.max(0, Math.min(100, remaining / (account.data.maxDrawdown || 1) * 100)) + "%", background: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#10B981" }} /></div>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => router.push(isChallenge ? `/challenges/${account.data.id}` : `/funded/${account.data.id}`)}
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#298DFF]/30 bg-[#298DFF]/15 px-4 py-3 text-sm font-semibold text-[#8FC2FF] transition group-hover:bg-[#298DFF] group-hover:text-white">
+                    Manage Account <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => router.push(isChallenge ? "/challenges" : "/funded")}
+                    className="mt-2 w-full py-1.5 text-xs font-medium text-[#64748B] hover:text-[#CBD5E1]">Advanced account management</button>
+                </motion.article>
+              );
+            })}
+          </div>
         )}
-      </motion.div>
+      </section>
 
       {/* ── SECTION 3+4+5 — Activity | Best Account + Quick Actions ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -49,7 +49,7 @@ export function TraderDNASections({
   tradesByInstrument: Record<string, number>;
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <TradingIdentityCard
         identity={identity}
         directionWinRates={directionWinRates}

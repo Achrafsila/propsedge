@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { BrainCircuit, Sparkles } from "lucide-react";
+import { EdgePilotAvatar } from "@/components/edgepilot/EdgePilotAvatar";
 import { useAccounts } from "@/context/AccountsContext";
 import { useTradingMode } from "@/context/TradingModeContext";
 import { getTradesForTradingMode } from "@/lib/tradingMode";
@@ -35,7 +37,6 @@ import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
 import { TraderDNASections } from "@/components/analytics/TraderDNASections";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
-import { DataConfidenceCard } from "@/components/analytics/DataConfidenceCard";
 import { RadialGauge } from "@/components/analytics/visualizations/RadialGauge";
 import { CountUpNumber } from "@/components/analytics/visualizations/CountUpNumber";
 
@@ -48,6 +49,7 @@ export default function GlobalAnalyticsPage() {
   const { challenges, fundedAccounts, trades, challengesLoading, fundedAccountsLoading, tradesLoading } = useAccounts();
   const { tradingMode } = useTradingMode();
   const [filters, setFilters] = useState<GlobalFilters>(DEFAULT_GLOBAL_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const isLoading = challengesLoading || fundedAccountsLoading || tradesLoading;
 
@@ -216,8 +218,9 @@ export default function GlobalAnalyticsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <GlobalFilterBar
+    <div className="space-y-5">
+      <button type="button" onClick={() => setFiltersOpen(v => !v)} aria-expanded={filtersOpen} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#0E1727] px-4 py-3 text-sm font-medium text-[#C6DBF3]"><span>Filters {isFiltered ? "· Custom selection" : "· All data"}</span><span>{filtersOpen ? "Hide −" : "Configure +"}</span></button>
+      {filtersOpen && <GlobalFilterBar
         filters={filters}
         onChange={patchFilters}
         onReset={resetFilters}
@@ -226,13 +229,13 @@ export default function GlobalAnalyticsPage() {
         instrumentOptions={instrumentOptions}
         sessionOptions={sessionOptions}
         isFiltered={isFiltered}
-      />
+      />}
 
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative rounded-2xl p-8 overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6"
+        className="relative rounded-2xl px-6 py-5 overflow-hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6"
         style={{
           background: "rgba(16,24,40,0.5)",
           backdropFilter: "blur(24px)",
@@ -291,7 +294,19 @@ export default function GlobalAnalyticsPage() {
         </div>
       </motion.div>
 
-      <DataConfidenceCard confidence={dataConfidence} />
+
+
+      <div className="relative overflow-hidden rounded-2xl border border-[#298DFF]/20 bg-gradient-to-r from-[#112541] via-[#0D1A2B] to-[#0A1220] p-4 sm:p-5">
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <EdgePilotAvatar state="reviewing" size={112} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2"><BrainCircuit className="h-4 w-4 text-[#7DBCFF]"/><h2 className="text-base font-bold text-white">Trader DNA Coach</h2><span className="rounded-full border border-[#6FAEFF]/25 px-2 py-0.5 text-[10px] font-semibold text-[#9CCFFF]">Groq · Planned</span></div>
+            <p className="mt-2 max-w-3xl text-sm text-[#C0CFE2]">Explore your trading identity, the sessions where you perform best, your execution habits, and what your history does not yet prove.</p>
+            <p className="mt-1 text-xs text-[#8EA5BF]">We will define its coaching role and Groq API access together before enabling conversation.</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-[#9DC6F4]"><Sparkles className="h-4 w-4"/> Behavioural intelligence</div>
+        </div>
+      </div>
 
       {orphanedTrades.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

@@ -225,11 +225,13 @@ export function getTraderEdge(trades: Trade[]): TraderEdge {
     weekdayResult,
     "This weekday currently delivers your strongest average expectancy."
   );
-  const bestSetup = buildBestSetupInsight(setupResult);
+  const bestSetup = setupResult === null && sampleSize > 0
+    ? { label: "Best Setup", value: "No qualified setup identified", detail: "", metricLabel: "", narrative: "Record a setup for each trade to analyse performance by setup.", sampleSize: 0 }
+    : buildBestSetupInsight(setupResult);
 
   return {
     bestSetup,
-    executiveSummary: buildExecutiveSummary(setupResult),
+    executiveSummary: setupResult === null && sampleSize > 0 ? "No qualified setup identified yet. Tag your trade setups to unlock this insight." : buildExecutiveSummary(setupResult),
     bestSession,
     bestInstrument,
     bestWeekday,

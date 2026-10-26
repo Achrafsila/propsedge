@@ -93,7 +93,7 @@ function AccountHealthCard({
       <div className="mt-auto space-y-0.5">
         <Stat label="Current Equity" value={equity !== null ? fmt$(equity) : "—"} />
         <Stat label="Risk" value={recommendedRisk.amount !== null ? fmt$(recommendedRisk.amount) : "—"} />
-        <Stat label="Buffer" value={tightestBuffer !== null ? fmt$(tightestBuffer) : "—"} />
+        <Stat label="Tightest risk buffer (daily / max)" value={tightestBuffer !== null ? fmt$(tightestBuffer) : "—"} />
       </div>
     </CardShell>
   );

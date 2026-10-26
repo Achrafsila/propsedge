@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAccounts } from "@/context/AccountsContext";
 import { useTodayObjective } from "@/context/TodayObjectiveContext";
 import { useDailyContracts } from "@/context/DailyContractsContext";
@@ -15,10 +15,7 @@ import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { getAICoachRecommendation, getAccountRiskStates, getAccountBriefings, AccountBriefing } from "@/lib/analytics/aiCoach";
 import { computeDeviations, computeDailyAccountability } from "@/lib/analytics/accountabilityEngine";
 import { getAccountDecision, Decision } from "@/lib/analytics/decisionEngine";
-import { getAccountHealthState, getBiggestRisk, getBuddyAdvice, getHeroQuote, getKeyTakeaway } from "@/lib/analytics/buddyAdvice";
-import { CockpitHero } from "@/components/edgepilot/CockpitHero";
-import { ExecutiveCardsRow } from "@/components/edgepilot/ExecutiveCardsRow";
-import { DetailedAnalysis } from "@/components/edgepilot/DetailedAnalysis";
+import { EdgeIntelligenceOverview } from "@/components/edgepilot/EdgeIntelligenceOverview";
 
 // ============================================================
 // PropEdge — EdgePilot page (V3: premium executive cockpit)
@@ -43,6 +40,7 @@ export default function EdgePilotPage() {
     fundedAccountsLoading,
     tradesLoading,
   } = useAccounts();
+  const [selectedAccountKey, setSelectedAccountKey] = useState<string | null>(null);
   const { objective } = useTodayObjective();
   const { getContract, contractsLoading } = useDailyContracts();
 
@@ -128,24 +126,17 @@ export default function EdgePilotPage() {
       .decision;
   }, [accountEvaluations]);
 
-  const allDeviationsToday = useMemo(() => accountEvaluations.flatMap((e) => e.accountability.deviations), [accountEvaluations]);
-
   // ── Presentation-only selection (V3 cockpit) ──────────────────────────
   // Everything below just picks among the values already computed above —
   // no new calculation. The "primary" account reuses the exact same
   // "worst decision wins" account V2's hero already used.
-  const primaryEvaluation = accountEvaluations.find((e) => e.decision.decision === worstDecision) ?? accountEvaluations[0] ?? null;
+  const activeEvaluation = selectedAccountKey
+    ? accountEvaluations.find(e => e.briefing.account.type + ":" + e.briefing.account.id === selectedAccountKey)
+    : null;
+  const primaryEvaluation = activeEvaluation ?? accountEvaluations.find((e) => e.decision.decision === worstDecision) ?? accountEvaluations[0] ?? null;
   const primaryRiskState = primaryEvaluation
     ? riskStates.find((s) => s.account.type === primaryEvaluation.briefing.account.type && s.account.id === primaryEvaluation.briefing.account.id) ?? null
     : null;
-  const healthState = primaryEvaluation ? getAccountHealthState(primaryEvaluation.briefing.mode) : null;
-  const biggestRisk = getBiggestRisk(primaryEvaluation?.accountability.deviations ?? [], discipline);
-  const buddyAdvice = primaryEvaluation
-    ? getBuddyAdvice(primaryEvaluation.decision.decision, primaryEvaluation.briefing.mode, biggestRisk)
-    : "Add an account to get today's briefing.";
-  const heroQuote = getHeroQuote(today);
-  const keyTakeaway = getKeyTakeaway(biggestRisk, today);
-
   if (isLoading) {
     return (
       <div className="flex justify-center py-24">
@@ -154,38 +145,18 @@ export default function EdgePilotPage() {
     );
   }
 
-  return (
-    <div className="space-y-8">
-      <CockpitHero
-        primaryEvaluation={primaryEvaluation}
-        recommendedRisk={coach.recommendedRisk}
-        nextBestAction={coach.nextBestAction}
-        buddyAdvice={buddyAdvice}
-        heroQuote={heroQuote}
-        healthState={healthState}
-      />
-
-      <ExecutiveCardsRow
-        primaryEvaluation={primaryEvaluation}
-        healthState={healthState}
-        riskState={primaryRiskState}
-        recommendedRisk={coach.recommendedRisk}
-        biggestRisk={biggestRisk}
-        keyTakeaway={keyTakeaway}
-      />
-
-      <DetailedAnalysis
-        accountEvaluations={accountEvaluations}
-        riskStates={riskStates}
-        coach={coach}
-        challenges={challenges}
-        fundedAccounts={fundedAccounts}
-        personalAccounts={[]}
-        trades={trades}
-        discipline={discipline}
-        edge={edge}
-        allDeviationsToday={allDeviationsToday}
-      />
-    </div>
-  );
+  return <EdgeIntelligenceOverview
+    briefing={primaryEvaluation?.briefing ?? null}
+    decision={primaryEvaluation?.decision.decision ?? null}
+    accountOptions={accountEvaluations.map(e => ({ key: e.briefing.account.type + ":" + e.briefing.account.id, name: e.briefing.account.name, kind: e.briefing.account.type }))}
+    selectedAccountKey={primaryEvaluation ? primaryEvaluation.briefing.account.type + ":" + primaryEvaluation.briefing.account.id : ""}
+    onSelectAccount={setSelectedAccountKey}
+    risk={primaryRiskState}
+    coach={coach}
+    confidence={dataConfidence}
+    identity={identity}
+    habits={habits}
+    edge={edge}
+    blindSpots={blindSpots}
+  />;
 }

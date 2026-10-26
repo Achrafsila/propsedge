@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Trophy,
-  Wallet,
-  BookOpen,
   BarChart3,
+  LayoutDashboard,
+  BookOpen,
   DollarSign,
   Settings,
   Shield,
@@ -29,13 +27,11 @@ export function Sidebar() {
   // Prop Firm nav — unchanged from before Personal Capital mode existed.
   const propFirmItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Challenges", href: "/challenges", icon: Trophy },
-    { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
-    { name: "EdgePilot", href: "/edgepilot", icon: Compass },
+    { name: "Edge Intelligence", href: "/edgepilot", icon: Compass },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];

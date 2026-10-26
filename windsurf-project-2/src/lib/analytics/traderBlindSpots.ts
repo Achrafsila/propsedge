@@ -246,9 +246,9 @@ interface LeakCandidate {
 }
 
 function pickBiggestLeak(candidates: LeakCandidate[]): BlindSpotInsight {
-  const available = candidates.filter((c) => c.sampleSize > 0);
+  const available = candidates.filter((c) => c.sampleSize >= 10 && c.expectancy < 0);
   if (available.length === 0) {
-    return { label: "Biggest Leak", value: NO_TRADES_YET, metricLabel: "", narrative: "", sampleSize: 0 };
+    return { label: "Biggest Leak", value: "No confirmed leak", metricLabel: "", narrative: "No negative-expectancy context has enough observations to qualify as a statistical weakness.", sampleSize: 0 };
   }
 
   const worst = available.reduce((a, b) => (b.expectancy < a.expectancy ? b : a));
@@ -269,6 +269,7 @@ function pickBiggestLeak(candidates: LeakCandidate[]): BlindSpotInsight {
 // ranking the card actually shows.
 
 function buildExecutiveSummary(biggestLeak: BlindSpotInsight): string {
+  if (biggestLeak.value === "No confirmed leak") return "No statistically supported blind spot yet.";
   if (biggestLeak.value === NO_TRADES_YET) return NO_TRADES_YET;
   return `Your biggest statistical leak currently comes from ${biggestLeak.value}.`;
 }

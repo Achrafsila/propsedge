@@ -63,7 +63,6 @@ export function CockpitHero({
   recommendedRisk,
   nextBestAction,
   buddyAdvice,
-  heroQuote,
   healthState,
 }: {
   primaryEvaluation: PrimaryEvaluation | null;
@@ -87,7 +86,7 @@ export function CockpitHero({
         className="relative"
       >
         {/* ── Wordmark + date ── */}
-        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-8">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-5">
           <h1
             style={{
               fontSize: typography.fontSize.display,
@@ -108,20 +107,15 @@ export function CockpitHero({
         </div>
 
         {/* ── Avatar | Quote + Pilot's Advice | Decision ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)_auto] gap-8 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)_minmax(280px,0.9fr)] gap-5 items-stretch">
           {/* Avatar column — the official EdgePilot character, mode-driven */}
           <div className="flex lg:flex-col items-center justify-center">
-            <EdgePilotAvatar state={healthState?.avatarState ?? "confident"} size={300} priority />
+            <EdgePilotAvatar state={healthState?.avatarState ?? "confident"} size={210} priority />
           </div>
 
           {/* Quote + Pilot's Advice */}
           <div className="flex flex-col justify-center gap-5 min-w-0">
-            <p
-              className="text-[#CBD5E1] italic"
-              style={{ fontSize: typography.fontSize["2xl"], lineHeight: typography.lineHeight.relaxed }}
-            >
-              &ldquo;{heroQuote}&rdquo;
-            </p>
+            <p className="text-[#94A3B8] text-sm">Your trading desk brief · contextual guidance</p>
             <div
               className="rounded-2xl p-6"
               style={{ background: glassmorphism.card.background, backdropFilter: glassmorphism.card.backdropBlur, border: "1px solid rgba(148,163,184,0.08)", borderRadius: borderRadius["2xl"] }}
@@ -140,7 +134,7 @@ export function CockpitHero({
 
           {/* Decision — neutral glass panel, colour kept on the badge + a subtle border/glow */}
           <div
-            className="rounded-2xl p-7 flex flex-col justify-center lg:min-w-[340px]"
+            className="rounded-2xl p-5 flex flex-col justify-center min-w-0"
             style={{
               background: glassmorphism.card.background,
               backdropFilter: glassmorphism.card.backdropBlur,
