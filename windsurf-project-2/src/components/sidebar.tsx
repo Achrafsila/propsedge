@@ -5,16 +5,19 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   LayoutDashboard,
+  Wallet,
   BookOpen,
   DollarSign,
   Settings,
   Shield,
+  LineChart,
   Compass,
   Activity
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
+import { useTradingMode } from "@/context/TradingModeContext";
 import { getCapitalEligibleChallenges } from "@/lib/challenges";
 import { borderRadius } from "@/design-system";
 import { Logo } from "@/components/common/Logo";
@@ -23,6 +26,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { challenges, fundedAccounts } = useAccounts();
   const { isAdmin } = useAdmin();
+  const { isPropFirmMode, isPersonalCapitalMode, setTradingMode } = useTradingMode();
 
   // Prop Firm nav — unchanged from before Personal Capital mode existed.
   const propFirmItems = [
@@ -36,7 +40,20 @@ export function Sidebar() {
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
-  const sidebarItems = propFirmItems;
+  // Personal Capital nav — hides Challenges/Funded Accounts/Payouts/Admin,
+  // adds Portfolio and Analytics (Trader DNA stays, it's not Prop-Firm-specific).
+  const personalCapitalItems = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Portfolio", href: "/portfolio", icon: Wallet },
+    { name: "Trade Journal", href: "/journal", icon: BookOpen },
+    { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
+    { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
+    { name: "Analytics", href: "/portfolio-analytics", icon: LineChart },
+    { name: "Edge Intelligence", href: "/edgepilot", icon: Compass },
+    { name: "Settings", href: "/settings", icon: Settings },
+  ];
+
+  const sidebarItems = isPersonalCapitalMode ? personalCapitalItems : propFirmItems;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -61,6 +78,40 @@ export function Sidebar() {
         <Link href="/welcome" className="block transition-all duration-200 group-hover:drop-shadow-[0_0_14px_rgba(41,141,255,0.55)]">
           <Logo size="medium" variant="full" src="/logo-sidebar.png" />
         </Link>
+      </div>
+
+      {/* Trading Mode — segmented control, global switch between Prop Firm
+          and Personal Capital. Prop Firm's selected state keeps the app's
+          existing brand blue; Personal Capital's selected state is the only
+          place this control uses the emerald accent. */}
+      <div className="px-4 py-3 border-b border-[rgba(148,163,184,0.1)]">
+        <div
+          className="flex items-center gap-1 p-1 rounded-full"
+          style={{ background: 'rgba(148,163,184,0.06)', border: '1px solid rgba(148,163,184,0.1)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setTradingMode("prop-firm")}
+            className="flex-1 text-xs font-semibold rounded-full py-1.5 transition-all duration-200"
+            style={{
+              background: isPropFirmMode ? 'rgba(41,141,255,0.18)' : 'transparent',
+              color: isPropFirmMode ? '#298DFF' : '#94A3B8',
+            }}
+          >
+            Prop Firm
+          </button>
+          <button
+            type="button"
+            onClick={() => setTradingMode("personal-capital")}
+            className="flex-1 text-xs font-semibold rounded-full py-1.5 transition-all duration-200"
+            style={{
+              background: isPersonalCapitalMode ? 'rgba(16,185,129,0.18)' : 'transparent',
+              color: isPersonalCapitalMode ? '#10B981' : '#94A3B8',
+            }}
+          >
+            Personal
+          </button>
+        </div>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
