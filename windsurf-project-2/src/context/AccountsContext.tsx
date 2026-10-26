@@ -208,6 +208,26 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       .finally(() => setPayoutsLoading(false));
   }, [user?.id, authLoading]);
 
+  // A payout is a cash withdrawal, not a trading loss. The firm's requested
+  // withdrawal leaves the trading balance only after the payout is paid.
+  // The smaller received amount is the trader's cash receipt after the split.
+  // Derive from source records to keep refreshes, edits and deletes idempotent.
+  useEffect(() => {
+    if (!user || fundedAccountsLoading || tradesLoading || payoutsLoading) return;
+    for (const account of fundedAccounts) {
+      const closedTradePnL = dbTrades.filter(t => t.accountId === account.id && t.accountType === "funded")
+        .reduce((total,t)=>total+t.pnl,0);
+      const debited = payouts.filter(p => p.fundedAccountId === account.id && p.status === "paid")
+        .reduce((total,p)=>total+p.requestedPayoutAmount,0);
+      const expected = Math.round((account.initialBalance + closedTradePnL - debited) * 100) / 100;
+      if (Math.abs(account.currentBalance - expected) > 0.005) {
+        setFundedAccounts(previous=>previous.map(a=>a.id===account.id?{...a,currentBalance:expected}:a));
+        updateFundedAccountDb(account.id,{currentBalance:expected})
+          .catch(err=>console.error("Failed to sync payout-adjusted balance:",err));
+      }
+    }
+  }, [user?.id, fundedAccounts, dbTrades, payouts, fundedAccountsLoading, tradesLoading, payoutsLoading]);
+
   // ── Orphan trade auto-cleanup ──────────────────────────────────────────────
   // Runs once per login, after challenges/funded accounts/trades have all
   // loaded. If any trade's accountId/accountType no longer resolves to a
@@ -427,7 +447,9 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       const lossAmount = Math.max(0, -totalPnL);
       const remainingDollars = Math.max(0, maxDDDollars - lossAmount);
       const newCurrentProfit = totalPnL;
-      const newCurrentBalance = account.initialBalance + totalPnL;
+      const paidWithdrawals = payouts.filter(p=>p.fundedAccountId===accountId && p.status==="paid")
+        .reduce((sum,p)=>sum+p.requestedPayoutAmount,0);
+      const newCurrentBalance = account.initialBalance + totalPnL - paidWithdrawals;
       const newRemainingDrawdown = account.accountSize > 0
         ? (remainingDollars / account.accountSize) * 100
         : 0;
