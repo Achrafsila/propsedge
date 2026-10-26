@@ -115,7 +115,7 @@ function TeamPerformance({ teamId }: { teamId: string }) {
       : t[ranking];
     return score(b) - score(a) || a.ownerId.localeCompare(b.ownerId);
   });
-  const topPnl = [...stats.traders].sort((a,b)=>b.pnl-a.pnl)[0];
+  const topPnl = [...stats.traders].filter(t=>t.trades>0 && t.pnl>0).sort((a,b)=>b.pnl-a.pnl)[0];
   // Funded achievement: count accounts that passed an evaluation, not purchases
   // of instant/direct funded accounts. No winner until there is a conversion.
   const fundedAchievements = stats.traders.map(t=>({
@@ -123,13 +123,13 @@ function TeamPerformance({ teamId }: { teamId: string }) {
     fundedConversions: stats.unique.filter(a=>a.ownerId===t.ownerId && a.type==="funded" && a.fundingPath==="evaluation").length,
   }));
   const topFunder = fundedAchievements.filter(t=>t.fundedConversions>0).sort((a,b)=>b.fundedConversions-a.fundedConversions || b.pnl-a.pnl)[0];
-  const topPayout = [...stats.traders].sort((a,b)=>b.payouts-a.payouts)[0];
+  const topPayout = [...stats.traders].filter(t=>t.payouts>0).sort((a,b)=>b.payouts-a.payouts)[0];
   const topConsistency = [...stats.traders].filter(t=>t.trades>=5)
     .sort((a,b)=>(b.wins/b.trades)-(a.wins/a.trades)||b.trades-a.trades)[0];
   const accolades = [
     {title:"P&L Champion", kicker:"TOP TRADER",name:topPnl?traderName(topPnl.ownerId):"No results yet",metric:topPnl?money(topPnl.pnl):"—",note:"Highest realized trading P&L",icon:Trophy,accent:"text-amber-300",border:"border-amber-400/25"},
     {title:"Funding Legend",kicker:"TOP ACCOUNT FUNDER",name:topFunder?traderName(topFunder.ownerId):"The funding throne is still empty 👑",metric:topFunder?`${topFunder.fundedConversions} funded`:"🚀",note:topFunder?"Most evaluations successfully converted into funded accounts":"First trader to pass a challenge claims the crown!",icon:Crown,accent:"text-violet-300",border:"border-violet-400/25"},
-    {title:"Payout Hunter",kicker:"CASHOUT LEADER",name:topPayout?traderName(topPayout.ownerId):"No results yet",metric:topPayout?money(topPayout.payouts):"—",note:"Most cash actually received",icon:DollarSign,accent:"text-emerald-300",border:"border-emerald-400/25"},
+    {title:"Payout Hunter",kicker:"CASHOUT LEADER",name:topPayout?traderName(topPayout.ownerId):"No payouts yet 💸",metric:topPayout?money(topPayout.payouts):"—",note:topPayout?"Most cash actually received":"The first paid payout unlocks this award!",icon:DollarSign,accent:"text-emerald-300",border:"border-emerald-400/25"},
     {title:"Steady Hands",kicker:"CONSISTENCY AWARD",name:topConsistency?traderName(topConsistency.ownerId):"5 trades required",metric:topConsistency?`${(topConsistency.wins/topConsistency.trades*100).toFixed(0)}% wins`:"—",note:"Highest win rate · minimum 5 closed trades",icon:Medal,accent:"text-sky-300",border:"border-sky-400/25"},
   ];
   const invested = costsComplete ? costs : null;
