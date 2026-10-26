@@ -30,6 +30,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
     fundingDate: new Date().toISOString().split('T')[0],
     initialBalance: "",
     maxDrawdown: "",
+    purchaseCost: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -48,6 +49,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
       maxDrawdown: parseFloat(formData.maxDrawdown),
       remainingDrawdown: parseFloat(formData.maxDrawdown),
       status: "active",
+      purchaseCost: formData.sourceChallengeId || formData.purchaseCost.trim() === "" ? undefined : Number(formData.purchaseCost),
       // This form doesn't collect an origin — a linked source challenge
       // means it really did come from an evaluation; otherwise it's a
       // manually-entered account with no more specific origin to record.
@@ -68,7 +70,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] max-w-md">
+      <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] max-w-md max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain [scrollbar-width:thin] sm:max-h-[90dvh]">
         <DialogHeader>
           <DialogTitle className="text-[#F8FAFC]">Add Funded Account</DialogTitle>
         </DialogHeader>
@@ -109,6 +111,17 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
               ))}
             </select>
           </div>
+          {!formData.sourceChallengeId && (
+            <div className="space-y-2">
+              <Label htmlFor="purchaseCost" className="text-[#8B97A8]">Account Purchase Cost ($) (Optional)</Label>
+              <Input id="purchaseCost" type="number" min="0" step="0.01" inputMode="decimal"
+                value={formData.purchaseCost}
+                onChange={(e) => setFormData({ ...formData, purchaseCost: e.target.value })}
+                placeholder="e.g., 249.00 (leave blank if free)"
+                className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#00C875]" />
+              <p className="text-xs text-[#8B97A8]">For directly funded accounts. If converted from a challenge, the original challenge cost is tracked separately.</p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="accountSize" className="text-[#8B97A8]">Account Size ($)</Label>
             <Input
@@ -154,7 +167,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
               className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#00C875] focus:outline-none focus:ring-2 focus:ring-[#00C875]/20 transition-all"
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 z-10 !mx-[-1rem] !mb-[-1rem] border-t border-[#1A2942] bg-[#080D1B] px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-[#1A2942] text-[#F8FAFC] hover:bg-[#111C33] hover:border-[#00C875] rounded-xl">
               Cancel
             </Button>
