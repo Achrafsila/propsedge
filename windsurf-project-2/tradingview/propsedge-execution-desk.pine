@@ -1,0 +1,257 @@
+//@version=6
+// Or : tendance multi-unités de temps et entrées proposées
+// À ajouter sur le graphique PEPPERSTONE:XAUUSD (fonctionne sur tout symbole).
+// Outil d'aide à la lecture du marché, pas un conseil en investissement.
+indicator("PropsEdge Execution Desk — Entrées & Playbook", shorttitle = "PropsEdge Desk", overlay = true, max_lines_count = 100, max_labels_count = 100, max_boxes_count = 20)
+
+// ───────────── Réglages ─────────────
+rr        = input.float(2.0, "Ratio take profit (1 : x)", minval = 0.5, step = 0.5)
+detail    = input.string("Auto", "Proposition détaillée (zones SL / TP)", options = ["Auto", "Marché", "Repli / confirmation", "Cassure", "Aucune"])
+showSig   = input.bool(true, "Flèches de signaux")
+showEma   = input.bool(true, "EMA 20 / 50 / 200")
+showTab   = input.bool(true, "Tableau de tendance")
+showProps = input.bool(true, "Entrées proposées")
+playbook = input.bool(true, "Filtre playbook : structure + réintégration / confirmation")
+showStructure = input.bool(true, "Niveaux de liquidité précédents (PDH/PDL)")
+tabPos    = input.string("Haut droite", "Position du tableau", options = ["Haut droite", "Haut gauche", "Bas droite", "Bas gauche"])
+
+colBull = #1F8A55
+colBear = #C2412F
+colFlat = #7A8494
+colGold = #D9B44A
+
+// ───────────── Tendance d'une unité de temps ─────────────
+// 5 critères à +1 / -1, atténués par l'ADX (même logique que l'application web)
+f_trend() =>
+    e20  = ta.ema(close, 20)
+    e50  = ta.ema(close, 50)
+    e200 = ta.ema(close, 200)
+    s1 = close > e200 ? 1 : -1
+    s2 = e50 > e200 ? 1 : -1
+    s3 = e20 > e50 ? 1 : -1
+    s4 = e50 - e50[10] > 0 ? 1 : -1
+    hiA = ta.highest(high, 20)
+    loA = ta.lowest(low, 20)
+    hiB = hiA[20]
+    loB = loA[20]
+    s5 = hiA > hiB and loA > loB ? 1 : hiA < hiB and loA < loB ? -1 : 0
+    raw = s1 + s2 + s3 + s4 + s5
+    [diP, diM, adx] = ta.dmi(14, 14)
+    f = adx >= 25 ? 1.0 : adx >= 20 ? 0.8 : 0.6
+    [raw, raw / 5.0 * f, adx, ta.rsi(close, 14)]
+
+[r5,   sc5,   adx5,   rsi5]   = request.security(syminfo.tickerid, "5",   f_trend())
+[r15,  sc15,  adx15,  rsi15]  = request.security(syminfo.tickerid, "15",  f_trend())
+[r30,  sc30,  adx30,  rsi30]  = request.security(syminfo.tickerid, "30",  f_trend())
+[r60,  sc60,  adx60,  rsi60]  = request.security(syminfo.tickerid, "60",  f_trend())
+[r240, sc240, adx240, rsi240] = request.security(syminfo.tickerid, "240", f_trend())
+
+// Score global pondéré : les grandes unités pèsent plus
+g    = (nz(sc5) * 1 + nz(sc15) * 1.5 + nz(sc30) * 2 + nz(sc60) * 2.5 + nz(sc240) * 3) / 10.0
+gPct = math.round(g * 100)
+d    = gPct >= 15 ? 1 : gPct <= -15 ? -1 : 0
+
+f_label(float raw, float adx) =>
+    string t = na(raw) ? "Pas de données" : raw >= 4 ? "Haussier fort" : raw >= 2 ? "Haussier" : raw <= -4 ? "Baissier fort" : raw <= -2 ? "Baissier" : "Sans direction"
+    not na(adx) and adx < 20 and math.abs(nz(raw)) < 5 ? t + ", plat" : t
+
+f_col(float raw) =>
+    na(raw) ? colFlat : raw >= 2 ? colBull : raw <= -2 ? colBear : colFlat
+
+// ───────────── EMA et signaux sur l'unité du graphique ─────────────
+e20  = ta.ema(close, 20)
+e50  = ta.ema(close, 50)
+e200 = ta.ema(close, 200)
+atr  = ta.atr(14)
+plot(showEma ? e20 : na,  "EMA 20",  color = #2F6FB0, linewidth = 1)
+plot(showEma ? e50 : na,  "EMA 50",  color = #8A5CB8, linewidth = 1)
+plot(showEma ? e200 : na, "EMA 200", color = #97A1B1, linewidth = 2)
+
+up  = e20 > e50 and e50 > e200
+dn  = e20 < e50 and e50 < e200
+hh  = ta.highest(high, 20)[1]
+ll  = ta.lowest(low, 20)[1]
+lo6 = ta.lowest(low, 6)
+hi6 = ta.highest(high, 6)
+lo5p = ta.lowest(low, 5)[1]
+hi5p = ta.highest(high, 5)[1]
+
+pbB = up and low <= e20 and close > e20 and close > open and close > e50
+pbS = dn and high >= e20 and close < e20 and close < open and close < e50
+boB = up and close > hh and close[1] <= hh[1]
+boS = dn and close < ll and close[1] >= ll[1]
+
+// Signaux uniquement sur bougies clôturées (pas de repaint), 5 bougies minimum entre deux signaux du même type
+var int lPbB = -100
+var int lPbS = -100
+var int lBoB = -100
+var int lBoS = -100
+sigPbB = barstate.isconfirmed and pbB and bar_index - lPbB >= 5
+sigPbS = barstate.isconfirmed and pbS and bar_index - lPbS >= 5
+sigBoB = barstate.isconfirmed and boB and not pbB and bar_index - lBoB >= 5
+sigBoS = barstate.isconfirmed and boS and not pbS and bar_index - lBoS >= 5
+if sigPbB
+    lPbB := bar_index
+if sigPbS
+    lPbS := bar_index
+if sigBoB
+    lBoB := bar_index
+if sigBoS
+    lBoS := bar_index
+
+// Mémorise le dernier signal de chaque sens pour l'entrée au marché
+var int   lastBuyBar  = na
+var float lastBuySl   = na
+var float lastBuyPx   = na
+var string lastBuyTyp = ""
+var int   lastSellBar = na
+var float lastSellSl  = na
+var float lastSellPx  = na
+var string lastSellTyp = ""
+if sigPbB or sigBoB
+    lastBuyBar := bar_index
+    lastBuySl  := lo6 - 0.2 * atr
+    lastBuyPx  := close
+    lastBuyTyp := sigPbB ? "repli" : "cassure"
+if sigPbS or sigBoS
+    lastSellBar := bar_index
+    lastSellSl  := hi6 + 0.2 * atr
+    lastSellPx  := close
+    lastSellTyp := sigPbS ? "rebond" : "cassure"
+
+plotshape(showSig and sigPbB, "Repli achat",    shape.triangleup,   location.belowbar, colBull, text = "Repli",   textcolor = colBull, size = size.tiny)
+plotshape(showSig and sigBoB, "Cassure achat",  shape.triangleup,   location.belowbar, colBull, text = "Cassure", textcolor = colBull, size = size.tiny)
+plotshape(showSig and sigPbS, "Repli vente",    shape.triangledown, location.abovebar, colBear, text = "Repli",   textcolor = colBear, size = size.tiny)
+plotshape(showSig and sigBoS, "Cassure vente",  shape.triangledown, location.abovebar, colBear, text = "Cassure", textcolor = colBear, size = size.tiny)
+
+// Playbook : références de liquidité journalieres. Ces lignes représentent des niveaux
+// potentiels, pas la preuve d'un sweep ou d'un MSS.
+pdh = request.security(syminfo.tickerid, "D", high[1], lookahead = barmerge.lookahead_on)
+pdl = request.security(syminfo.tickerid, "D", low[1], lookahead = barmerge.lookahead_on)
+plot(showStructure ? pdh : na, "PDH", color = color.new(colBear, 60), style = plot.style_stepline)
+plot(showStructure ? pdl : na, "PDL", color = color.new(colBull, 60), style = plot.style_stepline)
+
+// Exigences observables (et simplifiees) du playbook.
+// Les notions discretionnaires FVG/OB/MSS ne sont PAS inventees automatiquement.
+sweepBuy = low < pdl and close > pdl
+sweepSell = high > pdh and close < pdh
+confirmBuy = close > high[1] and close > open
+confirmSell = close < low[1] and close < open
+playbookBuy = sweepBuy or confirmBuy
+playbookSell = sweepSell or confirmSell
+
+// ───────────── Tableau de tendance ─────────────
+pos = switch tabPos
+    "Haut gauche" => position.top_left
+    "Bas droite"  => position.bottom_right
+    "Bas gauche"  => position.bottom_left
+    => position.top_right
+
+var table tb = table.new(pos, 4, 7, bgcolor = color.new(#18212E, 8), border_color = color.new(#2E3A4C, 0), border_width = 1)
+
+f_row(int row, string tf, float raw, float adx, float rsi) =>
+    table.cell(tb, 0, row, tf, text_color = color.white, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, row, f_label(raw, adx), text_color = color.white, bgcolor = color.new(f_col(raw), 25), text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 2, row, na(adx) ? "—" : str.tostring(adx, "#.0"), text_color = color.white, text_size = size.small)
+    table.cell(tb, 3, row, na(rsi) ? "—" : str.tostring(rsi, "#.0"), text_color = color.white, text_size = size.small)
+
+if showTab and barstate.islast
+    table.cell(tb, 0, 0, "UT",        text_color = colGold, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, 0, "Tendance",  text_color = colGold, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 2, 0, "ADX",       text_color = colGold, text_size = size.small)
+    table.cell(tb, 3, 0, "RSI",       text_color = colGold, text_size = size.small)
+    f_row(1, "5 min",  r5,   adx5,   rsi5)
+    f_row(2, "15 min", r15,  adx15,  rsi15)
+    f_row(3, "30 min", r30,  adx30,  rsi30)
+    f_row(4, "1 h",    r60,  adx60,  rsi60)
+    f_row(5, "4 h",    r240, adx240, rsi240)
+    verdict = gPct >= 40 ? "Biais acheteur" : gPct <= -40 ? "Biais vendeur" : gPct >= 15 ? "Légèrement haussier" : gPct <= -15 ? "Légèrement baissier" : "Pas de direction : attendre"
+    gCol = gPct >= 15 ? colBull : gPct <= -15 ? colBear : colFlat
+    table.cell(tb, 0, 6, "Global", text_color = colGold, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, 6, verdict, text_color = color.white, bgcolor = color.new(gCol, 10), text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 2, 6, (gPct > 0 ? "+" : "") + str.tostring(gPct), text_color = color.white, text_size = size.small)
+    table.cell(tb, 3, 6, "", text_size = size.small)
+
+// ───────────── Entrées proposées (dans le sens du score global) ─────────────
+var array<line>  pLines  = array.new<line>()
+var array<label> pLabels = array.new<label>()
+var array<box>   pBoxes  = array.new<box>()
+
+if barstate.islast
+    for l in pLines
+        line.delete(l)
+    for lb in pLabels
+        label.delete(lb)
+    for b in pBoxes
+        box.delete(b)
+    array.clear(pLines)
+    array.clear(pLabels)
+    array.clear(pBoxes)
+
+    if showProps and d != 0 and not na(atr) and not na(e50) and (not playbook or (d == 1 ? playbookBuy : playbookSell)) and (not playbook or (d == 1 ? playbookBuy : playbookSell))
+        kinds   = array.new<string>()
+        names   = array.new<string>()
+        entries = array.new<float>()
+        stops   = array.new<float>()
+
+        // 1. Entrée au marché après un signal récent (8 bougies max)
+        recBar = d == 1 ? lastBuyBar : lastSellBar
+        if not na(recBar) and bar_index - recBar <= 8
+            float sl = d == 1 ? lastBuySl : lastSellSl
+            if math.abs(close - sl) < 0.5 * atr
+                sl := close - d * 0.5 * atr
+            if d * (close - sl) > 0
+                array.push(kinds, "Marché")
+                array.push(names, d == 1 ? "Achat au marché" : "Vente au marché")
+                array.push(entries, close)
+                array.push(stops, sl)
+
+        // 2. Limite au repli sur l'EMA 20, ou entrée sur confirmation si le prix est déjà dans la zone EMA 20 à 50
+        if (d == 1 and close > e20 and e20 > e50) or (d == -1 and close < e20 and e20 < e50)
+            array.push(kinds, "Repli / confirmation")
+            array.push(names, d == 1 ? "Achat limite (repli EMA 20)" : "Vente limite (rebond EMA 20)")
+            array.push(entries, e20)
+            array.push(stops, d == 1 ? math.min(e50 - 0.3 * atr, e20 - atr) : math.max(e50 + 0.3 * atr, e20 + atr))
+        else if (d == 1 and close <= e20 and close > e50) or (d == -1 and close >= e20 and close < e50)
+            array.push(kinds, "Repli / confirmation")
+            array.push(names, d == 1 ? "Achat stop (confirmation)" : "Vente stop (confirmation)")
+            array.push(entries, d == 1 ? high[1] + 0.1 * atr : low[1] - 0.1 * atr)
+            array.push(stops, d == 1 ? lo5p - 0.2 * atr : hi5p + 0.2 * atr)
+
+        // 3. Ordre stop sur cassure du plus haut / plus bas des 20 dernières bougies
+        lvl     = d == 1 ? hh : ll
+        entryBo = lvl + d * 0.1 * atr
+        if d * (entryBo - close) > 0
+            array.push(kinds, "Cassure")
+            array.push(names, d == 1 ? "Achat stop (cassure)" : "Vente stop (cassure)")
+            array.push(entries, entryBo)
+            array.push(stops, entryBo - d * 1.5 * atr)
+
+        n = array.size(entries)
+        if n > 0
+            // Niveaux d'entrée de toutes les propositions : lignes pointillées dorées
+            for i = 0 to n - 1
+                y = array.get(entries, i)
+                array.push(pLines, line.new(bar_index - 15, y, bar_index + 30, y, color = colGold, style = line.style_dotted, width = 1))
+                array.push(pLabels, label.new(bar_index + 31, y, array.get(names, i) + "  " + str.tostring(y, format.mintick), style = label.style_label_left, color = color.new(colGold, 15), textcolor = color.black, size = size.small))
+
+            // Proposition détaillée : zones de risque (SL) et d'objectif (TP)
+            idx = detail == "Aucune" ? -1 : detail == "Auto" ? 0 : array.indexof(kinds, detail)
+            if idx >= 0
+                en   = array.get(entries, idx)
+                st   = array.get(stops, idx)
+                risk = math.abs(en - st)
+                tp   = en + d * risk * rr
+                array.push(pBoxes, box.new(bar_index, math.max(en, st), bar_index + 30, math.min(en, st), border_color = color.new(colBear, 40), bgcolor = color.new(colBear, 82)))
+                array.push(pBoxes, box.new(bar_index, math.max(en, tp), bar_index + 30, math.min(en, tp), border_color = color.new(colBull, 40), bgcolor = color.new(colBull, 82)))
+                array.push(pLines, line.new(bar_index, en, bar_index + 30, en, color = colGold, width = 2))
+                array.push(pLabels, label.new(bar_index + 31, st, "SL  " + str.tostring(st, format.mintick) + "  (risque " + str.tostring(risk, "#.##") + ")", style = label.style_label_left, color = colBear, textcolor = color.white, size = size.small))
+                array.push(pLabels, label.new(bar_index + 31, tp, "TP  " + str.tostring(tp, format.mintick) + "  (1 : " + str.tostring(rr, "#.#") + ")", style = label.style_label_left, color = colBull, textcolor = color.white, size = size.small))
+
+// ───────────── Alertes ─────────────
+// Les alertes restent des signaux techniques : pas de conseil ni passage d’ordre.
+
+alertcondition(sigPbB or sigBoB, "Signal d'achat", "{{ticker}} {{interval}} : signal d'achat (repli ou cassure) à {{close}}")
+alertcondition(sigPbS or sigBoS, "Signal de vente", "{{ticker}} {{interval}} : signal de vente (repli ou cassure) à {{close}}")
+alertcondition((sigPbB or sigBoB) and d == 1, "Achat dans le sens de la tendance globale", "{{ticker}} {{interval}} : signal d'achat aligné avec le 1 h et le 4 h, à {{close}}")
+alertcondition((sigPbS or sigBoS) and d == -1, "Vente dans le sens de la tendance globale", "{{ticker}} {{interval}} : signal de vente aligné avec le 1 h et le 4 h, à {{close}}")
