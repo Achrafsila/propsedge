@@ -32,6 +32,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { AddTradeDialog } from "@/components/AddTradeDialog";
+import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
 import { getAccountOptionLabel, ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
@@ -120,6 +121,7 @@ export function AccountAnalyticsView({
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
+  const [isImportTradeDialogOpen, setIsImportTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
 
   // ── Defensive trade filtering ───────────────────────────────────────────────
@@ -331,7 +333,7 @@ export function AccountAnalyticsView({
           allAccounts={allAccounts}
           onAccountChange={onAccountChange}
           router={router}
-          setIsAddTradeDialogOpen={setIsAddTradeDialogOpen}
+          setIsAddTradeDialogOpen={setIsImportTradeDialogOpen}
           setIsAddPayoutDialogOpen={setIsAddPayoutDialogOpen}
         />
         <div
@@ -359,14 +361,15 @@ export function AccountAnalyticsView({
           </p>
           <Button
             className="bg-gradient-to-r from-[#298DFF] to-[#1E6FE0] hover:shadow-lg hover:shadow-[rgba(41,141,255,0.3)] hover:scale-105 transition-all duration-300 text-white rounded-xl pointer-events-auto"
-            onClick={() => setIsAddTradeDialogOpen(true)}
+            onClick={() => setIsImportTradeDialogOpen(true)}
             type="button"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Add First Trade
+            Add First Trade from Screenshot
           </Button>
         </div>
-        <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} />
+        <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} />
+        <ImportTradesDialog open={isImportTradeDialogOpen} onOpenChange={setIsImportTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} lockAccount />
         {accountType === "funded" && (
           <AddPayoutDialog open={isAddPayoutDialogOpen} onOpenChange={setIsAddPayoutDialogOpen} defaultFundedAccountId={account.id} />
         )}
@@ -855,7 +858,8 @@ export function AccountAnalyticsView({
       </div>
 
       {/* ── Dialogs ───────────────────────────────────────────────────────── */}
-      <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} />
+      <AddTradeDialog open={isAddTradeDialogOpen} onOpenChange={setIsAddTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} />
+        <ImportTradesDialog open={isImportTradeDialogOpen} onOpenChange={setIsImportTradeDialogOpen} defaultAccountType={accountType} defaultAccountId={account.id} lockAccount />
       {accountType === "funded" && (
         <AddPayoutDialog open={isAddPayoutDialogOpen} onOpenChange={setIsAddPayoutDialogOpen} defaultFundedAccountId={account.id} />
       )}
@@ -954,11 +958,11 @@ function Header({
           variant="outline"
           size="sm"
           className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl pointer-events-auto transition-all duration-300"
-          onClick={() => setIsAddTradeDialogOpen(true)}
+          onClick={() => setIsImportTradeDialogOpen(true)}
           type="button"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Add Trade
+          Add Trade from Screenshot
         </Button>
         {accountType === "funded" && (
           <Button
