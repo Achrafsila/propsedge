@@ -38,6 +38,7 @@ export function Sidebar() {
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     { name: "EdgePilot", href: "/edgepilot", icon: Compass },
+    { name: "Execution Desk", href: "/execution-desk", icon: Crosshair },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
