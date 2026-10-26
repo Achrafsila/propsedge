@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, DollarSign, ShieldAlert, Users, Wallet, ChevronDown, TrendingUp, Target } from "lucide-react";
+import { ArrowUpRight, DollarSign, ShieldAlert, Users, Wallet, ChevronDown, TrendingUp, Target, Trophy, Crown, Medal, Sparkles } from "lucide-react";
 import { useTeams } from "@/lib/teams/useTeams";
+import { createClient } from "@/lib/supabase/client";
 import { useTeamShares } from "@/lib/teams/useTeamShares";
 import { useSharedAccountSummaries } from "@/lib/teams/useSharedAccountSummaries";
 
@@ -13,6 +14,23 @@ const card = "min-w-0 rounded-xl border border-slate-400/[0.08] bg-[#101a2d]/90 
 function TeamPerformance({ teamId }: { teamId: string }) {
   const { shares, error: shareError } = useTeamShares(teamId);
   const { accounts, error: accountError } = useSharedAccountSummaries(shares);
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    setMemberNames({});
+    createClient().rpc("get_team_member_profiles", { p_team_id: teamId })
+      .then(({data,error}) => {
+        if (!active) return;
+        if (error) { console.warn("Unable to resolve team member display names"); return; }
+        const names: Record<string, string> = {};
+        for (const member of (data ?? []) as {user_id:string;display_name:string}[]) {
+          names[member.user_id] = member.display_name?.trim() || "Trader";
+        }
+        setMemberNames(names);
+      });
+    return () => { active = false; };
+  }, [teamId]);
+  const traderName = (id:string) => memberNames[id] || "Team trader";
   const visibleAccounts = accounts;
   const stats = useMemo(() => {
     const unique = Array.from(new Map(visibleAccounts.map(a => [`${a.type}:${a.id}:${a.ownerId}`, a])).values());
@@ -42,7 +60,7 @@ function TeamPerformance({ teamId }: { teamId: string }) {
     }
     return { unique, trades, pnl, received, wins, capital: unique.reduce((sum, a) => sum + a.size, 0), traders: [...byTrader.values()] };
   }, [visibleAccounts]);
-  const [ranking, setRanking] = useState<"roi" | "payouts" | "accounts">("roi");
+  const [ranking, setRanking] = useState<"pnl" | "roi" | "payouts" | "accounts">("pnl");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [propRanking, setPropRanking] = useState<"roi" | "payouts">("roi");
   // Mirror Personal ROI rules: root challenges once; non-evaluation funded
@@ -97,6 +115,19 @@ function TeamPerformance({ teamId }: { teamId: string }) {
       : t[ranking];
     return score(b) - score(a) || a.ownerId.localeCompare(b.ownerId);
   });
+  const topPnl = [...stats.traders].sort((a,b)=>b.pnl-a.pnl)[0];
+  const topFarming = [...stats.traders]
+    .filter(t=>t.costsComplete && t.costs>0)
+    .sort((a,b)=>((b.payouts-b.costs)/b.costs)-((a.payouts-a.costs)/a.costs))[0];
+  const topPayout = [...stats.traders].sort((a,b)=>b.payouts-a.payouts)[0];
+  const topConsistency = [...stats.traders].filter(t=>t.trades>=5)
+    .sort((a,b)=>(b.wins/b.trades)-(a.wins/a.trades)||b.trades-a.trades)[0];
+  const accolades = [
+    {title:"P&L Champion", kicker:"TOP TRADER",name:topPnl?traderName(topPnl.ownerId):"No results yet",metric:topPnl?money(topPnl.pnl):"—",note:"Highest realized trading P&L",icon:Trophy,accent:"text-amber-300",border:"border-amber-400/25"},
+    {title:"Farming Maestro",kicker:"TOP FARMING TRADER",name:topFarming?traderName(topFarming.ownerId):"Not yet eligible",metric:topFarming?`${((topFarming.payouts-topFarming.costs)/topFarming.costs*100).toFixed(1)}%`:"N/A",note:"Highest net farming ROI · paid payouts minus costs",icon:Crown,accent:"text-violet-300",border:"border-violet-400/25"},
+    {title:"Payout Hunter",kicker:"CASHOUT LEADER",name:topPayout?traderName(topPayout.ownerId):"No results yet",metric:topPayout?money(topPayout.payouts):"—",note:"Most cash actually received",icon:DollarSign,accent:"text-emerald-300",border:"border-emerald-400/25"},
+    {title:"Steady Hands",kicker:"CONSISTENCY AWARD",name:topConsistency?traderName(topConsistency.ownerId):"5 trades required",metric:topConsistency?`${(topConsistency.wins/topConsistency.trades*100).toFixed(0)}% wins`:"—",note:"Highest win rate · minimum 5 closed trades",icon:Medal,accent:"text-sky-300",border:"border-sky-400/25"},
+  ];
   const invested = costsComplete ? costs : null;
   const winRate = stats.trades.length ? stats.wins / stats.trades.length * 100 : null;
   const topMetric = [
@@ -118,6 +149,32 @@ function TeamPerformance({ teamId }: { teamId: string }) {
       <div className="relative mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
         {topMetric.map(metric => <div key={metric.label} className="min-w-0 rounded-xl border border-white/[0.07] bg-black/20 p-3 sm:p-4"><div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400"><metric.icon size={15} className={metric.tone}/>{metric.label}</div><p className={`mt-2 break-words text-xl font-extrabold tabular-nums sm:text-2xl ${metric.tone}`}>{metric.value}</p><p className="mt-1 text-[11px] text-slate-500">{metric.note}</p></div>)}
       </div>
+    </section>
+
+    {/* Team talent — distinct leaderboards use real shared trades and payouts. */}
+    <section className={card}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300">02 / Team Hall of Fame</p>
+          <h2 className="mt-1 text-lg font-bold sm:text-xl">Meet the trading leaders <Sparkles className="inline h-4 w-4 text-amber-300"/></h2>
+          <p className="mt-1 text-xs text-slate-400">Performance earned, never invented · based on shared account activity</p></div>
+        <span className="text-[11px] text-slate-500">All-time · Shared portfolio</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {accolades.map(a=><div key={a.title} className={`min-w-0 rounded-xl border ${a.border} bg-white/[0.035] p-3 sm:p-4`}>
+          <div className="flex items-center gap-2"><a.icon className={`h-5 w-5 shrink-0 ${a.accent}`}/><p className={`truncate text-[9px] font-extrabold tracking-wider ${a.accent}`}>{a.kicker}</p></div>
+          <h3 className="mt-3 text-xs font-semibold text-slate-300 sm:text-sm">{a.title}</h3>
+          <p className="mt-1 truncate text-sm font-bold text-white sm:text-base" title={a.name}>{a.name}</p>
+          <p className={`mt-2 break-words text-xl font-extrabold tabular-nums sm:text-2xl ${a.accent}`}>{a.metric}</p>
+          <p className="mt-1 text-[10px] leading-snug text-slate-500">{a.note}</p>
+        </div>)}
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-2"><h3 className="text-sm font-bold">Trader P&L leaderboard</h3><span className="text-[10px] text-slate-500">Net trade results · all shared accounts</span></div>
+      {stats.traders.length ? <div className="mt-2 space-y-1.5">{[...stats.traders].sort((a,b)=>b.pnl-a.pnl).map((t,i)=>
+        <div key={t.ownerId} className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+          <span className={`text-sm font-black ${i===0?"text-amber-300":"text-slate-500"}`}>{i===0?"★":i+1}</span>
+          <div className="min-w-0"><p className="truncate text-sm font-semibold text-white" title={traderName(t.ownerId)}>{traderName(t.ownerId)}</p><p className="text-[10px] text-slate-500">{t.accounts} accounts · {t.trades} trades</p></div>
+          <p className={`text-sm font-bold tabular-nums sm:text-base ${t.pnl>=0?"text-emerald-300":"text-rose-300"}`}>{t.pnl>0?"+":""}{money(t.pnl)}</p>
+        </div>)}</div>:<p className="mt-3 text-xs text-slate-400">Share trading accounts to unlock the rankings.</p>}
     </section>
 
     {/* 02 — Account lifecycle: replace redundant funnel, pipeline and rate cards. */}
@@ -155,8 +212,8 @@ function TeamPerformance({ teamId }: { teamId: string }) {
       <button type="button" aria-expanded={detailsOpen} onClick={()=>setDetailsOpen(v=>!v)} className="flex min-h-11 w-full items-center justify-between gap-3 text-left"><span><span className="block text-sm font-bold">Advanced performance comparisons</span><span className="mt-1 block text-xs text-slate-500">Trader and prop firm rankings · conversion statistics</span></span><ChevronDown size={18} className={`shrink-0 text-slate-400 transition-transform ${detailsOpen?"rotate-180":""}`}/></button>
       {detailsOpen && <div className="mt-5 space-y-5 border-t border-white/10 pt-5">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{[{label:"Eval → Funded",value:conversionEval===null?"N/A":`${conversionEval.toFixed(1)}%`},{label:"Funded → Paid",value:conversionFunded===null?"N/A":`${conversionFunded.toFixed(1)}%`},{label:"Cost per funded",value:costPerFunded===null?"N/A":money(costPerFunded)}].map(k=><div key={k.label} className="rounded-lg bg-white/5 p-3"><p className="text-xs text-slate-400">{k.label}</p><p className="mt-1 text-lg font-bold">{k.value}</p></div>)}</div>
-        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Trader comparison</h3><select aria-label="Leaderboard ranking" value={ranking} onChange={e=>setRanking(e.target.value as typeof ranking)} className="rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm"><option value="roi">Farming ROI</option><option value="payouts">Payouts</option><option value="accounts">Accounts</option></select></div>
-        <div className="space-y-2">{leaders.map((t,i)=><div key={t.ownerId} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] p-3 text-sm"><span className="min-w-0 truncate text-slate-300">#{i+1} · Trader {t.ownerId.slice(0,8)}</span><span className="shrink-0 font-semibold tabular-nums">{ranking==="roi"?(t.costsComplete&&t.costs>0?`${((t.payouts-t.costs)/t.costs*100).toFixed(1)}%`:"N/A"):ranking==="payouts"?money(t.payouts):`${t.accounts} accounts`}</span></div>)}</div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Trader comparison</h3><select aria-label="Leaderboard ranking" value={ranking} onChange={e=>setRanking(e.target.value as typeof ranking)} className="rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm"><option value="pnl">Trading P&L</option><option value="roi">Farming ROI</option><option value="payouts">Payouts</option><option value="accounts">Accounts</option></select></div>
+        <div className="space-y-2">{leaders.map((t,i)=><div key={t.ownerId} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] p-3 text-sm"><span className="min-w-0 truncate text-slate-300">#{i+1} · {traderName(t.ownerId)}</span><span className="shrink-0 font-semibold tabular-nums">{ranking==="roi"?(t.costsComplete&&t.costs>0?`${((t.payouts-t.costs)/t.costs*100).toFixed(1)}%`:"N/A"):ranking==="payouts"?money(t.payouts):ranking==="pnl"?money(t.pnl):`${t.accounts} accounts`}</span></div>)}</div>
         <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Prop firm comparison</h3><select aria-label="Prop firm ranking" value={propRanking} onChange={e=>setPropRanking(e.target.value as typeof propRanking)} className="rounded-lg border border-white/20 bg-slate-950 px-3 py-2 text-sm"><option value="roi">Farming ROI</option><option value="payouts">Payouts</option></select></div>
         <div className="space-y-2">{firmRows.map(f=><div key={f.firm} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] p-3 text-sm"><span className="min-w-0 truncate text-slate-300">{f.firm} · {f.accounts} accounts</span><span className="shrink-0 font-semibold tabular-nums">{propRanking==="roi"?(f.costsComplete&&f.costs>0?`${((f.payouts-f.costs)/f.costs*100).toFixed(1)}%`:"N/A"):money(f.payouts)}</span></div>)}</div>
       </div>}
