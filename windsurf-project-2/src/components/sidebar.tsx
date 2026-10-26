@@ -3,60 +3,49 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   LayoutDashboard,
+  Trophy,
   Wallet,
   BookOpen,
+  BarChart3,
   DollarSign,
   Settings,
   Shield,
-  LineChart,
   Compass,
   Activity,
-  Users
+  Crosshair,
+  Users, UserRound
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
 import { useAdmin } from "@/context/AdminContext";
-import { useTradingMode } from "@/context/TradingModeContext";
 import { getCapitalEligibleChallenges } from "@/lib/challenges";
 import { borderRadius } from "@/design-system";
 import { Logo } from "@/components/common/Logo";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const teamEnabled = process.env.NEXT_PUBLIC_TEAMS_ENABLED === "true";
+  const isTeamWorkspace = pathname === "/team-dashboard" || pathname === "/teams";
   const { challenges, fundedAccounts } = useAccounts();
   const { isAdmin } = useAdmin();
-  const { isPropFirmMode, isPersonalCapitalMode, setTradingMode } = useTradingMode();
 
   // Prop Firm nav — unchanged from before Personal Capital mode existed.
   const propFirmItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+
+    { name: "Challenges", href: "/challenges", icon: Trophy },
+    { name: "Funded Accounts", href: "/funded", icon: Wallet },
     { name: "Trade Journal", href: "/journal", icon: BookOpen },
     { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
-    { name: "Edge Intelligence", href: "/edgepilot", icon: Compass },
-    ...(process.env.NEXT_PUBLIC_TEAMS_ENABLED === "true" ? [{ name: "Team Workspace", href: "/teams", icon: Users }] : []),
+    { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
-  // Personal Capital nav — hides Challenges/Funded Accounts/Payouts/Admin,
-  // adds Portfolio and Analytics (Trader DNA stays, it's not Prop-Firm-specific).
-  const personalCapitalItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Portfolio", href: "/portfolio", icon: Wallet },
-    { name: "Trade Journal", href: "/journal", icon: BookOpen },
-    { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
-    { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
-    { name: "Analytics", href: "/portfolio-analytics", icon: LineChart },
-    { name: "Edge Intelligence", href: "/edgepilot", icon: Compass },
-    ...(process.env.NEXT_PUBLIC_TEAMS_ENABLED === "true" ? [{ name: "Team Workspace", href: "/teams", icon: Users }] : []),
-    { name: "Settings", href: "/settings", icon: Settings },
-  ];
-
-  const sidebarItems = isPersonalCapitalMode ? personalCapitalItems : propFirmItems;
+  const sidebarItems = propFirmItems;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -76,49 +65,21 @@ export function Sidebar() {
                        fundedAccounts.reduce((sum, a) => sum + a.accountSize, 0);
 
   return (
-    <aside className="w-64 max-w-full bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-screen flex flex-col">
+    <aside className="w-full lg:w-64 bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-full lg:min-h-screen flex flex-col">
       <div className="group px-5 py-4 border-b border-[rgba(148,163,184,0.1)] transition-all duration-200">
         <Link href="/welcome" className="block transition-all duration-200 group-hover:drop-shadow-[0_0_14px_rgba(41,141,255,0.55)]">
           <Logo size="medium" variant="full" src="/logo-sidebar.png" />
         </Link>
       </div>
 
-      {/* Trading Mode — segmented control, global switch between Prop Firm
-          and Personal Capital. Prop Firm's selected state keeps the app's
-          existing brand blue; Personal Capital's selected state is the only
-          place this control uses the emerald accent. */}
-      <div className="px-4 py-3 border-b border-[rgba(148,163,184,0.1)]">
-        <div
-          className="flex items-center gap-1 p-1 rounded-full"
-          style={{ background: 'rgba(148,163,184,0.06)', border: '1px solid rgba(148,163,184,0.1)' }}
-        >
-          <button
-            type="button"
-            onClick={() => setTradingMode("prop-firm")}
-            className="flex-1 text-xs font-semibold rounded-full py-1.5 transition-all duration-200"
-            style={{
-              background: isPropFirmMode ? 'rgba(41,141,255,0.18)' : 'transparent',
-              color: isPropFirmMode ? '#298DFF' : '#94A3B8',
-            }}
-          >
-            Prop Firm
-          </button>
-          <button
-            type="button"
-            onClick={() => setTradingMode("personal-capital")}
-            className="flex-1 text-xs font-semibold rounded-full py-1.5 transition-all duration-200"
-            style={{
-              background: isPersonalCapitalMode ? 'rgba(16,185,129,0.18)' : 'transparent',
-              color: isPersonalCapitalMode ? '#10B981' : '#94A3B8',
-            }}
-          >
-            Personal
-          </button>
+      {teamEnabled && <div className="mx-3 mt-4 rounded-xl border border-white/10 bg-white/5 p-1" role="group" aria-label="Workspace mode">
+        <div className="grid grid-cols-2 gap-1">
+          <Link href="/dashboard" className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-xs font-semibold ${!isTeamWorkspace ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-white/10"}`}><UserRound size={14}/> Personal</Link>
+          <Link href="/team-dashboard" className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-xs font-semibold ${isTeamWorkspace ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-white/10"}`}><Users size={14}/> Team</Link>
         </div>
-      </div>
-
+      </div>}
       <nav className="flex-1 p-4 space-y-1">
-        {sidebarItems.map((item) => {
+        {(isTeamWorkspace ? [{ name: "Team Dashboard", href: "/team-dashboard", icon: LayoutDashboard }, { name: "Team Management", href: "/teams", icon: Users }] : sidebarItems).map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
           
