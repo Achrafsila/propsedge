@@ -30,11 +30,12 @@ interface ImportTradesDialogProps {
   onOpenChange: (open: boolean) => void;
   defaultAccountType?: AccountKind;
   defaultAccountId?: string;
+  lockAccount?: boolean;
 }
 
 const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".csv", ".jpg", ".jpeg", ".png", ".webp"];
 
-export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, defaultAccountId }: ImportTradesDialogProps) {
+export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, defaultAccountId, lockAccount = false }: ImportTradesDialogProps) {
   const { addTradesBatch, challenges, fundedAccounts, personalAccounts } = useAccounts();
   const { tradingMode } = useTradingMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +80,9 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   // deleted after being selected) that no longer matches anything in
   // availableAccounts. Importing against that would create exactly the
   // "linked to missing account" trades Global Analytics has to warn about.
-  const isDestinationValid = availableAccounts.some((a) => a.id === accountId);
+  const resolvedAccountType = lockAccount && defaultAccountType ? defaultAccountType : accountType;
+  const resolvedAccountId = lockAccount && defaultAccountId ? defaultAccountId : accountId;
+  const isDestinationValid = availableAccounts.some((a) => a.id === resolvedAccountId);
 
   const resetState = () => {
     setAccountType(tradingMode === "personal-capital" ? "personal" : "challenge");
@@ -166,7 +169,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
       // request per row — firing hundreds/thousands of concurrent
       // single-row inserts used to exhaust Supabase's connection pool
       // after roughly the first 100, silently failing the rest.
-      const tradesToImport = parsedTrades.map((trade) => ({ accountId, accountType, ...trade }));
+      const tradesToImport = parsedTrades.map((trade) => ({ ...trade, accountId: resolvedAccountId, accountType: resolvedAccountType }));
       const { imported, failed, errors } = await addTradesBatch(tradesToImport);
 
       const importedCount = imported.length;
@@ -220,7 +223,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
         </DialogHeader>
 
         <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain space-y-4 pb-5 pr-1 [-webkit-overflow-scrolling:touch]">
-          <div className="grid grid-cols-2 gap-4">
+          {!lockAccount && <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="importAccountType" className="text-[#8B97A8]">Account Type</Label>
               <select
@@ -276,7 +279,8 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                 );
               })()}
             </div>
-          </div>
+          </div>}
+          {lockAccount && <p className="text-xs text-[#8B97A8]">Trades will be added to the current account automatically.</p>}
 
           <div
             onDragOver={(e) => {
