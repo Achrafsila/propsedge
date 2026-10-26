@@ -231,6 +231,9 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
               <Input
                 id="purchaseCost"
                 type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
                 value={formData.purchaseCost}
                 onChange={(e) => setFormData({ ...formData, purchaseCost: e.target.value })}
                 required

@@ -49,7 +49,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
       maxDrawdown: parseFloat(formData.maxDrawdown),
       remainingDrawdown: parseFloat(formData.maxDrawdown),
       status: "active",
-      purchaseCost: formData.sourceChallengeId || formData.purchaseCost.trim() === "" ? undefined : Number(formData.purchaseCost),
+      purchaseCost: formData.sourceChallengeId ? challenges.find(c => c.id === formData.sourceChallengeId)?.purchaseCost : Number(formData.purchaseCost),
       // This form doesn't collect an origin — a linked source challenge
       // means it really did come from an evaluation; otherwise it's a
       // manually-entered account with no more specific origin to record.
@@ -112,15 +112,16 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
               ))}
             </select>
           </div>
+          {formData.sourceChallengeId && <p className="text-xs text-emerald-300">Inherited challenge cost: ${challenges.find(c => c.id === formData.sourceChallengeId)?.purchaseCost ?? 0}. Counted only once in overall ROI.</p>}
           {!formData.sourceChallengeId && (
             <div className="space-y-2">
-              <Label htmlFor="purchaseCost" className="text-[#8B97A8]">Account Purchase Cost ($) (Optional)</Label>
+              <Label htmlFor="purchaseCost" className="text-[#8B97A8]">Account Purchase Cost ($)</Label>
               <Input id="purchaseCost" type="number" min="0" step="0.01" inputMode="decimal"
                 value={formData.purchaseCost}
                 onChange={(e) => setFormData({ ...formData, purchaseCost: e.target.value })}
-                placeholder="e.g., 249.00 (leave blank if free)"
+                required placeholder="e.g., 249.00 (enter 0 if free)"
                 className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#00C875]" />
-              <p className="text-xs text-[#8B97A8]">For directly funded accounts. If converted from a challenge, the original challenge cost is tracked separately.</p>
+              <p className="text-xs text-[#8B97A8]">Required for directly funded accounts. Enter 0 for a free account.</p>
             </div>
           )}
           <div className="space-y-2">

@@ -624,7 +624,10 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       prev.map((c) => (c.id === challengeId ? { ...c, convertedToFunded: true } : c))
     );
 
-    insertFundedAccount(user.id, fundedAccount)
+    const source = challenges.find(c => c.id === challengeId);
+    const root = source?.parentChallengeId ? challenges.find(c => c.id === source.parentChallengeId) : source;
+    const convertedAccount = { ...fundedAccount, fundingPath: "evaluation" as const, purchaseCost: root?.purchaseCost ?? source?.purchaseCost };
+    insertFundedAccount(user.id, convertedAccount)
       .then((saved) => {
         setFundedAccounts((prev) => [saved, ...prev]);
         // Persist the challenge update with the real funded account UUID
