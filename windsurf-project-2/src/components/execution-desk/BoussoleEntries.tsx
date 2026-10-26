@@ -51,6 +51,6 @@ export default function BoussoleEntries(){
         {active&&<div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3 text-xs text-cyan-100">Sélection : {active.title} · Entrée {n(active.entry)} · SL {n(active.sl)} · TP {n(active.tp)}. Reporter ces niveaux manuellement sur TradingView.</div>}
         {!result.options.length&&!busy&&<p className="text-sm text-slate-400">Aucune proposition calculable pour le moment.</p>}
       </div>
-    </div><footer className="flex flex-wrap justify-between gap-2 text-[11px] text-slate-500"><span>Recalcul basé sur 300 bougies OHLC · EMA20/50/200 · ATR14 · range 20 bougies.</span><span>{asOf?"Dernière requête : "+new Date(asOf).toLocaleTimeString():"En attente des cours"}</span></footer>
+    <footer className="flex flex-wrap justify-between gap-2 text-[11px] text-slate-500"><span>Recalcul basé sur 300 bougies OHLC · EMA20/50/200 · ATR14 · range 20 bougies.</span><span>{asOf?"Dernière requête : "+new Date(asOf).toLocaleTimeString():"En attente des cours"}</span></footer>
   </section>;
 }
