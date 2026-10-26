@@ -66,7 +66,6 @@ export default function ExecutionDeskPage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[["MARKET","XAU/USD · GOLD"],["TRADING SESSION","LIVE CHART"],["HTF BIAS",alignment],["EXECUTION STATUS",state]].map(([k,val],i) => <div key={k} className={panel+" p-4"}><div className="text-[10px] font-semibold tracking-[.15em] text-slate-500">{k}</div><div className={"mt-2 text-sm font-bold sm:text-base "+(i===3 ? "text-amber-300" : "text-slate-100")}>{val}</div></div>)}
         </div>
-        <BoussoleEntries />
         <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(340px,1fr)]">
           <section className={panel+" overflow-hidden"}>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3"><span className="flex items-center gap-2 text-sm font-semibold"><Activity size={16} className="text-cyan-400"/> Market Chart <span className="text-xs font-normal text-slate-500">TradingView · OANDA:XAUUSD</span></span><span className="text-[10px] text-slate-500">Broker chart may differ from execution prices</span></div>
@@ -90,6 +89,7 @@ export default function ExecutionDeskPage() {
             <div className={"rounded-xl border px-4 py-3 text-sm "+(ready?"border-emerald-500/30 bg-emerald-500/10 text-emerald-200":"border-amber-500/25 bg-amber-500/10 text-amber-200")}>{ready?"All manually selected conditions and price geometry pass. Human trade review still required.":"Wait for full playbook confirmation and valid SL / entry geometry. No executable signal issued."}</div>
           </aside>
         </div>
+        <BoussoleEntries />
         <section className={panel+" p-4 sm:p-5"}>
           <button onClick={()=>setOpen(!open)} className="flex w-full items-center justify-between text-left"><span className="flex items-center gap-2 font-semibold"><Layers3 size={18} className="text-blue-400"/> Desk Intelligence · Methodology</span><span className="text-xs text-slate-400">{open?"Hide":"Explore"} <ArrowUpRight size={14} className="inline"/></span></button>
           {open && <div className="mt-4 grid gap-3 text-xs text-slate-300 md:grid-cols-3">{[["01 · Context","H1/H4 structure, EMA 20/50/200 trend context and session liquidity."],["02 · Confirm","HTF liquidity target, M15 reaction, M5 MSS, sweep/retest or breakout. Manual until verified feeds are connected."],["03 · Protect","Structural invalidation before sizing, next liquidity for targets, account risk permission from EdgePilot before any future execution."]].map(([t,d])=><div key={t} className="rounded-xl border border-white/10 bg-white/[.03] p-4"><strong className="text-cyan-300">{t}</strong><p className="mt-2 leading-relaxed text-slate-400">{d}</p></div>)}</div>}
