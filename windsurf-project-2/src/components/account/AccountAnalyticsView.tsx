@@ -217,7 +217,8 @@ export function AccountAnalyticsView({
   const dailyPnL = useMemo(
     () =>
       trades.reduce((acc: Record<string, { pnl: number; trades: number }>, trade) => {
-        const d = trade.entryDate;
+        // Daily realised P&L belongs to the closing day, not the opening day.
+        const d = trade.exitDate || trade.entryDate;
         if (!acc[d]) acc[d] = { pnl: 0, trades: 0 };
         acc[d].pnl += trade.pnl;
         acc[d].trades += 1;
@@ -232,7 +233,7 @@ export function AccountAnalyticsView({
       ([a], [b]) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime()
     );
     const points: { date: string; balance: number }[] = [
-      { date: startDate ?? "Start", balance: startBalance },
+      { date: "Start", balance: startBalance },
     ];
     let running = startBalance;
     for (const [date, data] of sorted) {
@@ -240,7 +241,7 @@ export function AccountAnalyticsView({
       points.push({ date, balance: running });
     }
     return points;
-  }, [dailyPnL, startBalance, startDate]);
+  }, [dailyPnL, startBalance]);
 
   // ── Y-axis domain: tight around actual equity range, not forced to 0 ──────
   const yDomain = useMemo((): [number, number] => {
@@ -656,7 +657,7 @@ export function AccountAnalyticsView({
                 tickLine={false}
                 axisLine={{ stroke: "rgba(148,163,184,0.15)" }}
                 tickFormatter={(v) => {
-                  if (v === "Start" || v === startDate) return "Start";
+                  if (v === "Start") return "Start";
                   try {
                     return parseLocalDate(v).toLocaleDateString("en-US", { month: "short", day: "numeric" });
                   } catch { return v; }
@@ -891,12 +892,12 @@ export function AccountAnalyticsView({
         <summary className="cursor-pointer select-none text-sm font-semibold text-white">Trade History · {trades.length} trades <span className="ml-2 text-xs font-normal text-slate-400">View account journal</span></summary>
         <div className="mt-4 max-h-[55dvh] space-y-2 overflow-y-auto overscroll-contain">
           {trades.length === 0 ? <p className="py-5 text-sm text-slate-400">No trades recorded for this account.</p> :
-            [...trades].sort((a,b) => String(b.entryDate).localeCompare(String(a.entryDate))).map(trade => (
+            [...trades].sort((a,b) => String(b.exitDate || b.entryDate).localeCompare(String(a.exitDate || a.entryDate))).map(trade => (
               <div key={trade.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
                 <div className="min-w-0"><p className="truncate text-sm font-medium text-white">{trade.symbol || "Trade"}</p><p className="text-[11px] text-slate-400">{trade.direction || "—"}</p></div>
-                <p className="hidden text-xs text-slate-400 sm:block">{trade.entryDate}</p>
+                <p className="hidden text-xs text-slate-400 sm:block">{trade.exitDate || trade.entryDate}</p>
                 <p className="hidden text-xs text-slate-400 sm:block">{trade.status || "—"}</p>
-                <div className="text-right"><p className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt$(trade.pnl)}</p><p className="text-[11px] text-slate-400 sm:hidden">{trade.entryDate}</p></div>
+                <div className="text-right"><p className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt$(trade.pnl)}</p><p className="text-[11px] text-slate-400 sm:hidden">{trade.exitDate || trade.entryDate}</p></div>
                 <div className="col-span-2 flex justify-end gap-2 sm:col-span-4">
                   <button type="button" onClick={() => setEditingTrade({...trade})} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-white/15 px-3 text-xs text-slate-200"><Pencil className="h-3.5 w-3.5"/> Edit</button>
                   <button type="button" onClick={() => setDeleteCandidate(trade)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-rose-500/30 px-3 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5"/> Delete</button>
