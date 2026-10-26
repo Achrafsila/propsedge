@@ -9,8 +9,11 @@ import { useTeams } from "@/lib/teams/useTeams";
 import { useTeamMembers } from "@/lib/teams/useTeamMembers";
 
 export default function TeamsPage() {
-  const { teams, loading, error, createTeam } = useTeams();
+  const { teams, loading, error, createTeam, deleteTeam } = useTeams();
   const [name, setName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{id:string;name:string}|null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
@@ -76,6 +79,17 @@ export default function TeamsPage() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
+  async function confirmDelete() {
+    if(!deleteTarget || deleteConfirmation !== deleteTarget.name || deleting) return;
+    setDeleting(true); setFailure(null);
+    try {
+      await deleteTeam(deleteTarget.id);
+      if(selectedTeamId === deleteTarget.id) {setSelectedTeamId(null);setSelectionDismissed(false);}
+      setDeleteTarget(null);setDeleteConfirmation("");
+    } catch(err) {setFailure(err instanceof Error?err.message:"Unable to delete team");}
+    finally {setDeleting(false);}
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -101,12 +115,13 @@ export default function TeamsPage() {
           {error && <p role="alert" className="text-red-300">{error}</p>}
           {!loading && !error && teams.length === 0 && <p className="text-slate-400">No teams yet.</p>}
           <ul className="space-y-3">
-            {teams.map(team => <li key={team.id}>
+            {teams.map(team => <li key={team.id} className="flex items-center gap-2">
               <button type="button" onClick={() => { setSelectionDismissed(false); setSelectedTeamId(team.id); }}
                 aria-pressed={selectedTeamId === team.id}
                 className={`w-full rounded-lg border p-3 text-left transition-colors ${selectedTeamId === team.id ? "border-blue-400 bg-blue-500/15" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
                 {team.name}
               </button>
+              {team.ownerUserId === userId && <button type="button" aria-label={`Delete team ${team.name}`} title="Delete team" onClick={()=>{setDeleteTarget({id:team.id,name:team.name});setDeleteConfirmation("");}} className="min-h-11 shrink-0 rounded-lg border border-rose-500/25 px-3 text-sm text-rose-300 hover:bg-rose-500/10">Delete</button>}
             </li>)}
           </ul>
         </section>
@@ -125,6 +140,19 @@ export default function TeamsPage() {
           </form>
         </section>
       </div>
+      {deleteTarget && <div role="alertdialog" aria-modal="true" aria-labelledby="delete-team-title" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3">
+        <div className="w-full max-w-sm rounded-2xl border border-rose-500/30 bg-[#111b2d] p-4 shadow-2xl sm:p-6">
+          <h2 id="delete-team-title" className="text-lg font-bold">Delete team?</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-300">Deleting <strong>{deleteTarget.name}</strong> removes memberships, invitations, shared-account access and team notes permanently. Your original trading accounts, trades and payouts remain untouched.</p>
+          <label className="mt-4 block text-xs text-slate-300">Type the exact team name to confirm
+            <input autoFocus value={deleteConfirmation} onChange={e=>setDeleteConfirmation(e.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-white/20 bg-slate-950 px-3 text-base text-white" placeholder={deleteTarget.name}/>
+          </label>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button type="button" onClick={()=>setDeleteTarget(null)} disabled={deleting} className="min-h-11 rounded-xl border border-white/20 text-sm">Cancel</button>
+            <button type="button" onClick={()=>void confirmDelete()} disabled={deleting||deleteConfirmation!==deleteTarget.name} className="min-h-11 rounded-xl bg-rose-600 px-2 text-sm font-bold disabled:opacity-40">{deleting?"Deleting…":"Delete permanently"}</button>
+          </div>
+        </div>
+      </div>}
       {inviteFailure && !canManage && <p role="alert" className="mt-4 text-sm text-red-300">{inviteFailure}</p>}
       {invitationsError && !canManage && <p role="alert" className="mt-4 text-sm text-red-300">{invitationsError}</p>}
       {incoming.length > 0 && (

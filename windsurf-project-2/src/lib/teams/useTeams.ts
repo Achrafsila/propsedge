@@ -65,5 +65,11 @@ export function useTeams() {
     return data;
   }, [refresh]);
 
-  return { teams, loading, error, refresh, createTeam };
+  const deleteTeam = useCallback(async (teamId: string) => {
+    const client = createClient();
+    const {error:rpcError} = await client.rpc("delete_team",{p_team_id:teamId});
+    if(rpcError) throw rpcError;
+    await refresh();
+  },[refresh]);
+  return { teams, loading, error, refresh, createTeam, deleteTeam };
 }
