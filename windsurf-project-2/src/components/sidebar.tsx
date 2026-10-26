@@ -56,7 +56,7 @@ export function Sidebar() {
                        fundedAccounts.reduce((sum, a) => sum + a.accountSize, 0);
 
   return (
-    <aside className="w-64 bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-screen flex flex-col">
+    <aside className="w-64 max-w-full bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-screen flex flex-col">
       <div className="group px-5 py-4 border-b border-[rgba(148,163,184,0.1)] transition-all duration-200">
         <Link href="/welcome" className="block transition-all duration-200 group-hover:drop-shadow-[0_0_14px_rgba(41,141,255,0.55)]">
           <Logo size="medium" variant="full" src="/logo-sidebar.png" />

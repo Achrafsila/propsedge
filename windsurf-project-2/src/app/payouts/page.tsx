@@ -171,13 +171,13 @@ export default function Payouts() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex items-center justify-between"
+        className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
       >
         <div>
           <h1 
             className="text-[3rem] font-extrabold text-[#F8FAFC]"
             style={{ 
-              fontSize: typography.fontSize.display, 
+              fontSize: "clamp(2rem, 7vw, 4rem)",
               fontWeight: typography.fontWeight.extraBold,
               letterSpacing: typography.letterSpacing.display,
               lineHeight: typography.lineHeight.display,
@@ -206,7 +206,7 @@ export default function Payouts() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 md:grid-cols-4 gap-6"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
       >
         <motion.div variants={itemVariants}>
           <motion.div

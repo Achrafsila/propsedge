@@ -5,7 +5,7 @@ import { Bell, Search, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 
-export function TopNav() {
+export function TopNav({mobileMenuButton}:{mobileMenuButton?:React.ReactNode}) {
   const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -25,9 +25,9 @@ export function TopNav() {
   const initial = displayName[0]?.toUpperCase() ?? "T";
 
   return (
-    <header className="h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-6">
-      <div className="flex items-center gap-4 flex-1">
-        <div className="relative w-96">
+    <header className="h-16 min-w-0 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-2 px-3 sm:px-5 lg:px-6">
+      <div className="flex min-w-0 items-center gap-3 flex-1">{mobileMenuButton}
+        <div className="relative hidden w-full max-w-96 min-w-0 sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type="text"
@@ -37,13 +37,13 @@ export function TopNav() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
           <Bell className="w-5 h-5" />
         </Button>
 
         {/* User menu */}
-        <div className="relative pl-4 border-l border-zinc-800" ref={menuRef}>
+        <div className="relative pl-2 sm:pl-4 border-l border-zinc-800" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((v) => !v)}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"

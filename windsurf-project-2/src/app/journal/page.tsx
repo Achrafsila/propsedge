@@ -186,13 +186,13 @@ export default function Journal() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex items-center justify-between"
+        className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
       >
         <div>
           <h1 
-            className="text-[3rem] font-extrabold text-[#F8FAFC]"
+            className="text-3xl sm:text-5xl font-extrabold text-[#F8FAFC]"
             style={{ 
-              fontSize: typography.fontSize.display, 
+              fontSize: "clamp(2.2rem, 6vw, 4rem)",
               fontWeight: typography.fontWeight.extraBold,
               letterSpacing: typography.letterSpacing.display,
               lineHeight: typography.lineHeight.display,
@@ -206,7 +206,7 @@ export default function Journal() {
           </h1>
           <p className="text-[#94A3B8] mt-2" style={{ fontSize: typography.fontSize.base, opacity: typography.opacity.tertiary }}>Track and analyze your trading history</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             className="border-[rgba(239,68,68,0.3)] text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] hover:border-[#EF4444] rounded-xl transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
@@ -328,7 +328,7 @@ export default function Journal() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl p-12 flex flex-col items-center justify-center text-center"
+          className="rounded-xl p-6 sm:p-12 flex flex-col items-center justify-center text-center"
           style={{
             background: glassmorphism.card.background,
             backdropFilter: glassmorphism.card.backdropBlur,
@@ -348,7 +348,7 @@ export default function Journal() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 md:grid-cols-4 gap-6"
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
       >
         <motion.div variants={itemVariants}>
           <motion.div

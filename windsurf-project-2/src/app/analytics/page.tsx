@@ -261,7 +261,7 @@ export default function GlobalAnalyticsPage() {
           </p>
           <h1
             style={{
-              fontSize: typography.fontSize.display,
+              fontSize: "clamp(2.2rem, 7vw, 4rem)",
               fontWeight: typography.fontWeight.extraBold,
               letterSpacing: typography.letterSpacing.display,
               lineHeight: typography.lineHeight.display,
