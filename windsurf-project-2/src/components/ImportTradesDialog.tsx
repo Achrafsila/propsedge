@@ -168,12 +168,13 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     const date = new Date(value + "T12:00:00Z");
     return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
   };
+  const invalidDetails = isImageImport && (parsedTrades ?? []).some(t => !t.symbol.trim() || !["long","short"].includes(t.direction) || !Number.isFinite(t.quantity) || t.quantity <= 0);
   const invalidDates = (parsedTrades ?? []).some(t =>
     !validDate(t.entryDate) || !validDate(t.exitDate) || t.exitDate < t.entryDate
   );
-  const editTrade = (index: number, field: "entryDate" | "exitDate" | "pnl", value: string) => {
+  const editTrade = (index: number, field: "entryDate" | "exitDate" | "pnl" | "symbol" | "direction" | "quantity", value: string) => {
     setParsedTrades(current => current?.map((t, i) => i === index
-      ? { ...t, [field]: field === "pnl" ? Number(value) : value,
+      ? { ...t, [field]: (field === "pnl" || field === "quantity") ? Number(value) : value,
           ...(field === "pnl" ? {status: Number(value) > 0 ? "win" : Number(value) < 0 ? "loss" : "breakeven"} : {}) }
       : t) ?? null);
   };
@@ -185,7 +186,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
   }, {})).sort(([a], [b]) => a.localeCompare(b));
 
   const handleImport = async () => {
-    if (!parsedTrades || parsedTrades.length === 0 || !isDestinationValid || invalidDates) return;
+    if (!parsedTrades || parsedTrades.length === 0 || !isDestinationValid || invalidDates || invalidDetails) return;
     setIsImporting(true);
     try {
       // A single chunked bulk insert (see addTradesBatch) instead of one
@@ -373,6 +374,17 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                           <span className={trade.pnl >= 0 ? "text-emerald-300" : "text-rose-300"}>{formatCurrency(trade.pnl)}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
+                          <label className="text-[11px] text-[#AAB9CF]">Symbol
+                            <input value={trade.symbol} placeholder="Required: XAUUSD" onChange={e=>editTrade(index,"symbol",e.target.value)} className="mt-1 block w-full rounded-lg border border-white/15 bg-[#080D1B] p-2 text-xs text-white"/>
+                          </label>
+                          <label className="text-[11px] text-[#AAB9CF]">Direction
+                            <select value={trade.direction} onChange={e=>editTrade(index,"direction",e.target.value)} className="mt-1 block w-full rounded-lg border border-white/15 bg-[#080D1B] p-2 text-xs text-white"><option value="">Select…</option><option value="long">Buy</option><option value="short">Sell</option></select>
+                          </label>
+                          <label className="col-span-2 text-[11px] text-[#AAB9CF]">Volume (lots)
+                            <input type="number" min="0" step="any" value={trade.quantity || ""} placeholder="Required" onChange={e=>editTrade(index,"quantity",e.target.value)} className="mt-1 block w-full rounded-lg border border-white/15 bg-[#080D1B] p-2 text-xs text-white"/>
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
                           <label className="min-w-0 text-[11px] text-[#AAB9CF]">Entry date
                             <input aria-label={`Trade ${index + 1} entry date`} type="date" value={trade.entryDate}
                               onChange={e => editTrade(index, "entryDate", e.target.value)}
@@ -404,7 +416,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                       </div>
                     ))}
                   </div>
-                  {invalidDates && <p role="alert" className="text-xs font-semibold text-rose-300">Correct invalid dates to enable import.</p>}
+                  {(invalidDates || invalidDetails) && <p role="alert" className="text-xs font-semibold text-rose-300">Complete missing symbol, direction and volume, and correct dates to enable import.</p>}
                 </div>
               )}
               <div className="flex justify-between">
@@ -455,7 +467,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
           </Button>
           <Button
             type="button"
-            disabled={!parsedTrades || parsedTrades.length === 0 || !isDestinationValid || invalidDates || isImporting}
+            disabled={!parsedTrades || parsedTrades.length === 0 || !isDestinationValid || invalidDates || invalidDetails || isImporting}
             onClick={handleImport}
             className="bg-gradient-to-r from-[#2F80ED] to-[#1E6BC7] hover:shadow-lg hover:shadow-[#2F80ED]/20 hover:scale-105 transition-all duration-200 text-white rounded-xl disabled:opacity-50 disabled:hover:scale-100"
           >
