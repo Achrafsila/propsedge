@@ -122,7 +122,7 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] max-w-md">
+      <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] max-w-md max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain [scrollbar-width:thin] sm:max-h-[90dvh]">
         <DialogHeader>
           <DialogTitle className="text-[#F8FAFC]">Add New Trade</DialogTitle>
         </DialogHeader>
@@ -257,7 +257,7 @@ export function AddTradeDialog({ open, onOpenChange, defaultAccountType, default
               className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 z-10 !mx-[-1rem] !mb-[-1rem] border-t border-[#1A2942] bg-[#080D1B] px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-[#1A2942] text-[#F8FAFC] hover:bg-[#111C33] hover:border-[#2F80ED] rounded-xl">
               Cancel
             </Button>
