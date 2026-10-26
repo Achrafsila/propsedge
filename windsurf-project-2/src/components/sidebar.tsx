@@ -12,7 +12,8 @@ import {
   Shield,
   LineChart,
   Compass,
-  Activity
+  Activity,
+  Users
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAccounts } from "@/context/AccountsContext";
@@ -36,6 +37,7 @@ export function Sidebar() {
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     { name: "Edge Intelligence", href: "/edgepilot", icon: Compass },
+    ...(process.env.NEXT_PUBLIC_TEAMS_ENABLED === "true" ? [{ name: "Team Workspace", href: "/teams", icon: Users }] : []),
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
@@ -50,6 +52,7 @@ export function Sidebar() {
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Analytics", href: "/portfolio-analytics", icon: LineChart },
     { name: "Edge Intelligence", href: "/edgepilot", icon: Compass },
+    ...(process.env.NEXT_PUBLIC_TEAMS_ENABLED === "true" ? [{ name: "Team Workspace", href: "/teams", icon: Users }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
