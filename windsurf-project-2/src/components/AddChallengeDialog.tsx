@@ -57,7 +57,7 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
     return challengeTypes.find(p => p.id === id);
   };
 
-  const plans = selectedFirm ? getPlansByFirm(selectedFirm) : [];
+  const plans = selectedFirm && selectedFirm !== "__custom__" ? getPlansByFirm(selectedFirm) : [];
 
   const handlePresetChange = (presetId: string) => {
     setSelectedPresetId(presetId);
@@ -86,6 +86,7 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.propFirmName.trim()) return;
     const is2Step = formData.challengeKind === "2-step";
     addChallenge({
       propFirmName: formData.propFirmName,
@@ -141,16 +142,24 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
                 id="propFirm"
                 value={selectedFirm}
                 onChange={(e) => {
-                  setSelectedFirm(e.target.value);
+                  const value = e.target.value;
+                  setSelectedFirm(value);
                   setSelectedPresetId("");
+                  setFormData(previous => ({...previous, propFirmName: value === "__custom__" ? "" : firms.find(f => f.key === value)?.label ?? ""}));
                 }}
                 className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all"
               >
                 <option value="">Select a firm</option>
+                <option value="__custom__">+ Other firm (enter name)</option>
                 {firms.map((firm) => (
                   <option key={firm.key} value={firm.key}>{firm.label}</option>
                 ))}
               </select>
+              {selectedFirm === "__custom__" && <input id="customPropFirm" required maxLength={100}
+                autoComplete="organization" placeholder="Enter the prop firm name"
+                value={formData.propFirmName}
+                onChange={e => setFormData(previous => ({...previous, propFirmName:e.target.value}))}
+                className="mt-2 min-h-11 w-full rounded-lg border border-[#2F80ED]/40 bg-[#0D1424] px-3 text-base text-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20" />}
             </div>
             <div className="space-y-2">
               <Label htmlFor="plan" className="text-[#8B97A8]">Plan</Label>
@@ -158,7 +167,7 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
                 id="plan"
                 value={selectedPresetId}
                 onChange={(e) => handlePresetChange(e.target.value)}
-                disabled={!selectedFirm}
+                disabled={!selectedFirm || selectedFirm === "__custom__"}
                 className="w-full bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] rounded-lg px-3 py-2 focus:border-[#2F80ED] focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20 transition-all disabled:opacity-50"
               >
                 <option value="">Select a plan</option>
