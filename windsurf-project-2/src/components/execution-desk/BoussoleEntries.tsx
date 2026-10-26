@@ -39,7 +39,7 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
   return {options:opts,trend,atr:a,price};
 }
 export default function BoussoleEntries(){
-  const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
+  const [chartReady,setChartReady]=useState(false);const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
   const chartNode=useRef<HTMLDivElement>(null), chartObj=useRef<ChartApi|null>(null),series=useRef<Series|null>(null),lines=useRef<unknown[]>([]);
   const load=useCallback(async()=>{setBusy(true);setError("");try{const r=await fetch("/api/execution-desk/candles?tf="+tf,{cache:"no-store"});const j=await r.json();if(!r.ok||!Array.isArray(j.candles))throw Error(j.error||"No data");setData(j.candles);setAsOf(j.asOf||"");}catch(e){setError(e instanceof Error?e.message:"No data");setData([]);}finally{setBusy(false)}},[tf]);
   useEffect(()=>{void load();const t=setInterval(()=>void load(),300000);return()=>clearInterval(t)},[load]);
@@ -52,17 +52,17 @@ export default function BoussoleEntries(){
       if(!window.LightweightCharts){const script=document.createElement("script");script.src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js";script.async=true;document.head.appendChild(script);await new Promise<void>((resolve,reject)=>{script.onload=()=>resolve();script.onerror=()=>reject(Error("Chart library unavailable"))})}
       if(disposed||!chartNode.current||!window.LightweightCharts)return;
       const el=chartNode.current;const chart=window.LightweightCharts.createChart(el,{width:el.clientWidth,height:500,layout:{background:{color:"#080f20"},textColor:"#b3c4dd"},grid:{vertLines:{color:"#182238"},horzLines:{color:"#182238"}},rightPriceScale:{borderColor:"#26354a"},timeScale:{borderColor:"#26354a",timeVisible:true}});
-      chartObj.current=chart;series.current=chart.addCandlestickSeries({upColor:"#10b981",downColor:"#ef6473",borderVisible:false,wickUpColor:"#10b981",wickDownColor:"#ef6473"});
+      chartObj.current=chart;series.current=chart.addCandlestickSeries({upColor:"#10b981",downColor:"#ef6473",borderVisible:false,wickUpColor:"#10b981",wickDownColor:"#ef6473"});setChartReady(true);
       observer=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth,height:Math.max(380,Math.min(600,el.clientWidth*.64))}));observer.observe(el);
     }
     void init().catch(()=>{if(!disposed)setError("Interactive chart unavailable")});
     return()=>{disposed=true;observer?.disconnect();chartObj.current?.remove();chartObj.current=null;series.current=null;lines.current=[]}
   },[]);
-  useEffect(()=>{if(!series.current)return;const clean=data.slice(0,-1).filter((b,i,a)=>!i||b.time>a[i-1].time);series.current.setData(clean);if(clean.length)chartObj.current?.timeScale().fitContent()},[data]);
+  useEffect(()=>{if(!series.current)return;const clean=data.slice(0,-1).filter((b,i,a)=>!i||b.time>a[i-1].time);series.current.setData(clean);if(clean.length)chartObj.current?.timeScale().fitContent()},[data,chartReady]);
   useEffect(()=>{if(!series.current)return;for(const l of lines.current)try{series.current.removePriceLine(l)}catch{}lines.current=[];
     if(!active)return;for(const [price,color,title] of [[active.entry,"#f3c76a","ENTRY"],[active.sl,"#ef6473","SL"],[active.tp,"#10b981","TP"]] as const)
       lines.current.push(series.current.createPriceLine({price,color,title,lineWidth:2,lineStyle:2,axisLabelVisible:true}));
-  },[active]);
+  },[active,chartReady]);
   return <section className="space-y-4 rounded-2xl border border-cyan-500/20 bg-[#0c1325]/90 p-4 sm:p-5">
     <header className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Boussole · Graphique & entrées proposées</h2><p className="text-xs text-slate-400">XAU/USD spot · Twelve Data · bougies clôturées · actualisation toutes les 5 min</p></div><div className="flex gap-2"><select aria-label="Timeframe" className="rounded-lg border border-white/10 bg-[#182239] px-2 py-2 text-sm" value={tf} onChange={e=>{setTf(e.target.value);setSelected(null)}}>{["5m","15m","30m","1h","4h"].map(x=><option key={x}>{x}</option>)}</select><button onClick={()=>void load()} disabled={busy} className="flex items-center gap-2 rounded-lg border border-cyan-400/30 px-3 py-2 text-xs font-semibold text-cyan-200"><RefreshCcw size={13} className={busy?"animate-spin":""}/> Recalculer</button></div></header>
     {error&&<p role="alert" className="flex gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200"><AlertTriangle size={15}/>{error} · Aucun prix ni signal n'est inventé.</p>}
