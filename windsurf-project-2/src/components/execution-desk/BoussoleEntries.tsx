@@ -26,11 +26,11 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
   for(const side of [1,-1] as const){
     const label=side===1?"Achat":"Vente";
     const structural=side===1?Math.min(...closed.slice(-6).map(x=>x.low))-.2*a:Math.max(...closed.slice(-6).map(x=>x.high))+.2*a;
-    if((price-structural)*side>0)push("market",label+" au marché",price,structural,"Prix de dernière bougie clôturée · scénario conditionnel, non exécuté",side);
+    if((side===1&&up||side===-1&&down) && (price-structural)*side>0 && (last.close-last.open)*side>0)push("market",label+" au marché",price,structural,"EMA alignées et dernière bougie clôturée dans le sens du mouvement · confirmation structurelle à vérifier",side);
     const pullback=side===1?Math.min(e50-.3*a,e20-a):Math.max(e50+.3*a,e20+a);
-    if((e20-pullback)*side>0)push("rebound",label+" sur rebond EMA20",e20,pullback,"Ordre limite théorique au repli EMA20 · attendre confirmation du playbook",side);
+    if((side===1&&up||side===-1&&down) && (e20-pullback)*side>0)push("rebound",label+" sur rebond EMA20",e20,pullback,"Ordre limite théorique au repli EMA20 · attendre sweep / retest confirmé",side);
     const breakout=(side===1?high:low)+side*.1*a;
-    push("breakout",label+" sur cassure 20 bougies",breakout,breakout-side*1.5*a,"Ordre stop conditionnel au-delà du range 20 bougies + 0,1 ATR",side);
+    if(side===1&&up||side===-1&&down)push("breakout",label+" sur cassure 20 bougies",breakout,breakout-side*1.5*a,"Ordre stop conditionnel au-delà du range 20 bougies + 0,1 ATR · retest du playbook non encore confirmé",side);
   }
   return {options:opts,trend,atr:a,price};
 }
@@ -46,7 +46,7 @@ export default function BoussoleEntries(){
     {error&&<p role="alert" className="flex gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200"><AlertTriangle size={15}/>{error} · Aucun prix ni signal n'est inventé.</p>}
     <div className="space-y-3 rounded-xl border border-white/10 bg-[#080f20] p-3"><div className="flex flex-wrap justify-between gap-2 text-xs"><span>Dernière clôture Twelve Data : <b className="text-white">{n(result.price)}</b></span><span>{result.trend} · ATR14 : {n(result.atr)}</span></div><p className="text-[11px] text-amber-200">Les niveaux proviennent de Twelve Data. Le graphique TradingView intégré utilise une autre source et ne permet pas un tracé piloté depuis les cartes.</p></div>
       <div className="space-y-3"><div className="flex justify-between"><h3 className="font-semibold">Opportunités conditionnelles</h3><label className="text-xs text-slate-400">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="ml-1 rounded bg-[#182239] p-1">{[1.5,2,3].map(x=><option key={x} value={x}>1:{x}</option>)}</select></label></div>
-        <p className="text-[11px] text-slate-400">Ces scénarios ne sont pas des signaux confirmés. Valide liquidité, structure, MSS et risque avec ton playbook avant toute exécution.</p>
+        <p className="text-[11px] text-slate-400">Scénarios filtrés par les EMA 20/50/200 et le sens de la bougie. Les conditions de liquidité, MSS et retest ne sont pas encore vérifiées automatiquement.</p>
         <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">{result.options.map(p=><button onClick={()=>setSelected(p.id)} key={p.id} className={"w-full rounded-xl border p-3 text-left transition "+(selected===p.id?"border-cyan-400 bg-cyan-500/10":"border-white/10 bg-white/[.03] hover:bg-white/[.07]")}><div className="flex items-center justify-between"><strong className="text-sm text-slate-100">{p.title}</strong><span className={"text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div><p className="my-2 text-[11px] text-slate-400">{p.reason}</p><div className="grid grid-cols-3 gap-2 text-xs"><span>Entrée<br/><b className="text-amber-200">{n(p.entry)}</b></span><span>SL<br/><b className="text-rose-300">{n(p.sl)}</b></span><span>TP<br/><b className="text-emerald-300">{n(p.tp)}</b></span></div></button>)}</div>
         {active&&<div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3 text-xs text-cyan-100">Sélection : {active.title} · Entrée {n(active.entry)} · SL {n(active.sl)} · TP {n(active.tp)}. Utilise les outils Position longue / courte du graphique pour les reporter.</div>}
         {!result.options.length&&!busy&&<p className="text-sm text-slate-400">Aucune proposition calculable pour le moment.</p>}
