@@ -168,13 +168,13 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
     const date = new Date(value + "T12:00:00Z");
     return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
   };
-  const invalidDetails = isImageImport && (parsedTrades ?? []).some(t => !t.symbol.trim() || !["long","short"].includes(t.direction) || !Number.isFinite(t.quantity) || t.quantity <= 0);
+  const invalidDetails = isImageImport && (parsedTrades ?? []).some(t => !t.symbol.trim() || !["long","short"].includes(t.direction) || !Number.isFinite(t.quantity) || t.quantity <= 0 || !Number.isFinite(t.entryPrice) || !Number.isFinite(t.exitPrice) || t.entryPrice <= 0 || t.exitPrice <= 0);
   const invalidDates = (parsedTrades ?? []).some(t =>
     !validDate(t.entryDate) || !validDate(t.exitDate) || t.exitDate < t.entryDate
   );
-  const editTrade = (index: number, field: "entryDate" | "exitDate" | "pnl" | "symbol" | "direction" | "quantity", value: string) => {
+  const editTrade = (index: number, field: "entryDate" | "exitDate" | "pnl" | "symbol" | "direction" | "quantity" | "entryPrice" | "exitPrice", value: string) => {
     setParsedTrades(current => current?.map((t, i) => i === index
-      ? { ...t, [field]: (field === "pnl" || field === "quantity") ? Number(value) : value,
+      ? { ...t, [field]: (["pnl","quantity","entryPrice","exitPrice"].includes(field)) ? Number(value) : value,
           ...(field === "pnl" ? {status: Number(value) > 0 ? "win" : Number(value) < 0 ? "loss" : "breakeven"} : {}) }
       : t) ?? null);
   };
@@ -396,6 +396,15 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                               className="mt-1 block w-full min-w-0 rounded-lg border border-white/15 bg-[#080D1B] p-2 text-xs text-white [color-scheme:dark]" />
                           </label>
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(["entryPrice","exitPrice"] as const).map(field => (
+                            <label key={field} className="text-[11px] text-[#AAB9CF]">{field === "entryPrice" ? "Entry price" : "Exit price"}
+                              <input type="number" step="any" min="0" value={trade[field] || ""} placeholder="Required"
+                                onChange={e=>editTrade(index,field,e.target.value)}
+                                className="mt-1 block w-full rounded-lg border border-white/15 bg-[#080D1B] p-2 text-xs text-white"/>
+                            </label>
+                          ))}
+                        </div>
                         <label className="block text-[11px] text-[#AAB9CF]">Net P&amp;L
                           <input aria-label={`Trade ${index + 1} P&L`} type="number" step="0.01" value={trade.pnl}
                             onChange={e => editTrade(index, "pnl", e.target.value)}
@@ -416,7 +425,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
                       </div>
                     ))}
                   </div>
-                  {(invalidDates || invalidDetails) && <p role="alert" className="text-xs font-semibold text-rose-300">Complete missing symbol, direction and volume, and correct dates to enable import.</p>}
+                  {(invalidDates || invalidDetails) && <p role="alert" className="text-xs font-semibold text-rose-300">Complete missing fields (including entry date and prices) to enable import.</p>}
                 </div>
               )}
               <div className="flex justify-between">
