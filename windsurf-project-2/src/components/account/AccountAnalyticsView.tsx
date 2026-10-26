@@ -200,6 +200,20 @@ export function AccountAnalyticsView({
   const grossLoss = Math.abs(losingTrades.reduce((sum, trade) => sum + trade.pnl, 0));
   const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null;
 
+  // Trading history is immutable across payouts. Only the current payout
+  // cycle resets; historical strategy and risk insights still use all trades.
+  const paidPayouts = useMemo(() => accountType === "funded"
+    ? payouts.filter(p => p.status === "paid")
+    : [], [payouts, accountType]);
+  const lastPaidDate = paidPayouts.reduce((latest, p) =>
+    p.payoutDate > latest ? p.payoutDate : latest, "");
+  const cycleTrades = trades.filter(t => !lastPaidDate || (t.exitDate || t.entryDate) > lastPaidDate);
+  const cyclePnL = cycleTrades.reduce((sum,t)=>sum+t.pnl,0);
+  const paidPayoutByDate = paidPayouts.reduce<Record<string,number>>((acc,p)=>{
+    acc[p.payoutDate]=(acc[p.payoutDate]??0)+p.requestedPayoutAmount;
+    return acc;
+  }, {});
+
   // ── Drawdown (dollar figure first, percentages derived from it) ────────────
   const maxDDDollars = resolveDrawdownDollars(account.maxDrawdown, account.accountSize);
   const maxDDPercent = account.accountSize > 0 ? (maxDDDollars / account.accountSize) * 100 : 0;
@@ -452,9 +466,9 @@ export function AccountAnalyticsView({
             colored={(account.currentProfit ?? 0) >= 0 ? "#10B981" : "#EF4444"}
           />
           <DataField
-            label="Net P&L"
-            value={fmt$(totalPnL)}
-            colored={totalPnL >= 0 ? "#10B981" : "#EF4444"}
+            label={accountType === "funded" ? "Current Cycle P&L" : "Net P&L"}
+            value={fmt$(accountType === "funded" ? cyclePnL : totalPnL)}
+            colored={(accountType === "funded" ? cyclePnL : totalPnL) >= 0 ? "#10B981" : "#EF4444"}
           />
           {accountType === "challenge" && account.profitTarget > 0 && (
             <DataField
@@ -560,7 +574,7 @@ export function AccountAnalyticsView({
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">DD buffer*</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(remainingDDDollars)}</p></div>
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">{accountType === "challenge" ? "Target progress" : "Net P&L"}</p><p className="mt-1 text-lg font-bold tabular-nums text-[#7ABEFF]">{accountType === "challenge" ? fmtPct(targetProgress) : fmt$(totalPnL)}</p></div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">{accountType === "challenge" ? "Target progress" : "Lifetime Trade P&L"}</p><p className="mt-1 text-lg font-bold tabular-nums text-[#7ABEFF]">{accountType === "challenge" ? fmtPct(targetProgress) : fmt$(totalPnL)}</p></div>
             <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">Trade sample</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{trades.length} <span className="text-xs font-normal text-[#94A3B8]">trades</span></p></div>
           </div>
           <div className="mt-4 border-l-2 border-[#298DFF] pl-3">
@@ -782,13 +796,14 @@ export function AccountAnalyticsView({
           {monthDays.map((date, idx) => {
             if (!date) return <div key={idx} className="h-11 sm:h-12" />;
             const data = getDayData(date);
+            const payoutAmount = paidPayoutByDate[toDateKey(date)] ?? 0;
             const today = isToday(date);
             return (
               <div
                 key={idx}
                 className="h-11 sm:h-12 min-w-0 rounded-lg p-1.5 flex flex-col transition-colors duration-200 hover:bg-white/[0.06]"
                 style={{
-                  background: data
+                  background: payoutAmount && !data ? "rgba(212,175,55,0.13)" : data
                     ? data.pnl >= 0
                       ? "rgba(16,185,129,0.12)"
                       : "rgba(239,68,68,0.12)"
@@ -796,7 +811,7 @@ export function AccountAnalyticsView({
                   border: `1px solid ${
                     today
                       ? "#D4AF37"
-                      : data
+                      : payoutAmount && !data ? "rgba(212,175,55,0.45)" : data
                       ? data.pnl >= 0
                         ? "rgba(16,185,129,0.3)"
                         : "rgba(239,68,68,0.3)"
@@ -814,6 +829,9 @@ export function AccountAnalyticsView({
                 >
                   {date.getDate()}
                 </span>
+                {payoutAmount > 0 && (
+                  <span title={`Paid payout: ${fmt$(payoutAmount)} withdrawn`} className="mt-auto truncate text-[9px] font-semibold text-[#D4AF37]">＄{fmt$(payoutAmount)}</span>
+                )}
                 {data && (
                   <>
                     <span
@@ -843,6 +861,9 @@ export function AccountAnalyticsView({
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded bg-[rgba(239,68,68,0.3)]" /> Losing day
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-bold text-[#D4AF37]">$</span> Paid payout
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded border border-[#D4AF37]" /> Today
