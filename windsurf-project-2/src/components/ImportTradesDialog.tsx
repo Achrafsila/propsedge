@@ -214,12 +214,12 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] max-w-lg">
-        <DialogHeader>
+      <DialogContent className="bg-[#080D1B] border-[#1A2942] text-[#F8FAFC] w-[calc(100vw-1rem)] max-w-lg max-h-[calc(100dvh-1.5rem)] grid grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden p-4">
+        <DialogHeader className="min-w-0 pr-9">
           <DialogTitle className="text-[#F8FAFC]">Import Trades</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain space-y-4 pb-5 pr-1 [-webkit-overflow-scrolling:touch]">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="importAccountType" className="text-[#8B97A8]">Account Type</Label>
@@ -381,7 +381,7 @@ export function ImportTradesDialog({ open, onOpenChange, defaultAccountType, def
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="relative z-10 shrink-0 !bg-[#101A2B] !border-[#1A2942] pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button
             type="button"
             variant="outline"
