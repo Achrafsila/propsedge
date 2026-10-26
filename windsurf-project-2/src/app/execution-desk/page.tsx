@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import BoussoleEntries from "@/components/execution-desk/BoussoleEntries";
 import { Activity, ArrowUpRight, CheckCircle2, Circle, Crosshair, Layers3, ShieldCheck, Target, TrendingUp, Zap } from "lucide-react";
 
 type Setup = "rebound" | "breakout" | "countertrend";
@@ -65,6 +66,7 @@ export default function ExecutionDeskPage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[["MARKET","XAU/USD · GOLD"],["TRADING SESSION","LIVE CHART"],["HTF BIAS",alignment],["EXECUTION STATUS",state]].map(([k,val],i) => <div key={k} className={panel+" p-4"}><div className="text-[10px] font-semibold tracking-[.15em] text-slate-500">{k}</div><div className={"mt-2 text-sm font-bold sm:text-base "+(i===3 ? "text-amber-300" : "text-slate-100")}>{val}</div></div>)}
         </div>
+        <BoussoleEntries />
         <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(340px,1fr)]">
           <section className={panel+" overflow-hidden"}>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3"><span className="flex items-center gap-2 text-sm font-semibold"><Activity size={16} className="text-cyan-400"/> Market Chart <span className="text-xs font-normal text-slate-500">TradingView · OANDA:XAUUSD</span></span><span className="text-[10px] text-slate-500">Broker chart may differ from execution prices</span></div>
