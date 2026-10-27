@@ -9,32 +9,25 @@ export type TrackedTrade = {
   committedAt: string; sourceCandleTime: number; initialReason: string;
 };
 type Candle = {time:number;open:number;high:number;low:number;close:number};
-const KEY = "propsedge.executionDesk.activeTrade.v1";
 const fmt = (n:number) => n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-
+type DbPosition = {id:string;symbol:"XAU/USD";timeframe:string;side:1|-1;title:string;entry:number;sl:number;tp:number;committed_at:string;source_candle_time:number;reason:string};
+const normalize = (p:DbPosition):TrackedTrade=>({id:p.id,symbol:p.symbol,timeframe:p.timeframe,side:p.side,title:p.title,entry:Number(p.entry),sl:Number(p.sl),tp:Number(p.tp),committedAt:p.committed_at,sourceCandleTime:p.source_candle_time,initialReason:p.reason});
 export function useTrackedTrade() {
-  const [trade,setTrade] = useState<TrackedTrade|null>(null);
-  const [loaded,setLoaded] = useState(false);
-  useEffect(()=>{
-    try {
-      const raw = window.localStorage.getItem(KEY);
-      if(raw) {
-        const candidate = JSON.parse(raw) as TrackedTrade;
-        if(candidate?.symbol === "XAU/USD" && [candidate.entry,candidate.sl,candidate.tp].every(Number.isFinite) && [1,-1].includes(candidate.side)) setTrade(candidate);
-      }
-    } catch { /* Corrupt local state must not activate a trade. */ }
-    setLoaded(true);
-  },[]);
-  const commit = (next:TrackedTrade) => {
-    window.localStorage.setItem(KEY,JSON.stringify(next));
-    setTrade(next);
+  const [trade,setTrade]=useState<TrackedTrade|null>(null);
+  const [loaded,setLoaded]=useState(false);
+  const [storageError,setStorageError]=useState("");
+  useEffect(()=>{let cancelled=false;fetch('/api/execution-desk/positions',{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||'Position storage unavailable');if(!cancelled)setTrade(j.position?normalize(j.position):null)}).catch(e=>{if(!cancelled)setStorageError(e instanceof Error?e.message:'Connection unavailable')}).finally(()=>{if(!cancelled)setLoaded(true)});return()=>{cancelled=true}},[]);
+  const commit=async(next:TrackedTrade)=>{
+    const r=await fetch('/api/execution-desk/positions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:next.symbol,timeframe:next.timeframe,side:next.side,title:next.title,entry:next.entry,sl:next.sl,tp:next.tp,reason:next.initialReason,source_candle_time:next.sourceCandleTime})});
+    const j=await r.json();if(!r.ok)throw Error(j.error||'Commit failed');setTrade(normalize(j.position));
   };
-  const close = () => { window.localStorage.removeItem(KEY); setTrade(null); };
-  return {trade,loaded,commit,close};
+  const close=async()=>{if(!trade)return;const r=await fetch('/api/execution-desk/positions',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:trade.id})});const j=await r.json();if(!r.ok)throw Error(j.error||'Close failed');setTrade(null)};
+  return {trade,loaded,storageError,commit,close};
 }
 
-export default function LiveTradeCopilot({trade,candles,asOf,error,onClose}:{trade:TrackedTrade;candles:Candle[];asOf:string;error:string;onClose:()=>void}) {
+export default function LiveTradeCopilot({trade,candles,asOf,error,onClose}:{trade:TrackedTrade;candles:Candle[];asOf:string;error:string;onClose:()=>void|Promise<void>}) {
   const [confirmClose,setConfirmClose] = useState(false);
+  const [closeError,setCloseError]=useState("");
   const closed = candles.length>1 ? candles[candles.length-2] : undefined;
   const timestamp = asOf ? Date.parse(asOf) : NaN;
   const age = Number.isFinite(timestamp) ? Date.now()-timestamp : Infinity;
@@ -66,6 +59,7 @@ export default function LiveTradeCopilot({trade,candles,asOf,error,onClose}:{tra
       {(analysis.adverse||analysis.reached) ? <div className="flex gap-2 text-amber-200"><ShieldAlert size={17} className="shrink-0"/><span>{analysis.adverse && analysis.reached ? "La bougie a traversé SL et TP : ordre intrabougie inconnu." : analysis.adverse ? "Le prix a touché ou traversé le SL théorique. Vérifie l'exécution sur ton broker." : "Le prix a touché ou traversé le TP théorique. Vérifie l'exécution sur ton broker."}</span></div> : analysis.invalidated ? <div className="flex gap-2 text-rose-300"><XCircle size={17} className="shrink-0"/><span>Clôture au-delà du stop structurel enregistré : scénario invalidé.</span></div> : analysis.target ? <div className="flex gap-2 text-emerald-300"><CheckCircle2 size={17}/><span>Objectif dépassé sur clôture : vérifie ton ordre réel.</span></div> : analysis.opposite ? <div className="flex gap-2 text-amber-200"><ShieldAlert size={17} className="shrink-0"/><span>Cassure récente contre la position. Réévalue la structure et le risque, sans déplacer automatiquement le SL.</span></div> : <div className="flex gap-2 text-slate-300"><CheckCircle2 size={17} className="shrink-0 text-cyan-300"/><span>Pas d'invalidation du SL détectée sur cette dernière clôture. Cela ne confirme pas à lui seul le setup.</span></div>}
     </div>}
     <p className="text-[11px] leading-5 text-slate-400">Surveillance indicative des bougies clôturées Twelve Data pendant que cette page est ouverte. Les fills, sorties partielles, spread, stops et TP réels ne sont pas synchronisés avec MT5. Ne remplace pas les protections configurées chez le broker.</p>
-    {!confirmClose ? <button className="w-full rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/5" onClick={()=>setConfirmClose(true)}>Déclarer la clôture de la position</button> : <div className="flex gap-2"><button className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-xs" onClick={()=>setConfirmClose(false)}>Annuler</button><button className="flex-1 rounded-xl bg-rose-500/20 px-3 py-2 text-xs text-rose-200" onClick={onClose}>Confirmer la clôture</button></div>}
+    {closeError&&<p role="alert" className="text-xs text-rose-300">{closeError}</p>}
+    {!confirmClose ? <button className="w-full rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-200 hover:bg-white/5" onClick={()=>setConfirmClose(true)}>Déclarer la clôture de la position</button> : <div className="flex gap-2"><button className="flex-1 rounded-xl border border-white/15 px-3 py-2 text-xs" onClick={()=>setConfirmClose(false)}>Annuler</button><button className="flex-1 rounded-xl bg-rose-500/20 px-3 py-2 text-xs text-rose-200" onClick={()=>{void Promise.resolve(onClose()).catch(e=>setCloseError(e instanceof Error?e.message:"Clôture impossible"))}}>Confirmer la clôture</button></div>}
   </section>;
 }
