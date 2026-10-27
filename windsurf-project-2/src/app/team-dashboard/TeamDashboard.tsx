@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, DollarSign, ShieldAlert, Users, Wallet, ChevronDown, TrendingUp, Target, Trophy, Crown, Medal, Sparkles } from "lucide-react";
+import { ArrowUpRight, DollarSign, ShieldAlert, Users, ChevronDown, TrendingUp, Target, Trophy, Crown, Medal, Sparkles } from "lucide-react";
 import { useTeams } from "@/lib/teams/useTeams";
 import { createClient } from "@/lib/supabase/client";
 import { useTeamShares } from "@/lib/teams/useTeamShares";
@@ -134,8 +134,11 @@ function TeamPerformance({ teamId }: { teamId: string }) {
   ];
   const invested = costsComplete ? costs : null;
   const winRate = stats.trades.length ? stats.wins / stats.trades.length * 100 : null;
+  const challengeCapital = challengeRows.filter(a => !a.parentChallengeId).reduce((sum, a) => sum + a.size, 0);
+  const fundedCapital = fundedRows.reduce((sum, a) => sum + a.size, 0);
   const topMetric = [
-    { label: "Shared capital", value: money(stats.capital), note: `${stats.unique.length} shared accounts`, icon: Wallet, tone: "text-blue-400" },
+    { label: "Challenge Shared Capital", value: money(challengeCapital), note: roots.length === 0 ? "Every trading empire starts with its first challenge. 🚀" : `${roots.length} shared challenges`, emptyTitle: roots.length === 0 ? "The mission hasn't started yet." : null, icon: Target, tone: "text-blue-400" },
+    { label: "Funded Shared Capital", value: money(fundedCapital), note: fundedRows.length === 0 ? "The capital is waiting for its future champions. 🏆" : `${fundedRows.length} funded accounts`, emptyTitle: fundedRows.length === 0 ? "No funded capital… yet!" : null, icon: Trophy, tone: "text-emerald-400" },
     { label: "Trading P&L", value: money(stats.pnl), note: `${stats.trades.length} recorded trades`, icon: TrendingUp, tone: stats.pnl >= 0 ? "text-emerald-400" : "text-rose-400" },
     { label: "Payouts received", value: money(totalPayouts), note: `${paidFunded.length} funded accounts paid`, icon: DollarSign, tone: "text-emerald-400" },
     { label: "Win rate", value: winRate === null ? "—" : `${winRate.toFixed(1)}%`, note: "Closed recorded trades", icon: Target, tone: "text-violet-400" },
@@ -150,8 +153,8 @@ function TeamPerformance({ teamId }: { teamId: string }) {
         <div><p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-300">01 / Collective position</p><h2 className="mt-2 text-xl font-bold sm:text-2xl">Your team at a glance</h2><p className="mt-1 text-sm text-slate-400">{stats.unique.length} shared accounts · {stats.traders.length} contributing traders · {fundedRows.length} funded</p></div>
         <Link href="/teams" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-blue-400/25 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200 hover:bg-blue-500/20">Manage accounts <ArrowUpRight size={15}/></Link>
       </div>
-      <div className="relative mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {topMetric.map(metric => <div key={metric.label} className="min-w-0 rounded-xl border border-white/[0.07] bg-black/20 p-3 sm:p-4"><div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400"><metric.icon size={15} className={metric.tone}/>{metric.label}</div><p className={`mt-2 break-words text-xl font-extrabold tabular-nums sm:text-2xl ${metric.tone}`}>{metric.value}</p><p className="mt-1 text-[11px] text-slate-500">{metric.note}</p></div>)}
+      <div className="relative mt-5 grid grid-cols-2 gap-2 lg:grid-cols-5">
+        {topMetric.map(metric => <div key={metric.label} className="min-w-0 rounded-xl border border-white/[0.07] bg-black/20 p-3 sm:p-4"><div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400"><metric.icon size={15} className={metric.tone}/>{metric.label}</div><p className={`mt-2 break-words text-xl font-extrabold tabular-nums sm:text-2xl ${metric.tone}`}>{metric.value}</p>{"emptyTitle" in metric && metric.emptyTitle && <p className="mt-2 text-xs font-semibold text-slate-200">{metric.emptyTitle}</p>}<p className="mt-1 text-[11px] text-slate-500">{metric.note}</p></div>)}
       </div>
     </section>
 
