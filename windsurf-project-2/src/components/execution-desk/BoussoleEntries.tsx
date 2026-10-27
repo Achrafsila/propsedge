@@ -33,11 +33,21 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
     const breakout=(side===1?high:low)+side*.1*a;
     if(side===1&&up||side===-1&&down)push("breakout",label+" sur cassure 20 bougies",breakout,breakout-side*1.5*a,"Ordre stop conditionnel au-delà du range 20 bougies + 0,1 ATR · retest du playbook non encore confirmé",side);
   }
+  // During EMA compression, keep a directional watchlist rather than an empty screen.
+  // Never classify those as confirmed signals or immediate market orders.
+  if(opts.length===0 && Number.isFinite(a) && a>0){
+    const watchSide:1|-1=d;
+    const breakPrice=(watchSide===1?high:low)+watchSide*.1*a;
+    push("breakout",watchSide===1?"Achat conditionnel sur cassure":"Vente conditionnelle sur cassure",breakPrice,breakPrice-watchSide*1.5*a,"WATCHING · EMA non alignées : attendre cassure, clôture et retest confirmé avant toute décision.",watchSide);
+    const counter:-1|1=watchSide===1?-1:1;
+    const oppositePrice=(counter===1?high:low)+counter*.1*a;
+    push("breakout",counter===1?"Achat alternatif sur cassure":"Vente alternative sur cassure",oppositePrice,oppositePrice-counter*1.5*a,"WATCHING · scénario alternatif en cas de renversement structurel, non validé.",counter);
+  }
   return {options:opts,trend,atr:a,price};
 }
 export default function BoussoleEntries(){
   const {trade,loaded,storageError,commit,close}=useTrackedTrade();
-  const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
+  const [tf,setTf]=useState("5m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
   const effectiveTf=trade?.timeframe||tf;
   const load=useCallback(async()=>{setBusy(true);setError("");try{const r=await fetch("/api/execution-desk/candles?tf="+effectiveTf,{cache:"no-store"});const j=await r.json();if(!r.ok||!Array.isArray(j.candles))throw Error(j.error||"No data");setData(j.candles);setAsOf(j.asOf||"");}catch(e){setError(e instanceof Error?e.message:"No data");setData([]);}finally{setBusy(false)}},[effectiveTf]);
   useEffect(()=>{void load();const t=setInterval(()=>void load(),trade?60000:300000);return()=>clearInterval(t)},[load,trade]);
@@ -45,7 +55,7 @@ export default function BoussoleEntries(){
   useEffect(()=>{if(selected&&!result.options.some(o=>o.id===selected))setSelected(null)},[result.options,selected]);
   const active=result.options.find(p=>p.id===selected)||null;
   const commitSelected=async()=>{
-    if(!active || !data.length || !asOf) return;
+    if(!active || !data.length || !asOf || !window.confirm("As-tu réellement ouvert cette position chez ton broker ? Commit enregistre une position déclarée et active son suivi, mais ne passe aucun ordre.")) return;
     const age=Date.now()-Date.parse(asOf);
     if(!Number.isFinite(age)||age>600000||age<0){setError("Données trop anciennes pour confirmer ce scénario. Recalcule avant Commit.");return;}
     const risk=(active.entry-active.sl)*active.side;
@@ -59,7 +69,7 @@ export default function BoussoleEntries(){
     {error&&<p role="alert" className="flex gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200"><AlertTriangle size={15}/>{error} · Aucun prix ni signal n'est inventé.</p>}
     <div className="space-y-3 rounded-xl border border-white/10 bg-[#080f20] p-3"><div className="flex flex-wrap justify-between gap-2 text-xs"><span>Dernière clôture Twelve Data : <b className="text-white">{n(result.price)}</b></span><span>{result.trend} · ATR14 : {n(result.atr)}</span></div><p className="text-[11px] text-amber-200">Les niveaux proviennent de Twelve Data. Le graphique TradingView intégré utilise une autre source et ne permet pas un tracé piloté depuis les cartes.</p></div>
       <div className="space-y-3"><div className="flex justify-between"><h3 className="font-semibold">Opportunités conditionnelles</h3><label className="text-xs text-slate-400">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="ml-1 rounded bg-[#182239] p-1">{[1.5,2,3].map(x=><option key={x} value={x}>1:{x}</option>)}</select></label></div>
-        <p className="text-[11px] text-slate-400">Scénarios filtrés par les EMA 20/50/200 et le sens de la bougie. Les conditions de liquidité, MSS et retest ne sont pas encore vérifiées automatiquement.</p>
+        <p className="text-[11px] text-slate-400">Scénarios filtrés par les EMA 20/50/200 et le sens de la bougie. Les setups WATCHING attendent une cassure, un retest et une confirmation. Aucune entrée automatique ni signal garanti.</p>
         <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">{result.options.map(p=><button onClick={()=>setSelected(p.id)} key={p.id} className={"w-full rounded-xl border p-3 text-left transition "+(selected===p.id?"border-cyan-400 bg-cyan-500/10":"border-white/10 bg-white/[.03] hover:bg-white/[.07]")}><div className="flex items-center justify-between"><strong className="text-sm text-slate-100">{p.title}</strong><span className={"text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div><p className="my-2 text-[11px] text-slate-400">{p.reason}</p><div className="grid grid-cols-3 gap-2 text-xs"><span>Entrée<br/><b className="text-amber-200">{n(p.entry)}</b></span><span>SL<br/><b className="text-rose-300">{n(p.sl)}</b></span><span>TP<br/><b className="text-emerald-300">{n(p.tp)}</b></span></div></button>)}</div>
         {active&&<div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3 text-xs text-cyan-100">Sélection : {active.title} · Entrée {n(active.entry)} · SL {n(active.sl)} · TP {n(active.tp)}. Les niveaux seront figés après Commit. Aucun ordre réel n'est passé.<button onClick={()=>void commitSelected()} disabled={busy || !!error || !!storageError || !loaded || !asOf} className="mt-3 w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-bold text-slate-950 disabled:opacity-40">Commit Trade · Je suis entré en position</button></div>}
         {!result.options.length&&!busy&&<p className="text-sm text-slate-400">Aucune proposition calculable pour le moment.</p>}
