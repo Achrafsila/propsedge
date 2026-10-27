@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw, AlertTriangle } from "lucide-react";
 
+import DecisionBrief, { evaluateDecision } from "./DecisionBrief";
 import LiveTradeCopilot, { useTrackedTrade, type TrackedTrade } from "./LiveTradeCopilot";
 type Candle = {time:number;open:number;high:number;low:number;close:number};
 type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"};
@@ -56,6 +57,7 @@ export default function BoussoleEntries(){
   const result=useMemo(()=>proposals(data,rr),[data,rr]);
   useEffect(()=>{if(selected&&!result.options.some(o=>o.id===selected))setSelected(null)},[result.options,selected]);
   const active=result.options.find(p=>p.id===selected)||null;
+  const decision=useMemo(()=>evaluateDecision(data,active,asOf),[data,active,asOf]);
   const commitSelected=async()=>{
     if(!active || !data.length || !asOf || !entryConfirmed) return;
     const execution=Number(actualEntry);
@@ -75,6 +77,7 @@ export default function BoussoleEntries(){
       <div className="space-y-3"><div className="flex justify-between"><h3 className="font-semibold">Opportunités conditionnelles</h3><label className="text-xs text-slate-400">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="ml-1 rounded bg-[#182239] p-1">{[1.5,2,3].map(x=><option key={x} value={x}>1:{x}</option>)}</select></label></div>
         <p className="text-[11px] text-slate-400">Scénarios filtrés par les EMA 20/50/200 et le sens de la bougie. Les setups WATCHING attendent une cassure, un retest et une confirmation. Aucune entrée automatique ni signal garanti.</p>
         <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">{result.options.map(p=><button onClick={()=>{setSelected(p.id);setActualEntry("");setEntryConfirmed(false)}} key={p.id} className={"w-full rounded-xl border p-3 text-left transition "+(selected===p.id?"border-cyan-400 bg-cyan-500/10":"border-white/10 bg-white/[.03] hover:bg-white/[.07]")}><div className="flex items-center justify-between"><strong className="text-sm text-slate-100">{p.title}</strong><span className={"text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div><p className="my-2 text-[11px] text-slate-400">{p.reason}</p><div className="grid grid-cols-3 gap-2 text-xs"><span>Entrée<br/><b className="text-amber-200">{n(p.entry)}</b></span><span>SL<br/><b className="text-rose-300">{n(p.sl)}</b></span><span>TP<br/><b className="text-emerald-300">{n(p.tp)}</b></span></div></button>)}</div>
+        <DecisionBrief value={decision}/>
         {active&&<div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3 text-xs text-cyan-100">Sélection : {active.title} · Entrée {n(active.entry)} · SL {n(active.sl)} · TP {n(active.tp)}. <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-amber-100">WATCHING — setup non confirmé. Le prix proposé n&apos;est pas une exécution. Commit est réservé à une position déjà ouverte chez ton broker.</p><label className="mt-3 block text-xs font-semibold">Prix d&apos;exécution réel<input aria-label="Prix d'exécution réel" type="number" min="0" step="0.01" placeholder="Ex. 4007.58" value={actualEntry} onChange={e=>setActualEntry(e.target.value)} className="mt-1 w-full rounded-lg border border-white/20 bg-[#111b2d] px-3 py-2 text-white" /></label><label className="mt-3 flex items-start gap-2 text-xs"><input type="checkbox" checked={entryConfirmed} onChange={e=>setEntryConfirmed(e.target.checked)} className="mt-0.5"/>Je confirme avoir ouvert cette position sur mon broker. Le système ne passe aucun ordre.</label><button onClick={()=>void commitSelected()} disabled={busy || !!error || !!storageError || !loaded || !asOf || !entryConfirmed || !Number.isFinite(Number(actualEntry)) || Number(actualEntry)<=0} className="mt-3 w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-bold text-slate-950 disabled:opacity-40">Commit position déjà ouverte · Activer Copilot</button></div>}
         {!result.options.length&&!busy&&<p className="text-sm text-slate-400">Aucune proposition calculable pour le moment.</p>}
       </div>
