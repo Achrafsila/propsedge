@@ -377,7 +377,7 @@ export function AccountAnalyticsView({
           allAccounts={allAccounts}
           onAccountChange={onAccountChange}
           router={router}
-          setIsAddTradeDialogOpen={setIsImportTradeDialogOpen}
+          setIsImportTradeDialogOpen={setIsImportTradeDialogOpen}
           setIsAddPayoutDialogOpen={setIsAddPayoutDialogOpen}
         />
         <div
@@ -430,7 +430,7 @@ export function AccountAnalyticsView({
         allAccounts={allAccounts}
         onAccountChange={onAccountChange}
         router={router}
-        setIsAddTradeDialogOpen={setIsAddTradeDialogOpen}
+        setIsImportTradeDialogOpen={setIsImportTradeDialogOpen}
         setIsAddPayoutDialogOpen={setIsAddPayoutDialogOpen}
       />
 
@@ -982,7 +982,7 @@ function Header({
   allAccounts,
   onAccountChange,
   router,
-  setIsAddTradeDialogOpen,
+  setIsImportTradeDialogOpen,
   setIsAddPayoutDialogOpen,
 }: {
   account: any;
@@ -990,7 +990,7 @@ function Header({
   allAccounts: any[];
   onAccountChange: (id: string) => void;
   router: any;
-  setIsAddTradeDialogOpen: (v: boolean) => void;
+  setIsImportTradeDialogOpen: (v: boolean) => void;
   setIsAddPayoutDialogOpen: (v: boolean) => void;
 }) {
   return (
@@ -1060,12 +1060,12 @@ function Header({
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
           className="border-[rgba(148,163,184,0.2)] text-[#F8FAFC] hover:bg-[rgba(41,141,255,0.1)] hover:border-[#298DFF] rounded-xl pointer-events-auto transition-all duration-300"
-          onClick={() => setIsAddTradeDialogOpen(true)}
+          onClick={() => setIsImportTradeDialogOpen(true)}
           type="button"
         >
           <Plus className="w-4 h-4 mr-2" />
