@@ -97,7 +97,7 @@ export default function BoussoleEntries(){
     const {data:row,error}=await supabase.from("execution_positions").insert({user_id:user.id,symbol:"XAU/USD",side:proposal.side,title:proposal.title,timeframe:tf,entry:price,sl:proposal.sl,tp:proposal.tp,status:"open",reason:proposal.reason,source_candle_time:latest?.time??null}).select("id,committed_at").single();
     if(error||!row){setError("Could not save position: "+(error?.message??"unknown error"));setSaving(false);return;}
     setPosition({id:row.id,proposal,actualEntry:price,startedAt:Math.floor(new Date(row.committed_at).getTime()/1000),status:"active",lastAlert:""});
-    setAlerts([]);setCommitCandidate(null);setSaving(false);
+    setAlerts([]);setSeenAlerts([]);setCommitCandidate(null);setSaving(false);
   };
   const [commitCandidate,setCommitCandidate]=useState<Proposal|null>(null);
   const [entryInput,setEntryInput]=useState("");
@@ -110,19 +110,29 @@ export default function BoussoleEntries(){
     setAlerts(current=>[message,...current].slice(0,6));
     if(typeof Notification!=="undefined" && Notification.permission==="granted") new Notification("PropEdge · Execution Desk",{body:message});
   },[]);
+  const [seenAlerts,setSeenAlerts]=useState<string[]>([]);
   useEffect(()=>{
-    if(!position || position.status!=="active" || !latest || latest.time<=position.startedAt)return;
+    if(!position || position.status!=="active" || !latest)return;
     const p=position.proposal;
-    const slHit=p.side===1?latest.low<=p.sl:latest.high>=p.sl;
-    const tpHit=p.side===1?latest.high>=p.tp:latest.low<=p.tp;
+    const afterEntry=data.slice(0,-1).filter(c=>c.time>=position.startedAt);
+    const all=afterEntry.length?afterEntry:[latest];
+    const favorable=(latest.close-position.actualEntry)*p.side;
+    const risk=Math.abs(position.actualEntry-p.sl);
+    const progress=risk>0?favorable/risk:0;
+    const events:string[]=[];
+    if(all.some(c=>p.side===1?c.low<=p.sl:c.high>=p.sl))events.push("Stop-loss touched · check your broker");
+    if(all.some(c=>p.side===1?c.high>=p.tp:c.low<=p.tp))events.push("Take-profit touched · check your broker");
+    if(progress>=1)events.push("Trade reached +1R");
+    else if(progress>=0.5)events.push("Trade reached +0.5R");
     const adverse=liquidity.lastEvent && liquidity.lastEvent.time>=position.startedAt &&
       (p.side===1?liquidity.lastEvent.kind.startsWith("bearish"):liquidity.lastEvent.kind.startsWith("bullish"));
-    const event=slHit?"Stop level touched":tpHit?"Target level touched":adverse?"Opposing structure detected":"";
-    if(event && event!==position.lastAlert){
-      setPosition(prev=>prev?{...prev,lastAlert:event}:prev);
-      pushAlert(event+" · Review your "+(p.side===1?"BUY":"SELL")+" position. Candle data is delayed.");
+    if(adverse)events.push("Opposing structure observed");
+    const fresh=events.filter(e=>!seenAlerts.includes(position.id+":"+e));
+    if(fresh.length){
+      setSeenAlerts(prev=>[...prev,...fresh.map(e=>position.id+":"+e)]);
+      fresh.forEach(e=>pushAlert(e+" · Indicative Twelve Data candles; verify MT5 execution."));
     }
-  },[latest?.time,liquidity.lastEvent?.time,position,pushAlert]);
+  },[latest?.time,position?.id,position?.startedAt,data,liquidity.lastEvent?.time,seenAlerts,pushAlert]);
   const currentR=position && latest ? (latest.close-position.actualEntry)*position.proposal.side/Math.abs(position.actualEntry-position.proposal.sl) : null;
 
   return <section className="rounded-2xl border border-white/10 bg-[#0c1325]/90 p-3 sm:p-4">
@@ -146,8 +156,8 @@ export default function BoussoleEntries(){
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
       <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {candidates.length}</button>
       <div className="flex items-center gap-3">
-        {alerts.length>0&&<span role="status" title={alerts[0]} className="max-w-52 truncate text-[11px] text-amber-300">● {alerts[0]}</span>}
-        <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Alerts on":"Enable alerts"}</button>
+        <span role="status" title={alerts[0]??"Monitoring checks on closed candles only"} className="max-w-52 truncate text-[11px] text-amber-300">{alerts.length>0?"● "+alerts[0]:"No new alerts · monitoring on page"}</span>
+        <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts on":"Enable alerts"}</button>
       </div>
     </div>
     {showWatchlist&&<>
