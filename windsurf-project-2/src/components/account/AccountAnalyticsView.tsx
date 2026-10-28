@@ -460,9 +460,37 @@ export function AccountAnalyticsView({
       <div className="flex justify-end"><button type="button" onClick={()=>setEditRulesOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-400/[.07] px-3 text-xs font-semibold text-cyan-200"><Pencil size={14}/> Edit Account Rules</button></div>
       <EditAccountRulesDialog open={editRulesOpen} onOpenChange={setEditRulesOpen} account={account} accountType={accountType}/>
       
-      {/* ── Account Data Strip ────────────────────────────────────────────── */}
+      {/* Premium account cockpit: primary decision metrics above secondary analytics. */}
+      <section className="relative overflow-hidden rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-[#13263a] via-[#101b2d] to-[#0b1423] p-4 sm:p-5">
+        <div className="pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl"/>
+        <div className="relative flex flex-wrap items-start justify-between gap-3">
+          <div><p className="text-[10px] font-bold uppercase tracking-[.19em] text-cyan-300">Account command center</p>
+            <h2 className="mt-1 text-lg font-bold text-white sm:text-xl">{account.accountName} <span className="text-xs font-medium text-slate-400">· {accountType==="funded"?"Funded":"Challenge"}</span></h2>
+            <p className="mt-1 text-xs text-slate-400">Realized P&L · account records, not broker-live equity</p>
+          </div>
+          <span className="rounded-full border border-white/15 bg-white/[.05] px-3 py-1 text-xs font-bold text-slate-200">{account.propFirmName}</span>
+        </div>
+        <div className="relative mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            {label:"Recorded balance",value:fmt$(accountType==="funded"?account.currentBalance:startBalance+totalPnL),sub:"Not live equity",tone:"text-white"},
+            {label:"Current cycle P&L",value:fmt$(accountType==="funded"?cyclePnL:totalPnL),sub:accountType==="funded"?(lastPaidDate?"Since "+lastPaidDate:"Since funding"):"Evaluation",tone:(accountType==="funded"?cyclePnL:totalPnL)>=0?"text-emerald-300":"text-rose-300"},
+            {label:"Estimated DD buffer",value:fmt$(remainingDDDollars),sub:"Simplified · check broker",tone:remainingDDDollars<=0?"text-rose-300":"text-amber-200"},
+            {label:"Win rate",value:fmtPct(winRate),sub:`${trades.length} recorded trades`,tone:"text-cyan-200"},
+          ].map(item=><div key={item.label} className="min-w-0 rounded-xl border border-white/[.08] bg-[#0b1422]/70 p-3">
+            <p className="text-[10px] text-slate-400">{item.label}</p><p className={`mt-1 break-words text-lg font-extrabold tabular-nums sm:text-2xl ${item.tone}`}>{item.value}</p><p className="mt-1 text-[10px] text-slate-500">{item.sub}</p>
+          </div>)}
+        </div>
+        <div className="relative mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[.08] pt-3">
+          <p className="text-xs text-slate-300">{remainingDDDollars<=0?"Review risk limits before placing another trade.":trades.length<5?"Early sample · focus on rule compliance and clean execution.":"Review drawdown and consistency limits before setting today's risk."}</p>
+          <button type="button" onClick={()=>document.getElementById("account-intelligence")?.scrollIntoView({behavior:"smooth",block:"start"})} className="min-h-9 rounded-lg border border-cyan-400/25 px-3 text-xs font-semibold text-cyan-200">Risk & consistency ↓</button>
+        </div>
+      </section>
+
+      {/* ── Secondary account data ────────────────────────────────────────── */}
+      <details className="group rounded-xl border border-white/[.08] bg-[#0d1728] p-3 sm:p-4">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-300">Account details <span className="ml-1 font-normal text-slate-500">· firm, dates, targets and configuration</span></summary>
       <div
-        className="rounded-xl p-3 sm:p-4 transition-all duration-300"
+        className="mt-3 rounded-xl p-3 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -511,6 +539,8 @@ export function AccountAnalyticsView({
         </div>
       </div>
 
+      </details>
+      <div id="account-intelligence" className="flex flex-wrap items-center justify-between gap-2 pt-1"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-cyan-300">Risk & rules</p><h3 className="text-lg font-bold text-white">Account Intelligence</h3></div><span className="text-[10px] text-slate-500">Calculated from recorded trades</span></div>
       {(() => {
         const sourceChallenge = accountType === "funded" && account.sourceChallengeId
           ? challenges.find(c => c.id === account.sourceChallengeId) : null;
@@ -641,10 +671,10 @@ export function AccountAnalyticsView({
         </div>
       </div>
       </div>
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-5">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
       {/* ── Equity Curve ──────────────────────────────────────────────────── */}
       <div
-        className="xl:col-span-3 rounded-xl p-4 transition-all duration-300"
+        className="min-w-0 rounded-xl p-4 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -773,7 +803,7 @@ export function AccountAnalyticsView({
 
       {/* ── Trading Calendar ──────────────────────────────────────────────── */}
       <div
-        className="xl:col-span-2 rounded-xl p-4 transition-all duration-300"
+        className="min-w-0 rounded-xl p-4 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
