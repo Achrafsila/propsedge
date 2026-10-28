@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCcw, AlertTriangle } from "lucide-react";
+import { RefreshCcw, AlertTriangle, Bell, Check, X } from "lucide-react";
 import { analyzeLiquidityStructure } from "@/lib/execution/liquidityStructure";
 
 type Candle = {time:number;open:number;high:number;low:number;close:number};
-type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"|"reversal";status?:"watch"|"conditional"};
+type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"|"reversal";status?:string};
 const n=(v:number)=>Number.isFinite(v)?v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
 const ema=(arr:number[],len:number)=>{if(arr.length<len)return NaN;let value=arr.slice(0,len).reduce((a,b)=>a+b,0)/len;for(let i=len;i<arr.length;i++)value=value+(arr[i]-value)*2/(len+1);return value};
 function atr(c:Candle[]){if(c.length<16)return NaN;let result=0;for(let i=1;i<=14;i++) result+=Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close));result/=14;for(let i=15;i<c.length;i++){const t=Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close));result=(result*13+t)/14}return result}
@@ -68,6 +68,32 @@ export default function BoussoleEntries(){
     }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority).slice(0,3);
   },[result.options,liquidity,data]);
   const active=candidates.find(x=>x.id===selected);
+  const [position,setPosition]=useState<{proposal:Proposal;actualEntry:number;startedAt:number;status:"active"|"closed";lastAlert:string}|null>(null);
+  const [commitCandidate,setCommitCandidate]=useState<Proposal|null>(null);
+  const [entryInput,setEntryInput]=useState("");
+  const [alerts,setAlerts]=useState<string[]>([]);
+  const [notifyEnabled,setNotifyEnabled]=useState(false);
+  const latest=data.at(-2);
+  const fired=(p:Proposal)=>!!latest && (p.side===1?latest.high>=p.entry:latest.low<=p.entry);
+  const pushAlert=useCallback((message:string)=>{
+    setAlerts(current=>[message,...current].slice(0,6));
+    if(typeof Notification!=="undefined" && Notification.permission==="granted") new Notification("PropEdge · Execution Desk",{body:message});
+  },[]);
+  useEffect(()=>{
+    if(!position || position.status!=="active" || !latest || latest.time<=position.startedAt)return;
+    const p=position.proposal;
+    const slHit=p.side===1?latest.low<=p.sl:latest.high>=p.sl;
+    const tpHit=p.side===1?latest.high>=p.tp:latest.low<=p.tp;
+    const adverse=liquidity.lastEvent && liquidity.lastEvent.time>=position.startedAt &&
+      (p.side===1?liquidity.lastEvent.kind.startsWith("bearish"):liquidity.lastEvent.kind.startsWith("bullish"));
+    const event=slHit?"Stop level touched":tpHit?"Target level touched":adverse?"Opposing structure detected":"";
+    if(event && event!==position.lastAlert){
+      setPosition(prev=>prev?{...prev,lastAlert:event}:prev);
+      pushAlert(event+" · Review your "+(p.side===1?"BUY":"SELL")+" position. Candle data is delayed.");
+    }
+  },[latest?.time,liquidity.lastEvent?.time,position,pushAlert]);
+  const currentR=position && latest ? (latest.close-position.actualEntry)*position.proposal.side/Math.abs(position.actualEntry-position.proposal.sl) : null;
+
   return <section className="rounded-2xl border border-white/10 bg-[#0c1325]/90 p-3 sm:p-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><h2 className="text-base font-bold text-white">Trade opportunities</h2><p className="text-[11px] text-slate-400">Top conditional setups · XAU/USD</p></div>
@@ -83,12 +109,23 @@ export default function BoussoleEntries(){
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
     <div className="mt-3 flex justify-between gap-2"><span className="text-[11px] text-slate-400">Watchlist · {candidates.length} setups</span><label className="text-xs text-slate-400">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] p-1">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label></div>
+    {position?.status==="active" && <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-400/[.07] p-3">
+      <div className="flex items-center justify-between gap-2"><div><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Active · manually committed</p><h3 className="text-sm font-bold text-white">{position.proposal.title}</h3></div><button type="button" onClick={()=>setPosition(prev=>prev?{...prev,status:"closed"}:prev)} className="min-h-10 rounded-lg border border-white/20 px-3 text-xs">Close monitoring</button></div>
+      <div className="mt-3 grid grid-cols-4 gap-2 text-xs">{[{label:"Entry",value:n(position.actualEntry)},{label:"SL",value:n(position.proposal.sl)},{label:"TP",value:n(position.proposal.tp)},{label:"Move",value:currentR===null?"—":currentR.toFixed(2)+"R"}].map(x=><div key={x.label} className="min-w-0"><p className="text-[10px] text-slate-400">{x.label}</p><b className="tabular-nums text-white">{x.value}</b></div>)}</div>
+      <p className="mt-2 text-[10px] text-slate-400">Monitoring with last closed OHLC candles · approx. 5-minute refresh, not broker execution or tick-by-tick surveillance.</p>
+    </div>}
+    {alerts.length>0 && <div aria-live="polite" className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/[.06] p-2.5"><p className="text-xs font-bold text-amber-200">Risk notifications</p>{alerts.slice(0,3).map((msg,i)=><p key={i} className="mt-1 text-[11px] text-slate-300">{msg}</p>)}</div>}
+    <div className="mt-2 flex justify-end"><button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1.5 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts enabled":"Enable browser alerts"}</button></div>
     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{candidates.map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
       <div className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-white sm:text-sm">{p.title}</strong><span className={"shrink-0 text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div>
       <p className="mt-1 text-[10px] text-amber-200">{p.status}</p>
       <div className="mt-3 grid grid-cols-3 gap-2">{[{key:"Entry",value:p.entry,style:"text-amber-200"},{key:"Stop",value:p.sl,style:"text-rose-300"},{key:"Target",value:p.tp,style:"text-emerald-300"}].map(x=><div key={x.key} className="min-w-0"><p className="text-[10px] text-slate-400">{x.key}</p><p className={"text-xs font-bold tabular-nums sm:text-sm "+x.style}>{n(x.value)}</p></div>)}</div>
-      {selected===p.id&&<p className="mt-3 border-t border-white/10 pt-2 text-xs leading-5 text-slate-300">{p.reason}. Invalidation : {n(p.sl)}. Aucune exécution automatique.</p>}
+      {selected===p.id&&<div className="mt-3 border-t border-white/10 pt-2"><p className="text-xs leading-5 text-slate-300">{p.reason}. Invalidation : {n(p.sl)}.</p><span className="mt-2 inline-block rounded-md border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-200">Select this setup to commit manually below</span></div>}
     </button>)}</div>
+    {active && !position?.status?.includes("active") && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{fired(active)?"Trigger level touched (not an executed order)":"Awaiting trigger · conditional setup"}</p></div><button type="button" onClick={()=>{setCommitCandidate(active);setEntryInput(String(active.entry));}} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white">Commit position</button></div>
+    </div>}
+    {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={!(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>{setPosition({proposal:commitCandidate,actualEntry:Number(entryInput),startedAt:latest?.time??0,status:"active",lastAlert:""});setAlerts([]);setCommitCandidate(null);}} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
     {!busy&&!candidates.length&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
     <p className="mt-3 text-[10px] leading-4 text-slate-500">Twelve Data OHLC · setups conditionnels, sans confirmation automatique · les prix peuvent différer de TradingView.</p>
   </section>;
