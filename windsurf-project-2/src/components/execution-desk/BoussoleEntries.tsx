@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw, AlertTriangle, Bell, Check, X } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { analyzeLiquidityStructure } from "@/lib/execution/liquidityStructure";
 
 type Candle = {time:number;open:number;high:number;low:number;close:number};
@@ -68,7 +69,36 @@ export default function BoussoleEntries(){
     }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority).slice(0,3);
   },[result.options,liquidity,data]);
   const active=candidates.find(x=>x.id===selected);
-  const [position,setPosition]=useState<{proposal:Proposal;actualEntry:number;startedAt:number;status:"active"|"closed";lastAlert:string}|null>(null);
+  const [position,setPosition]=useState<{id:string;proposal:Proposal;actualEntry:number;startedAt:number;status:"active"|"closed";lastAlert:string}|null>(null);
+  const [saving,setSaving]=useState(false);
+  useEffect(()=>{let mounted=true;const supabase=createClient();void (async()=>{
+    const {data:{user}}=await supabase.auth.getUser();
+    if(!user)return;
+    const {data:rows,error}=await supabase.from("execution_positions").select("*").eq("user_id",user.id).eq("status","open").order("committed_at",{ascending:false}).limit(1);
+    if(!mounted||error||!rows?.length)return;
+    const row=rows[0];
+    setPosition({id:row.id,actualEntry:Number(row.entry),startedAt:Math.floor(new Date(row.committed_at).getTime()/1000),status:"active",lastAlert:"",proposal:{id:row.id,title:row.title,side:row.side as 1|-1,entry:Number(row.entry),sl:Number(row.sl),tp:Number(row.tp),reason:"Saved committed position",type:"reversal"}});
+  })();return()=>{mounted=false}},[]);
+  const closePosition=async()=>{
+    if(!position)return;setSaving(true);
+    const {error}=await createClient().from("execution_positions").update({status:"closed",closed_at:new Date().toISOString()}).eq("id",position.id);
+    if(error){setError("Failed to close monitoring: "+error.message)}else setPosition(null);
+    setSaving(false);
+  };
+  const commitPosition=async()=>{
+    if(!commitCandidate||saving)return;
+    const price=Number(entryInput);
+    if(!(price>0))return;
+    setSaving(true);setError("");
+    const supabase=createClient();
+    const {data:{user}}=await supabase.auth.getUser();
+    if(!user){setError("Please sign in to save this position");setSaving(false);return;}
+    const proposal=commitCandidate;
+    const {data:row,error}=await supabase.from("execution_positions").insert({user_id:user.id,symbol:"XAU/USD",side:proposal.side,title:proposal.title,timeframe:tf,entry:price,sl:proposal.sl,tp:proposal.tp,status:"open",reason:proposal.reason,source_candle_time:latest?.time??null}).select("id,committed_at").single();
+    if(error||!row){setError("Could not save position: "+(error?.message??"unknown error"));setSaving(false);return;}
+    setPosition({id:row.id,proposal,actualEntry:price,startedAt:Math.floor(new Date(row.committed_at).getTime()/1000),status:"active",lastAlert:""});
+    setAlerts([]);setCommitCandidate(null);setSaving(false);
+  };
   const [commitCandidate,setCommitCandidate]=useState<Proposal|null>(null);
   const [entryInput,setEntryInput]=useState("");
   const [alerts,setAlerts]=useState<string[]>([]);
@@ -111,7 +141,7 @@ export default function BoussoleEntries(){
     {position?.status==="active" && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-400/30 bg-emerald-400/[.07] px-3 py-2.5">
       <div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300">● Active · {position.proposal.side===1?"BUY":"SELL"}</p><p className="truncate text-xs font-bold text-white">{position.proposal.title}</p></div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">{[{label:"Entry",value:n(position.actualEntry)},{label:"SL",value:n(position.proposal.sl)},{label:"TP",value:n(position.proposal.tp)},{label:"Move",value:currentR===null?"—":currentR.toFixed(2)+"R"}].map(x=><div key={x.label}><p className="text-[9px] text-slate-400">{x.label}</p><b className="text-xs tabular-nums text-white">{x.value}</b></div>)}</div>
-      <button type="button" onClick={()=>setPosition(prev=>prev?{...prev,status:"closed"}:prev)} className="min-h-9 rounded-lg border border-white/20 px-3 text-[11px]">End tracking</button>
+      <button type="button" onClick={()=>void closePosition()} disabled={saving} className="min-h-9 rounded-lg border border-white/20 px-3 text-[11px]">End tracking</button>
     </div>}
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
       <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {candidates.length}</button>
@@ -131,7 +161,7 @@ export default function BoussoleEntries(){
     {active && position?.status!=="active" && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{fired(active)?"Trigger level touched (not an executed order)":"Awaiting trigger · conditional setup"}</p></div><button type="button" onClick={()=>{setCommitCandidate(active);setEntryInput(String(active.entry));}} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white">Commit position</button></div>
     </div>}
-    {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={!(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>{setPosition({proposal:commitCandidate,actualEntry:Number(entryInput),startedAt:latest?.time??0,status:"active",lastAlert:""});setAlerts([]);setCommitCandidate(null);}} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
+    {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={saving || !(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>void commitPosition()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
     {!busy&&!candidates.length&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
 
   </section>;
