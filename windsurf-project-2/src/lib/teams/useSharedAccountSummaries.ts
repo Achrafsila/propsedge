@@ -79,8 +79,8 @@ export function useSharedAccountSummaries(shares: TeamShareRow[]) {
             ? Number(row.consistency_rule?.match(/(\d+(?:\.\d+)?)\s*%/)?.[1] ?? 0) || null
             : row.consistency_required && row.consistency_limit != null ? Number(row.consistency_limit) : null,
           tradeCount: tradeRows.filter(t => t.account_id === row.id && t.user_id === share.shared_by && t.account_type === share.account_type).length,
-          trades: tradeRows.filter(t => t.account_id === row.id && t.user_id === share.shared_by && t.account_type === share.account_type)
-            .map(t => ({ id: t.id, symbol: t.symbol, date: t.exit_date || t.entry_date, pnl: Number(t.pnl), status: t.status })),
+          trades: tradeRows.filter(t => t.account_id === row.id && t.user_id === share.shared_by && t.account_type === share.account_type && t.status.toLowerCase() === "closed")
+            .map(t => ({ id: t.id, symbol: t.symbol, date: String(t.exit_date || t.entry_date).slice(0, 10), pnl: Number(t.pnl), status: t.status })),
           payouts: share.account_type === "funded"
             ? payoutRows.filter(p => p.funded_account_id === row.id && p.user_id === share.shared_by)
                 .map(p => ({ id: p.id, requested: Number(p.requested_amount), received: Number(p.received_amount), status: p.status, date: p.payout_date }))
