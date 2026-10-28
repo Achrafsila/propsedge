@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw, AlertTriangle } from "lucide-react";
+import { analyzeLiquidityStructure } from "@/lib/execution/liquidityStructure";
 
 type Candle = {time:number;open:number;high:number;low:number;close:number};
 type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"};
@@ -41,13 +42,24 @@ export default function BoussoleEntries(){
   const result=useMemo(()=>proposals(data,rr),[data,rr]);
   useEffect(()=>{if(selected&&!result.options.some(o=>o.id===selected))setSelected(null)},[result.options,selected]);
   const active=result.options.find(p=>p.id===selected)||null;
+  const liquidity=useMemo(()=>analyzeLiquidityStructure(data),[data]);
+  const classify=(p:Proposal)=>{
+    const last=data.at(-2), e=liquidity.lastEvent;
+    const isBull=p.side===1;
+    const aligned=e && (isBull ? e.kind.startsWith("bullish") : e.kind.startsWith("bearish"));
+    const conflicting=e && (isBull ? e.kind.startsWith("bearish") : e.kind.startsWith("bullish"));
+    const triggered=last && (p.type==="breakout" ? (isBull?last.close>p.entry:last.close<p.entry) :
+      p.type==="rebound" ? (isBull?last.low<=p.entry&&last.close>p.entry:last.high>=p.entry&&last.close<p.entry) : true);
+    return {label: conflicting?"Contexte contradictoire":triggered&&aligned?"Conditions partielles réunies":"À surveiller",
+      detail: e?`${e.kind.replaceAll("-"," ")} · niveau ${n(e.level)}`:"Aucun sweep/BOS/MSS récent détecté"};
+  };
   return <section className="space-y-4 rounded-2xl border border-cyan-500/20 bg-[#0c1325]/90 p-4 sm:p-5">
     <header className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Entrées proposées</h2><p className="text-xs text-slate-400">XAU/USD spot · Twelve Data · EMA20/50/200 · actualisation toutes les 5 min</p></div><div className="flex gap-2"><select aria-label="Timeframe" className="rounded-lg border border-white/10 bg-[#182239] px-2 py-2 text-sm" value={tf} onChange={e=>{setTf(e.target.value);setSelected(null)}}>{["5m","15m","30m","1h","4h"].map(x=><option key={x}>{x}</option>)}</select><button onClick={()=>void load()} disabled={busy} className="flex items-center gap-2 rounded-lg border border-cyan-400/30 px-3 py-2 text-xs font-semibold text-cyan-200"><RefreshCcw size={13} className={busy?"animate-spin":""}/> Recalculer</button></div></header>
     {error&&<p role="alert" className="flex gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200"><AlertTriangle size={15}/>{error} · Aucun prix ni signal n'est inventé.</p>}
     <div className="space-y-3 rounded-xl border border-white/10 bg-[#080f20] p-3"><div className="flex flex-wrap justify-between gap-2 text-xs"><span>Dernière clôture Twelve Data : <b className="text-white">{n(result.price)}</b></span><span>{result.trend} · ATR14 : {n(result.atr)}</span></div><p className="text-[11px] text-amber-200">Les niveaux proviennent de Twelve Data. Le graphique TradingView intégré utilise une autre source et ne permet pas un tracé piloté depuis les cartes.</p></div>
       <div className="space-y-3"><div className="flex justify-between"><h3 className="font-semibold">Opportunités conditionnelles</h3><label className="text-xs text-slate-400">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="ml-1 rounded bg-[#182239] p-1">{[1.5,2,3].map(x=><option key={x} value={x}>1:{x}</option>)}</select></label></div>
-        <p className="text-[11px] text-slate-400">Scénarios filtrés par les EMA 20/50/200 et le sens de la bougie. Les conditions de liquidité, MSS et retest ne sont pas encore vérifiées automatiquement.</p>
-        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">{result.options.map(p=><button onClick={()=>setSelected(p.id)} key={p.id} className={"w-full rounded-xl border p-3 text-left transition "+(selected===p.id?"border-cyan-400 bg-cyan-500/10":"border-white/10 bg-white/[.03] hover:bg-white/[.07]")}><div className="flex items-center justify-between"><strong className="text-sm text-slate-100">{p.title}</strong><span className={"text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div><p className="my-2 text-[11px] text-slate-400">{p.reason}</p><div className="grid grid-cols-3 gap-2 text-xs"><span>Entrée<br/><b className="text-amber-200">{n(p.entry)}</b></span><span>SL<br/><b className="text-rose-300">{n(p.sl)}</b></span><span>TP<br/><b className="text-emerald-300">{n(p.tp)}</b></span></div></button>)}</div>
+        <p className="text-[11px] text-slate-400">Scénarios EMA enrichis par les événements de structure observés. Une détection BOS/MSS ou sweep ne constitue pas, à elle seule, une confirmation d’entrée.</p>
+        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">{result.options.map(p=><button onClick={()=>setSelected(p.id)} key={p.id} className={"w-full rounded-xl border p-3 text-left transition "+(selected===p.id?"border-cyan-400 bg-cyan-500/10":"border-white/10 bg-white/[.03] hover:bg-white/[.07]")}><div className="flex items-center justify-between"><strong className="text-sm text-slate-100">{p.title}</strong><span className={"text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div><p className="mt-2 text-[10px] font-semibold text-cyan-200">{classify(p).label} · {classify(p).detail}</p><p className="my-2 text-[11px] text-slate-400">{p.reason}</p><div className="grid grid-cols-3 gap-2 text-xs"><span>Entrée<br/><b className="text-amber-200">{n(p.entry)}</b></span><span>SL<br/><b className="text-rose-300">{n(p.sl)}</b></span><span>TP<br/><b className="text-emerald-300">{n(p.tp)}</b></span></div></button>)}</div>
         {active&&<div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3 text-xs text-cyan-100">Sélection : {active.title} · Entrée {n(active.entry)} · SL {n(active.sl)} · TP {n(active.tp)}. Utilise les outils Position longue / courte du graphique pour les reporter.</div>}
         {!result.options.length&&!busy&&<p className="text-sm text-slate-400">Aucune proposition calculable pour le moment.</p>}
       </div>
