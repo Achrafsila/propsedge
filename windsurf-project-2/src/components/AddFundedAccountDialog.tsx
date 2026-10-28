@@ -30,11 +30,14 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
     fundingDate: new Date().toISOString().split('T')[0],
     initialBalance: "",
     maxDrawdown: "",
+    consistencyMode: "" as "" | "limit" | "none",
+    consistencyLimit: "",
     purchaseCost: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.consistencyMode || (formData.consistencyMode==="limit" && !(Number(formData.consistencyLimit)>0&&Number(formData.consistencyLimit)<100))) return;
     const accountSize = parseFloat(formData.accountSize);
     const initialBalance = parseFloat(formData.initialBalance);
     addFundedAccount({
@@ -54,7 +57,7 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
       // means it really did come from an evaluation; otherwise it's a
       // manually-entered account with no more specific origin to record.
       fundingPath: formData.sourceChallengeId ? "evaluation" : "internal",
-      payoutRules: { consistency: { required: false }, minimumTradingDays: { required: false } },
+      payoutRules: { consistency: { required: formData.consistencyMode==="limit", limitPercent: formData.consistencyMode==="limit" ? Number(formData.consistencyLimit) : undefined }, minimumTradingDays: { required: false } },
     });
     onOpenChange(false);
     setFormData({
@@ -65,6 +68,8 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
       fundingDate: new Date().toISOString().split('T')[0],
       initialBalance: "",
       maxDrawdown: "",
+    consistencyMode: "" as "" | "limit" | "none",
+    consistencyLimit: "",
       purchaseCost: "",
     });
   };
@@ -145,6 +150,16 @@ export function AddFundedAccountDialog({ open, onOpenChange }: AddFundedAccountD
               required
               className="bg-[#0D1424] border-[#1A2942] text-[#F8FAFC] focus:border-[#00C875] focus:outline-none focus:ring-2 focus:ring-[#00C875]/20 transition-all"
             />
+          </div>
+          <div className="space-y-2 rounded-xl border border-cyan-400/20 p-3">
+            <Label className="text-[#8B97A8]">Consistency rule · required</Label>
+            <select value={formData.consistencyMode} required onChange={e=>setFormData({...formData,consistencyMode:e.target.value as "" | "limit" | "none",consistencyLimit:""})} className="min-h-11 w-full rounded-lg border border-[#1A2942] bg-[#0D1424] px-3 text-sm text-white">
+              <option value="">Select consistency rule</option>
+              <option value="limit">Consistency limit (%)</option>
+              <option value="none">No consistency</option>
+            </select>
+            {formData.consistencyMode==="limit"&&<Input type="number" min="0.1" max="99.9" step="0.1" required inputMode="decimal" placeholder="e.g. 20" value={formData.consistencyLimit} onChange={e=>setFormData({...formData,consistencyLimit:e.target.value})} className="min-h-11 bg-[#0D1424] border-[#1A2942] text-white" />}
+            <p className="text-[11px] text-slate-400">Explicitly choose the limit or No consistency for this account.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="maxDrawdown" className="text-[#8B97A8]">Max Drawdown (%)</Label>

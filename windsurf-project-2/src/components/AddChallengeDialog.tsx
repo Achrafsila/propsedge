@@ -38,6 +38,8 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
     step1ProfitTarget: "",
     step2ProfitTarget: "",
     maxDrawdown: "",
+    consistencyMode: "" as "" | "limit" | "none",
+    consistencyLimit: "",
     notes: "",
   });
 
@@ -86,7 +88,7 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.propFirmName.trim()) return;
+    if (!formData.propFirmName.trim() || !formData.consistencyMode || (formData.consistencyMode==="limit" && !(Number(formData.consistencyLimit)>0&&Number(formData.consistencyLimit)<100))) return;
     const is2Step = formData.challengeKind === "2-step";
     addChallenge({
       propFirmName: formData.propFirmName,
@@ -106,6 +108,7 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
       status: "active",
       presetId: selectedPresetId || undefined,
       notes: formData.notes || undefined,
+      consistencyRule: formData.consistencyMode==="limit" ? `${formData.consistencyLimit}%` : null,
     });
     onOpenChange(false);
     // Reset form
@@ -123,6 +126,8 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
       step1ProfitTarget: "",
       step2ProfitTarget: "",
       maxDrawdown: "",
+    consistencyMode: "" as "" | "limit" | "none",
+    consistencyLimit: "",
       notes: "",
     });
   };
@@ -317,6 +322,16 @@ export function AddChallengeDialog({ open, onOpenChange }: AddChallengeDialogPro
             />
           </div>
 
+          <div className="space-y-2 rounded-xl border border-cyan-400/20 p-3">
+            <Label className="text-[#8B97A8]">Consistency rule · required</Label>
+            <select value={formData.consistencyMode} required onChange={e=>setFormData({...formData,consistencyMode:e.target.value as "" | "limit" | "none",consistencyLimit:""})} className="min-h-11 w-full rounded-lg border border-[#1A2942] bg-[#0D1424] px-3 text-sm text-white">
+              <option value="">Select consistency rule</option>
+              <option value="limit">Consistency limit (%)</option>
+              <option value="none">No consistency</option>
+            </select>
+            {formData.consistencyMode==="limit"&&<Input type="number" min="0.1" max="99.9" step="0.1" required inputMode="decimal" placeholder="e.g. 20" value={formData.consistencyLimit} onChange={e=>setFormData({...formData,consistencyLimit:e.target.value})} className="min-h-11 bg-[#0D1424] border-[#1A2942] text-white" />}
+            <p className="text-[11px] text-slate-400">Choose the account limit or No consistency.</p>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-[#1A2942] text-[#F8FAFC] hover:bg-[#111C33] hover:border-[#2F80ED] rounded-xl">
               Cancel
