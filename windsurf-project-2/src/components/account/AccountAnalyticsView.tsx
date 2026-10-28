@@ -128,7 +128,7 @@ export function AccountAnalyticsView({
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
   const [isImportTradeDialogOpen, setIsImportTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
-  const { updateTrade, deleteTrade } = useAccounts();
+  const { updateTrade, deleteTrade, challenges } = useAccounts();
   const [editingTrade, setEditingTrade] = useState<any | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<any | null>(null);
   const [isSavingTrade, setIsSavingTrade] = useState(false);
@@ -488,8 +488,12 @@ export function AccountAnalyticsView({
       </div>
 
       {(() => {
+        const sourceChallenge = accountType === "funded" && account.sourceChallengeId
+          ? challenges.find(c => c.id === account.sourceChallengeId) : null;
+        const nativeRule = account.payoutRules?.consistency?.required
+          ? account.payoutRules.consistency.limitPercent : null;
         const rule = accountType === "funded"
-          ? (account.payoutRules?.consistency?.required ? account.payoutRules.consistency.limitPercent : null)
+          ? (nativeRule ?? parseConsistencyLimitPercent(sourceChallenge?.consistencyRule))
           : parseConsistencyLimitPercent(account.consistencyRule);
         const pct = Number(rule);
         if (rule == null || !(pct>0 && pct<100)) return null;
