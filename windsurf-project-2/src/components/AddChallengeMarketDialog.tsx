@@ -48,6 +48,7 @@ interface FormState {
   step2ProfitTarget: string;
   consistencyRule: string;
   // Instant Funded payout-eligibility rules — irrelevant/hidden for Evaluation.
+  consistencyChoice: "" | "limit" | "none";
   consistencyRequired: boolean;
   consistencyLimit: string;
   minimumTradingDaysRequired: boolean;
@@ -69,6 +70,7 @@ const INITIAL_FORM: FormState = {
   step1ProfitTarget: "",
   step2ProfitTarget: "",
   consistencyRule: "",
+  consistencyChoice: "",
   consistencyRequired: false,
   consistencyLimit: "",
   minimumTradingDaysRequired: false,
@@ -180,10 +182,11 @@ export function AddChallengeMarketDialog({ open, onOpenChange }: AddChallengeMar
     isValidNumber(formData.purchaseCost);
 
   const consistencyValid =
-    !formData.consistencyRequired ||
-    (isValidNumber(formData.consistencyLimit) &&
+    formData.consistencyChoice !== "" &&
+    (formData.consistencyChoice === "none" ||
+     (isValidNumber(formData.consistencyLimit) &&
       parseFloat(formData.consistencyLimit) > 0 &&
-      parseFloat(formData.consistencyLimit) <= 100);
+      parseFloat(formData.consistencyLimit) < 100));
 
   const minDaysValid = !formData.minimumTradingDaysRequired || isValidPositiveInteger(formData.minimumTradingDays);
 
@@ -199,6 +202,7 @@ export function AddChallengeMarketDialog({ open, onOpenChange }: AddChallengeMar
     ? commonFieldsValid && consistencyValid && minDaysValid && dailyProfitValid
     : !!marketType &&
       commonFieldsValid &&
+      consistencyValid &&
       (isTwoStep
         ? isValidNumber(formData.step1ProfitTarget) && isValidNumber(formData.step2ProfitTarget)
         : isSingleTarget && isValidNumber(formData.profitTarget));
@@ -267,7 +271,7 @@ export function AddChallengeMarketDialog({ open, onOpenChange }: AddChallengeMar
         remainingDrawdown: parseFloat(formData.maxDrawdown),
         dailyDrawdown: parseFloat(formData.dailyDrawdown),
         status: "active",
-        consistencyRule: formData.consistencyRule.trim() || undefined,
+        consistencyRule: formData.consistencyChoice==="limit" ? `${formData.consistencyLimit}%` : null,
       });
     }
 
@@ -578,16 +582,11 @@ export function AddChallengeMarketDialog({ open, onOpenChange }: AddChallengeMar
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="marketConsistencyRule" className="text-[#8B97A8]">
-                    Consistency Rule (Optional)
-                  </Label>
-                  <Input
-                    id="marketConsistencyRule"
-                    value={formData.consistencyRule}
-                    onChange={(e) => setFormData({ ...formData, consistencyRule: e.target.value })}
-                    placeholder="e.g. No single day > 30% of total profit"
-                    className={inputClass}
-                  />
+                  <Label className="text-[#8B97A8]">Consistency <RequiredMark /></Label>
+                  <select required value={formData.consistencyChoice} onChange={e=>setFormData({...formData,consistencyChoice:e.target.value as ""|"limit"|"none",consistencyRequired:e.target.value==="limit",consistencyLimit:""})} className={selectClass}>
+                    <option value="">Select rule</option><option value="limit">Consistency limit (%)</option><option value="none">No consistency</option>
+                  </select>
+                  {formData.consistencyChoice==="limit"&&<Input type="number" min="0.1" max="99.9" step="0.1" required value={formData.consistencyLimit} onChange={e=>setFormData({...formData,consistencyLimit:e.target.value})} placeholder="e.g. 20" className={inputClass}/>}
                 </div>
               </>
             )}
@@ -595,31 +594,11 @@ export function AddChallengeMarketDialog({ open, onOpenChange }: AddChallengeMar
             {isInstantFunded && (
               <div className="space-y-4">
                 <div className="rounded-xl p-4 bg-[rgba(41,141,255,0.06)] border border-[rgba(41,141,255,0.15)] space-y-3">
-                  <ToggleSwitch
-                    checked={formData.consistencyRequired}
-                    onChange={(next) => setFormData({ ...formData, consistencyRequired: next, consistencyLimit: next ? formData.consistencyLimit : "" })}
-                    label="Consistency required"
-                  />
-                  {formData.consistencyRequired && (
-                    <div className="space-y-2">
-                      <Label className="text-[#8B97A8]">
-                        Consistency limit (%) <RequiredMark />
-                      </Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={formData.consistencyLimit}
-                        onChange={(e) => setFormData({ ...formData, consistencyLimit: e.target.value })}
-                        placeholder="e.g. 20"
-                        required
-                        className={inputClass}
-                      />
-                      <p className="text-xs text-[#64748B]">
-                        The trader&apos;s best trading day must not exceed this percentage of total profit.
-                      </p>
-                    </div>
-                  )}
+                  <Label className="text-[#8B97A8]">Consistency <RequiredMark /></Label>
+                  <select required value={formData.consistencyChoice} onChange={e=>setFormData({...formData,consistencyChoice:e.target.value as ""|"limit"|"none",consistencyRequired:e.target.value==="limit",consistencyLimit:""})} className={selectClass}>
+                    <option value="">Select rule</option><option value="limit">Consistency limit (%)</option><option value="none">No consistency</option>
+                  </select>
+                  {formData.consistencyChoice==="limit"&&<Input type="number" min="0.1" max="99.9" step="0.1" required value={formData.consistencyLimit} onChange={e=>setFormData({...formData,consistencyLimit:e.target.value})} placeholder="e.g. 20" className={inputClass}/>}
                 </div>
 
                 <div className="rounded-xl p-4 bg-[rgba(41,141,255,0.06)] border border-[rgba(41,141,255,0.15)] space-y-3">
