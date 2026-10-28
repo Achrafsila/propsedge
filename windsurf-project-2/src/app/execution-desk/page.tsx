@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Crosshair, ShieldCheck } from "lucide-react";
 import BoussoleEntries from "@/components/execution-desk/BoussoleEntries";
+import MarketContextPanel from "@/components/execution-desk/MarketContextPanel";
 
 // The original TradingView widget is deliberately retained. Its public embed
 // API cannot accept custom price-line commands from the surrounding Next app.
@@ -55,7 +56,7 @@ export default function ExecutionDeskPage() {
             </div>
             <OriginalTradingView />
           </section>
-          <BoussoleEntries />
+          <div className="min-w-0 space-y-3"><MarketContextPanel /><BoussoleEntries /></div>
         </div>
         <p className="text-[11px] leading-5 text-slate-500">Les configurations affichées sont des scénarios conditionnels, pas des ordres ni des signaux validés automatiquement. Le widget TradingView public ne permet pas de superposer des lignes de prix pilotées par cette application : pour le tracé direct sur TradingView, une intégration Charting Library sous licence ou un indicateur Pine dédié sera nécessaire.</p>
       </div>
