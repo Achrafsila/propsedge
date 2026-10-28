@@ -135,7 +135,7 @@ function TeamPerformance({ teamId }: { teamId: string }) {
     const root=stats.unique.find(a=>a.type==="challenge" && a.id===parent?.parentChallengeId && a.ownerId===account.ownerId);
     const inherited=account.type==="funded" ? (parent?.consistencyLimit ?? root?.consistencyLimit ?? null) : null;
     const limit=account.consistencyLimit ?? inherited;
-    if(limit==null || !(limit>0 && limit<100))return [];
+    const hasLimit=limit!=null && limit>0 && limit<100;
     const daily=new Map<string,number>();
     for(const trade of account.trades){
       // Close-date calendar aggregation: multiple trades on one day count as ONE day.
@@ -149,15 +149,15 @@ function TeamPerformance({ teamId }: { teamId: string }) {
     // Exactly one profitable trading day = 100% consistency by definition.
     const concentration=daily.size===1?100:100*best/total;
     // A compliant account uses <= 100% of its allowed concentration.
-    const utilization=concentration/limit;
-    if(!Number.isFinite(utilization) || concentration<=0)return [];
-    return [{ownerId:account.ownerId,accountName:account.name,limit,concentration,utilization,tradeCount:account.trades.length,days:daily.size,compliant:utilization<=1}];
+    const utilization=hasLimit?concentration/limit!:null;
+    if(!Number.isFinite(concentration) || concentration<=0)return [];
+    return [{ownerId:account.ownerId,accountName:account.name,limit:hasLimit?limit:null,concentration,utilization,tradeCount:account.trades.length,days:daily.size,compliant:utilization===null?null:utilization<=1}];
   });
   const consistentTraders = [...stats.traders].flatMap(t=>{
     const own=consistencyResults.filter(r=>r.ownerId===t.ownerId);
     // One trading day is 100% concentration and cannot win a consistency award.
-    // A winner must have multiple distinct closed-trade days and a compliant ratio.
-    const eligible=own.filter(r=>r.days>=2 && r.compliant && r.concentration<100);
+    // Select the lowest actual consistency across shared accounts, regardless of firm rules.
+    const eligible=own.filter(r=>r.days>=2 && r.concentration<100);
     if(!eligible.length)return [];
     // A lower actual best-day concentration is better; show account limit separately.
     const best=[...eligible].sort((a,b)=>a.concentration-b.concentration||b.days-a.days||b.tradeCount-a.tradeCount)[0];
@@ -169,7 +169,7 @@ function TeamPerformance({ teamId }: { teamId: string }) {
     {title:"Funding Legend",kicker:"TOP ACCOUNT FUNDER",name:topFunder?traderName(topFunder.ownerId):"The funding throne is still empty 👑",metric:topFunder?`${topFunder.fundedConversions} funded`:"🚀",note:topFunder?"Most evaluations successfully converted into funded accounts":"First trader to pass a challenge claims the crown!",icon:Crown,accent:"text-violet-300",border:"border-violet-400/25"},
     {title:"Payout Hunter",kicker:"CASHOUT LEADER",name:topPayout?traderName(topPayout.ownerId):"No payouts yet 💸",metric:topPayout?money(topPayout.payouts):"—",note:topPayout?"Most cash actually received":"The first paid payout unlocks this award!",icon:DollarSign,accent:"text-emerald-300",border:"border-emerald-400/25"},
     {title:"Sharp Shooter",kicker:"WIN RATE CHAMPION",name:topWinRate?traderName(topWinRate.ownerId):"The target is waiting 🎯",metric:topWinRate?`${(topWinRate.wins/topWinRate.trades*100).toFixed(0)}% wins`:"🎯",note:topWinRate?"Best win rate · minimum 5 trades":"Five closed trades unlock the aim award!",icon:Target,accent:"text-sky-300",border:"border-sky-400/25"},
-    {title:"Steady Hands",kicker:"MOST CONSISTENT",name:topConsistent?traderName(topConsistent.ownerId):"No measurable consistency yet 🧘",metric:topConsistent?`${Math.min(100,topConsistent.concentration).toFixed(1)}% / ${topConsistent.limit}%`:"—",note:topConsistent?`${topConsistent.compliant?"✅ Within limit":"⚠ Above limit"} · ${topConsistent.accountName} · ${topConsistent.days} trading day${topConsistent.days===1?"":"s"} / ${topConsistent.tradeCount} trades`:"Requires 2+ trading days, positive net P&L and consistency within the account limit",icon:Medal,accent:"text-teal-300",border:"border-teal-400/25"},
+    {title:"Steady Hands",kicker:"MOST CONSISTENT",name:topConsistent?traderName(topConsistent.ownerId):"No measurable consistency yet 🧘",metric:topConsistent?`${Math.min(100,topConsistent.concentration).toFixed(1)}%${topConsistent.limit!=null?` / ${topConsistent.limit}% limit`:""}`:"—",note:topConsistent?`${topConsistent.compliant===null?"Rule not specified":topConsistent.compliant?"✅ Within limit":"⚠ Above limit"} · ${topConsistent.accountName} · ${topConsistent.days} trading day${topConsistent.days===1?"":"s"} / ${topConsistent.tradeCount} trades`:"Requires 2+ trading days and positive net P&L · lowest best-day concentration wins",icon:Medal,accent:"text-teal-300",border:"border-teal-400/25"},
   ];
   const invested = costsComplete ? costs : null;
   const winRate = stats.trades.length ? stats.wins / stats.trades.length * 100 : null;
