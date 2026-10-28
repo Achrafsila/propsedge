@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { Crosshair, ShieldCheck } from "lucide-react";
 import BoussoleEntries from "@/components/execution-desk/BoussoleEntries";
-import MarketContextPanel from "@/components/execution-desk/MarketContextPanel";
 
 // The original TradingView widget is deliberately retained. Its public embed
 // API cannot accept custom price-line commands from the surrounding Next app.
@@ -44,7 +43,7 @@ export default function ExecutionDeskPage() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-cyan-400"><Crosshair size={14}/> Trading workspace</div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Execution <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">Desk</span></h1>
-            <p className="mt-1 text-xs text-slate-400">Un graphique. Des opportunités calculées. Ton playbook dans le moteur de décision.</p>
+            <p className="mt-1 text-xs text-slate-400">Un graphique · Une lecture claire · Des scénarios conditionnels.</p>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-300"><ShieldCheck size={15} className="text-cyan-300"/> Analyse uniquement · aucune exécution automatique</div>
         </header>
@@ -56,9 +55,9 @@ export default function ExecutionDeskPage() {
             </div>
             <OriginalTradingView />
           </section>
-          <div className="min-w-0 space-y-3"><MarketContextPanel /><BoussoleEntries /></div>
+          <div className="min-w-0 space-y-3"><BoussoleEntries /></div>
         </div>
-        <p className="text-[11px] leading-5 text-slate-500">Les configurations affichées sont des scénarios conditionnels, pas des ordres ni des signaux validés automatiquement. Le widget TradingView public ne permet pas de superposer des lignes de prix pilotées par cette application : pour le tracé direct sur TradingView, une intégration Charting Library sous licence ou un indicateur Pine dédié sera nécessaire.</p>
+
       </div>
     </main>
   );
