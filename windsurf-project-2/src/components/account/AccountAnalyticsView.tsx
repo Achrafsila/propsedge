@@ -470,16 +470,33 @@ export function AccountAnalyticsView({
           </div>
           <span className="rounded-full border border-white/15 bg-white/[.05] px-3 py-1 text-xs font-bold text-slate-200">{account.propFirmName}</span>
         </div>
-        <div className="relative mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {/* Consistency: best positive closing day / net P&L for the current payout cycle. */}
+        {(() => {
+        const challengeOrigin = accountType === "funded" && account.sourceChallengeId
+          ? challenges.find(c=>c.id===account.sourceChallengeId) : null;
+        const ruleValue = accountType === "funded"
+          ? (account.payoutRules?.consistency?.required ? account.payoutRules.consistency.limitPercent : parseConsistencyLimitPercent(challengeOrigin?.consistencyRule))
+          : parseConsistencyLimitPercent(account.consistencyRule);
+        const limit = Number(ruleValue);
+        const hasLimit=ruleValue!=null && Number.isFinite(limit) && limit>0 && limit<100;
+        const days=new Map<string,number>();
+        for(const t of cycleTrades){const day=String(t.exitDate||t.entryDate).slice(0,10);days.set(day,(days.get(day)??0)+t.pnl);}
+        const net=cycleTrades.reduce((a,t)=>a+t.pnl,0);
+        const best=Math.max(0,...days.values());
+        const ratio=net>0 && days.size>0?Math.min(100,days.size===1?100:100*best/net):null;
+        const state=ratio===null?"Not measurable":!hasLimit?"Limit not configured":ratio<=limit?`Within ${limit}% limit`:`Above ${limit}% limit`;
+        return <div className="relative mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {[
             {label:"Recorded balance",value:fmt$(accountType==="funded"?account.currentBalance:startBalance+totalPnL),sub:"Not live equity",tone:"text-white"},
             {label:"Current cycle P&L",value:fmt$(accountType==="funded"?cyclePnL:totalPnL),sub:accountType==="funded"?(lastPaidDate?"Since "+lastPaidDate:"Since funding"):"Evaluation",tone:(accountType==="funded"?cyclePnL:totalPnL)>=0?"text-emerald-300":"text-rose-300"},
             {label:"Estimated DD buffer",value:fmt$(remainingDDDollars),sub:"Simplified · check broker",tone:remainingDDDollars<=0?"text-rose-300":"text-amber-200"},
             {label:"Win rate",value:fmtPct(winRate),sub:`${trades.length} recorded trades`,tone:"text-cyan-200"},
+            {label:"Consistency",value:ratio===null?"—":`${ratio.toFixed(1)}%`,sub:state,tone:ratio!==null&&hasLimit&&ratio>limit?"text-rose-300":"text-cyan-200"},
           ].map(item=><div key={item.label} className="min-w-0 rounded-xl border border-white/[.08] bg-[#0b1422]/70 p-3">
             <p className="text-[10px] text-slate-400">{item.label}</p><p className={`mt-1 break-words text-lg font-extrabold tabular-nums sm:text-2xl ${item.tone}`}>{item.value}</p><p className="mt-1 text-[10px] text-slate-500">{item.sub}</p>
           </div>)}
-        </div>
+        </div>;
+      })()}
         <div className="relative mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[.08] pt-3">
           <p className="text-xs text-slate-300">{remainingDDDollars<=0?"Review risk limits before placing another trade.":trades.length<5?"Early sample · focus on rule compliance and clean execution.":"Review drawdown and consistency limits before setting today's risk."}</p>
           <button type="button" onClick={()=>document.getElementById("account-intelligence")?.scrollIntoView({behavior:"smooth",block:"start"})} className="min-h-9 rounded-lg border border-cyan-400/25 px-3 text-xs font-semibold text-cyan-200">Risk & consistency ↓</button>
