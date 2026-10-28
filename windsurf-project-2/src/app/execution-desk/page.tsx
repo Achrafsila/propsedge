@@ -56,7 +56,6 @@ export default function ExecutionDeskPage() {
             </div>
             <OriginalTradingView />
           </section>
-          <section className="w-full min-w-0" aria-label="Trade opportunities below chart"><BoussoleEntries /></section>
         </div>
 
       </div>
