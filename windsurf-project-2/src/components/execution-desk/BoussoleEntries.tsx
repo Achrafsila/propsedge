@@ -73,6 +73,7 @@ export default function BoussoleEntries(){
   const [entryInput,setEntryInput]=useState("");
   const [alerts,setAlerts]=useState<string[]>([]);
   const [notifyEnabled,setNotifyEnabled]=useState(false);
+  const [showWatchlist,setShowWatchlist]=useState(false);
   const latest=data.at(-2);
   const fired=(p:Proposal)=>!!latest && (p.side===1?latest.high>=p.entry:latest.low<=p.entry);
   const pushAlert=useCallback((message:string)=>{
@@ -102,31 +103,36 @@ export default function BoussoleEntries(){
         <button onClick={()=>void load()} disabled={busy} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200"><RefreshCcw size={13} className={busy?"animate-spin":""}/> Refresh</button>
       </div>
     </div>
-    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-white/[.035] px-3 py-2 text-[11px] text-slate-300">
-      <span>Last close <b className="text-white">{n(result.price)}</b></span>
-      <span>ATR <b className="text-white">{n(result.atr)}</b></span>
-      <span className="text-slate-400">{result.trend}</span>
+    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
+      <span>Close <b className="text-white">{n(result.price)}</b></span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
+      <label className="ml-auto">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] px-1 py-0.5">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label>
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
-    <div className="mt-3 flex justify-between gap-2"><span className="text-[11px] text-slate-400">Watchlist · {candidates.length} setups</span><label className="text-xs text-slate-400">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] p-1">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label></div>
-    {position?.status==="active" && <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-400/[.07] p-3">
-      <div className="flex items-center justify-between gap-2"><div><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Active · manually committed</p><h3 className="text-sm font-bold text-white">{position.proposal.title}</h3></div><button type="button" onClick={()=>setPosition(prev=>prev?{...prev,status:"closed"}:prev)} className="min-h-10 rounded-lg border border-white/20 px-3 text-xs">Close monitoring</button></div>
-      <div className="mt-3 grid grid-cols-4 gap-2 text-xs">{[{label:"Entry",value:n(position.actualEntry)},{label:"SL",value:n(position.proposal.sl)},{label:"TP",value:n(position.proposal.tp)},{label:"Move",value:currentR===null?"—":currentR.toFixed(2)+"R"}].map(x=><div key={x.label} className="min-w-0"><p className="text-[10px] text-slate-400">{x.label}</p><b className="tabular-nums text-white">{x.value}</b></div>)}</div>
-      <p className="mt-2 text-[10px] text-slate-400">Monitoring with last closed OHLC candles · approx. 5-minute refresh, not broker execution or tick-by-tick surveillance.</p>
+    {position?.status==="active" && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-400/30 bg-emerald-400/[.07] px-3 py-2.5">
+      <div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300">● Active · {position.proposal.side===1?"BUY":"SELL"}</p><p className="truncate text-xs font-bold text-white">{position.proposal.title}</p></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">{[{label:"Entry",value:n(position.actualEntry)},{label:"SL",value:n(position.proposal.sl)},{label:"TP",value:n(position.proposal.tp)},{label:"Move",value:currentR===null?"—":currentR.toFixed(2)+"R"}].map(x=><div key={x.label}><p className="text-[9px] text-slate-400">{x.label}</p><b className="text-xs tabular-nums text-white">{x.value}</b></div>)}</div>
+      <button type="button" onClick={()=>setPosition(prev=>prev?{...prev,status:"closed"}:prev)} className="min-h-9 rounded-lg border border-white/20 px-3 text-[11px]">End tracking</button>
     </div>}
-    {alerts.length>0 && <div aria-live="polite" className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/[.06] p-2.5"><p className="text-xs font-bold text-amber-200">Risk notifications</p>{alerts.slice(0,3).map((msg,i)=><p key={i} className="mt-1 text-[11px] text-slate-300">{msg}</p>)}</div>}
-    <div className="mt-2 flex justify-end"><button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1.5 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts enabled":"Enable browser alerts"}</button></div>
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {candidates.length}</button>
+      <div className="flex items-center gap-3">
+        {alerts.length>0&&<span role="status" title={alerts[0]} className="max-w-52 truncate text-[11px] text-amber-300">● {alerts[0]}</span>}
+        <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Alerts on":"Enable alerts"}</button>
+      </div>
+    </div>
+    {showWatchlist&&<>
     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{candidates.map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
       <div className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-white sm:text-sm">{p.title}</strong><span className={"shrink-0 text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div>
       <p className="mt-1 text-[10px] text-amber-200">{p.status}</p>
       <div className="mt-3 grid grid-cols-3 gap-2">{[{key:"Entry",value:p.entry,style:"text-amber-200"},{key:"Stop",value:p.sl,style:"text-rose-300"},{key:"Target",value:p.tp,style:"text-emerald-300"}].map(x=><div key={x.key} className="min-w-0"><p className="text-[10px] text-slate-400">{x.key}</p><p className={"text-xs font-bold tabular-nums sm:text-sm "+x.style}>{n(x.value)}</p></div>)}</div>
       {selected===p.id&&<div className="mt-3 border-t border-white/10 pt-2"><p className="text-xs leading-5 text-slate-300">{p.reason}. Invalidation : {n(p.sl)}.</p><span className="mt-2 inline-block rounded-md border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-200">Select this setup to commit manually below</span></div>}
     </button>)}</div>
-    {active && !position?.status?.includes("active") && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
+    </>}
+    {active && position?.status!=="active" && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{fired(active)?"Trigger level touched (not an executed order)":"Awaiting trigger · conditional setup"}</p></div><button type="button" onClick={()=>{setCommitCandidate(active);setEntryInput(String(active.entry));}} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white">Commit position</button></div>
     </div>}
     {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={!(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>{setPosition({proposal:commitCandidate,actualEntry:Number(entryInput),startedAt:latest?.time??0,status:"active",lastAlert:""});setAlerts([]);setCommitCandidate(null);}} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
     {!busy&&!candidates.length&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
-    <p className="mt-3 text-[10px] leading-4 text-slate-500">Twelve Data OHLC · setups conditionnels, sans confirmation automatique · les prix peuvent différer de TradingView.</p>
+
   </section>;
 }
