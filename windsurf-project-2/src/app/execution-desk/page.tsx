@@ -48,6 +48,7 @@ export default function ExecutionDeskPage() {
           <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-300"><ShieldCheck size={15} className="text-cyan-300"/> Analyse uniquement · aucune exécution automatique</div>
         </header>
         <div className="flex flex-col gap-4">
+          <section className="w-full min-w-0" aria-label="Trade opportunities above chart"><BoussoleEntries /></section>
           <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0c1325]/85 shadow-[0_12px_55px_rgba(0,0,0,.16)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
               <span className="text-sm font-semibold">XAU/USD · TradingView</span>
