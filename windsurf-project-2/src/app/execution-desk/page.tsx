@@ -32,7 +32,7 @@ function OriginalTradingView() {
     node.appendChild(wrapper);
     return () => { node.innerHTML = ""; };
   }, []);
-  return <div ref={host} className="h-[450px] w-full sm:h-[620px] xl:h-[780px]" aria-label="TradingView original XAUUSD chart"/>;
+  return <div ref={host} className="h-[440px] w-full sm:h-[580px] lg:h-[660px] 2xl:h-[740px]" aria-label="TradingView original XAUUSD chart"/>;
 }
 
 export default function ExecutionDeskPage() {
@@ -47,7 +47,7 @@ export default function ExecutionDeskPage() {
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-300"><ShieldCheck size={15} className="text-cyan-300"/> Analyse uniquement · aucune exécution automatique</div>
         </header>
-        <div className="grid items-start gap-4 2xl:grid-cols-[minmax(0,1.65fr)_minmax(330px,1fr)]">
+        <div className="flex flex-col gap-4">
           <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0c1325]/85 shadow-[0_12px_55px_rgba(0,0,0,.16)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
               <span className="text-sm font-semibold">XAU/USD · TradingView</span>
@@ -55,7 +55,7 @@ export default function ExecutionDeskPage() {
             </div>
             <OriginalTradingView />
           </section>
-          <div className="min-w-0 space-y-3"><BoussoleEntries /></div>
+          <section className="w-full min-w-0" aria-label="Trade opportunities below chart"><BoussoleEntries /></section>
         </div>
 
       </div>
