@@ -40,6 +40,7 @@ import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
 import { EditAccountRulesDialog } from "@/components/account/EditAccountRulesDialog";
 import { ConsistencySimulator } from "@/components/account/ConsistencySimulator";
+import { updatePayoutDb } from "@/lib/supabase/payouts";
 import { parseConsistencyLimitPercent } from "@/lib/analytics/payoutEligibility";
 import { getAccountOptionLabel, ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
 
@@ -127,10 +128,12 @@ export function AccountAnalyticsView({
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [editRulesOpen,setEditRulesOpen] = useState(false);
+  const [editingPayout,setEditingPayout]=useState<{id:string;payoutDate:string}|null>(null);
+  const [savingPayoutDate,setSavingPayoutDate]=useState(false);
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
   const [isImportTradeDialogOpen, setIsImportTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
-  const { updateTrade, deleteTrade, challenges } = useAccounts();
+  const { updateTrade, deleteTrade, challenges, updatePayout } = useAccounts();
   const [editingTrade, setEditingTrade] = useState<any | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<any | null>(null);
   const [isSavingTrade, setIsSavingTrade] = useState(false);
@@ -213,6 +216,22 @@ export function AccountAnalyticsView({
     p.payoutDate > latest ? p.payoutDate : latest, "");
   const cycleTrades = trades.filter(t => !lastPaidDate || (t.exitDate || t.entryDate) > lastPaidDate);
   const cyclePnL = cycleTrades.reduce((sum,t)=>sum+t.pnl,0);
+  const savePayoutDate=async()=>{
+    if(!editingPayout || savingPayoutDate || !/^\d{4}-\d{2}-\d{2}$/.test(editingPayout.payoutDate))return;
+    const payout=payouts.find(p=>p.id===editingPayout.id && p.fundedAccountId===account.id);
+    if(!payout)return;
+    if(editingPayout.payoutDate===payout.payoutDate){setEditingPayout(null);return;}
+    setSavingPayoutDate(true);
+    try{
+      // Write first, then update the context, so UI and consistency cycle
+      // cannot claim the corrected payout date before persistence succeeds.
+      await updatePayoutDb(payout.id,{payoutDate:editingPayout.payoutDate});
+      updatePayout(payout.id,{payoutDate:editingPayout.payoutDate});
+      toast.success("Payout date updated · consistency cycle recalculated");
+      setEditingPayout(null);
+    }catch(e){toast.error("Failed to update payout date: "+(e instanceof Error?e.message:String(e)))}
+    finally{setSavingPayoutDate(false)}
+  };
   const paidPayoutByDate = paidPayouts.reduce<Record<string,number>>((acc,p)=>{
     acc[p.payoutDate]=(acc[p.payoutDate]??0)+p.requestedPayoutAmount;
     return acc;
@@ -508,7 +527,7 @@ export function AccountAnalyticsView({
           acc[d].pnl+=t.pnl;acc[d].trades++;return acc;
         },{});
         const target=accountType==="challenge" && account.profitTarget>0?Number(account.profitTarget):null;
-        return <ConsistencySimulator daily={cycleDaily} limit={rule!=null && pct>0 && pct<100?pct:null} target={target}/>;
+        return <div className="space-y-1">{accountType==="funded"&&<p className="text-xs text-slate-400">Current consistency cycle: {lastPaidDate?`after paid payout on ${lastPaidDate}`:"from account funding · no paid payout yet"}. Closing dates determine inclusion.</p>}<ConsistencySimulator daily={cycleDaily} limit={rule!=null && pct>0 && pct<100?pct:null} target={target}/></div>;
       })()}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -934,6 +953,21 @@ export function AccountAnalyticsView({
         </div>
       </div>
 
+      {accountType==="funded"&&<details className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-white">Payout History · {payouts.length} <span className="ml-2 text-xs font-normal text-slate-400">Edit payout date</span></summary>
+        <div className="mt-3 space-y-2">{payouts.length?payouts.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.03] p-3">
+          <div><p className="text-sm font-semibold text-white">{fmt$(p.requestedPayoutAmount)} · {p.status}</p><p className="text-xs text-slate-400">{p.payoutDate}</p></div>
+          <button type="button" onClick={()=>setEditingPayout({id:p.id,payoutDate:p.payoutDate})} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-white/20 px-3 text-xs text-cyan-200"><Pencil size={14}/> Edit date</button>
+        </div>):<p className="text-xs text-slate-400">No payouts recorded.</p>}</div>
+      </details>}
+      {editingPayout&&<div role="dialog" aria-modal="true" aria-label="Edit payout date" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3">
+        <div className="w-full max-w-sm rounded-xl border border-white/20 bg-[#101a2b] p-5 text-white"><h3 className="font-semibold">Edit payout date</h3>
+          <p className="mt-1 text-xs text-slate-400">For paid payouts, this date defines the beginning of the next funded consistency cycle. Amounts and status are unchanged.</p>
+          <input type="date" value={editingPayout.payoutDate} onChange={e=>setEditingPayout(v=>v?{...v,payoutDate:e.target.value}:null)} className="mt-3 min-h-11 w-full rounded-lg border border-white/15 bg-[#080d1b] p-2 text-white [color-scheme:dark]"/>
+          <div className="mt-4 flex gap-2"><button type="button" onClick={()=>setEditingPayout(null)} className="min-h-10 flex-1 rounded-lg border border-white/20">Cancel</button>
+          <button type="button" onClick={()=>void savePayoutDate()} disabled={savingPayoutDate||!editingPayout.payoutDate} className="min-h-10 flex-1 rounded-lg bg-cyan-600 font-semibold disabled:opacity-40">Save date</button></div>
+        </div>
+      </div>}
       {/* Account-scoped trade history; journal is no longer a primary navigation destination. */}
       <details className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-5">
         <summary className="cursor-pointer select-none text-sm font-semibold text-white">Trade History · {trades.length} trades <span className="ml-2 text-xs font-normal text-slate-400">View account journal</span></summary>
