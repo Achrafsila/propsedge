@@ -38,6 +38,8 @@ import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
+import { ConsistencySimulator } from "@/components/account/ConsistencySimulator";
+import { parseConsistencyLimitPercent } from "@/lib/analytics/payoutEligibility";
 import { getAccountOptionLabel, ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -484,6 +486,21 @@ export function AccountAnalyticsView({
           />
         </div>
       </div>
+
+      {(() => {
+        const rule = accountType === "funded"
+          ? (account.payoutRules?.consistency?.required ? account.payoutRules.consistency.limitPercent : null)
+          : parseConsistencyLimitPercent(account.consistencyRule);
+        const pct = Number(rule);
+        if (rule == null || !(pct>0 && pct<100)) return null;
+        const cycleDaily = cycleTrades.reduce((acc:Record<string,{pnl:number;trades:number}>,t)=>{
+          const d=String(t.exitDate||t.entryDate).slice(0,10);
+          if(!acc[d])acc[d]={pnl:0,trades:0};
+          acc[d].pnl+=t.pnl;acc[d].trades++;return acc;
+        },{});
+        const target=accountType==="challenge" && account.profitTarget>0?Number(account.profitTarget):null;
+        return <ConsistencySimulator daily={cycleDaily} limit={pct} target={target}/>;
+      })()}
 
       <div className="grid gap-4 lg:grid-cols-2">
       {/* ── Trading Requirements ──────────────────────────────────────────── */}
