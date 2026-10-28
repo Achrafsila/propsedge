@@ -2,7 +2,17 @@
 import {useState} from "react";
 type Daily = Record<string,{pnl:number;trades:number}>;
 const fmt=(n:number)=>Number.isFinite(n)?new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(n):"—";
-export function ConsistencySimulator({daily,limit,target}:{daily:Daily;limit:number;target:number|null}){
+export function ConsistencySimulator({daily,limit,target}:{daily:Daily;limit:number|null;target:number|null}){
+ const [manualLimit,setManualLimit]=useState("");
+ const effectiveLimit=limit??Number(manualLimit);
+ if(!(effectiveLimit>0&&effectiveLimit<100))return <section className="rounded-2xl border border-cyan-400/20 bg-[#0d1728] p-3 sm:p-4">
+   <h2 className="text-base font-bold text-white">Consistency Planner</h2>
+   <p className="mt-1 text-xs text-slate-400">No valid consistency percentage detected for this account. Enter the firm's limit to simulate without changing account rules.</p>
+   <label className="mt-3 block max-w-xs text-xs text-slate-300">Consistency limit (%)<input type="number" min="1" max="99" step="0.1" value={manualLimit} onChange={e=>setManualLimit(e.target.value)} placeholder="e.g. 25" className="mt-1 min-h-11 w-full rounded-lg border border-white/20 bg-slate-950 px-3 text-base text-white"/></label>
+ </section>;
+ return <ConsistencyCalculator daily={daily} limit={effectiveLimit} target={target}/>;
+}
+function ConsistencyCalculator({daily,limit,target}:{daily:Daily;limit:number;target:number|null}){
  const today=new Date();const key=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
  const todayPnl=daily[key]?.pnl??0;
  const other=Object.entries(daily).filter(([date])=>date!==key);

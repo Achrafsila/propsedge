@@ -496,14 +496,14 @@ export function AccountAnalyticsView({
           ? (nativeRule ?? parseConsistencyLimitPercent(sourceChallenge?.consistencyRule))
           : parseConsistencyLimitPercent(account.consistencyRule);
         const pct = Number(rule);
-        if (rule == null || !(pct>0 && pct<100)) return null;
+
         const cycleDaily = cycleTrades.reduce((acc:Record<string,{pnl:number;trades:number}>,t)=>{
           const d=String(t.exitDate||t.entryDate).slice(0,10);
           if(!acc[d])acc[d]={pnl:0,trades:0};
           acc[d].pnl+=t.pnl;acc[d].trades++;return acc;
         },{});
         const target=accountType==="challenge" && account.profitTarget>0?Number(account.profitTarget):null;
-        return <ConsistencySimulator daily={cycleDaily} limit={pct} target={target}/>;
+        return <ConsistencySimulator daily={cycleDaily} limit={rule!=null && pct>0 && pct<100?pct:null} target={target}/>;
       })()}
 
       <div className="grid gap-4 lg:grid-cols-2">
