@@ -82,11 +82,11 @@ export default function BoussoleEntries(){
   const closePosition=async()=>{
     if(!position)return;setSaving(true);
     const {error}=await createClient().from("execution_positions").update({status:"closed",closed_at:new Date().toISOString()}).eq("id",position.id);
-    if(error){setError("Failed to close monitoring: "+error.message)}else setPosition(null);
+    if(error){setError("Failed to close monitoring: "+error.message)}else {setPosition(null);setAlerts([]);setSeenAlerts([]);setDismissedAlerts([]);setSelected(null);}
     setSaving(false);
   };
   const commitPosition=async()=>{
-    if(!commitCandidate||saving)return;
+    if(!commitCandidate||saving||position?.status==="active")return;
     const price=Number(entryInput);
     if(!(price>0))return;
     setSaving(true);setError("");
@@ -97,7 +97,7 @@ export default function BoussoleEntries(){
     const {data:row,error}=await supabase.from("execution_positions").insert({user_id:user.id,symbol:"XAU/USD",side:proposal.side,title:proposal.title,timeframe:tf,entry:price,sl:proposal.sl,tp:proposal.tp,status:"open",reason:proposal.reason,source_candle_time:latest?.time??null}).select("id,committed_at").single();
     if(error||!row){setError("Could not save position: "+(error?.message??"unknown error"));setSaving(false);return;}
     setPosition({id:row.id,proposal,actualEntry:price,startedAt:Math.floor(new Date(row.committed_at).getTime()/1000),status:"active",lastAlert:""});
-    setAlerts([]);setSeenAlerts([]);setCommitCandidate(null);setSaving(false);
+    setAlerts([]);setSeenAlerts([]);setDismissedAlerts([]);setCommitCandidate(null);setSaving(false);
   };
   const [commitCandidate,setCommitCandidate]=useState<Proposal|null>(null);
   const [entryInput,setEntryInput]=useState("");
@@ -111,25 +111,48 @@ export default function BoussoleEntries(){
     if(typeof Notification!=="undefined" && Notification.permission==="granted") new Notification("PropEdge · Execution Desk",{body:message});
   },[]);
   const [seenAlerts,setSeenAlerts]=useState<string[]>([]);
+  const [dismissedAlerts,setDismissedAlerts]=useState<string[]>([]);
+  useEffect(()=>{
+    if(!position?.id)return;
+    try{
+      const key="pe-position-alerts:"+position.id;
+      setSeenAlerts(JSON.parse(sessionStorage.getItem(key)??"[]"));
+      setDismissedAlerts(JSON.parse(sessionStorage.getItem(key+":dismissed")??"[]"));
+      setAlerts([]);
+    }catch{setSeenAlerts([]);setDismissedAlerts([]);setAlerts([]);}
+  },[position?.id]);
+  const dismissCurrentAlert=()=>{
+    if(!position?.id||!alerts.length)return;
+    const key="pe-position-alerts:"+position.id+":dismissed";
+    const next=[...dismissedAlerts,alerts[0]];
+    setDismissedAlerts(next);setAlerts(prev=>prev.slice(1));
+    try{sessionStorage.setItem(key,JSON.stringify(next))}catch{}
+  };
   useEffect(()=>{
     if(!position || position.status!=="active" || !latest)return;
     const p=position.proposal;
     const afterEntry=data.slice(0,-1).filter(c=>c.time>=position.startedAt);
-    const all=afterEntry.length?afterEntry:[latest];
+    // A candle before entry must never trigger a stop or target alert.
+    const all=afterEntry;
     const favorable=(latest.close-position.actualEntry)*p.side;
     const risk=Math.abs(position.actualEntry-p.sl);
     const progress=risk>0?favorable/risk:0;
     const events:string[]=[];
     if(all.some(c=>p.side===1?c.low<=p.sl:c.high>=p.sl))events.push("Stop-loss touched · check your broker");
     if(all.some(c=>p.side===1?c.high>=p.tp:c.low<=p.tp))events.push("Take-profit touched · check your broker");
-    if(progress>=1)events.push("Trade reached +1R");
-    else if(progress>=0.5)events.push("Trade reached +0.5R");
+    if(afterEntry.length && progress>=1)events.push("Trade reached +1R");
+    else if(afterEntry.length && progress>=0.5)events.push("Trade reached +0.5R");
     const adverse=liquidity.lastEvent && liquidity.lastEvent.time>=position.startedAt &&
       (p.side===1?liquidity.lastEvent.kind.startsWith("bearish"):liquidity.lastEvent.kind.startsWith("bullish"));
     if(adverse)events.push("Opposing structure observed");
-    const fresh=events.filter(e=>!seenAlerts.includes(position.id+":"+e));
+    const key="pe-position-alerts:"+position.id;
+    let stored:string[]=[];
+    try{stored=JSON.parse(sessionStorage.getItem(key)??"[]")}catch{}
+    const fresh=events.filter(e=>!seenAlerts.includes(position.id+":"+e) && !stored.includes(position.id+":"+e));
     if(fresh.length){
-      setSeenAlerts(prev=>[...prev,...fresh.map(e=>position.id+":"+e)]);
+      const merged=[...new Set([...stored,...fresh.map(e=>position.id+":"+e)])];
+      try{sessionStorage.setItem(key,JSON.stringify(merged))}catch{}
+      setSeenAlerts(merged);
       fresh.forEach(e=>pushAlert(e+" · Indicative Twelve Data candles; verify MT5 execution."));
     }
   },[latest?.time,position?.id,position?.startedAt,data,liquidity.lastEvent?.time,seenAlerts,pushAlert]);
@@ -156,7 +179,7 @@ export default function BoussoleEntries(){
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
       <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {candidates.length}</button>
       <div className="flex items-center gap-3">
-        <span role="status" title={alerts[0]??"Monitoring checks on closed candles only"} className="max-w-52 truncate text-[11px] text-amber-300">{alerts.length>0?"● "+alerts[0]:"No new alerts · monitoring on page"}</span>
+        {alerts.length>0 ? <div className="flex items-center gap-1"><span role="status" title={alerts[0]} className="max-w-52 truncate text-[11px] text-amber-300">● {alerts[0]}</span><button type="button" onClick={dismissCurrentAlert} aria-label="Dismiss this alert" title="Dismiss alert" className="rounded-md border border-white/20 p-1 text-slate-300"><X size={12}/></button></div> : <span className="text-[11px] text-slate-400">No new alerts · monitoring on page</span>}
         <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts on":"Enable alerts"}</button>
       </div>
     </div>
