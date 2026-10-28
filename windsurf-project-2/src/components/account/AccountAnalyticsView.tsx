@@ -38,6 +38,7 @@ import { AddTradeDialog } from "@/components/AddTradeDialog";
 import { ImportTradesDialog } from "@/components/ImportTradesDialog";
 import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
+import { EditAccountRulesDialog } from "@/components/account/EditAccountRulesDialog";
 import { ConsistencySimulator } from "@/components/account/ConsistencySimulator";
 import { parseConsistencyLimitPercent } from "@/lib/analytics/payoutEligibility";
 import { getAccountOptionLabel, ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
@@ -125,6 +126,7 @@ export function AccountAnalyticsView({
 }: AccountAnalyticsViewProps) {
   const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [editRulesOpen,setEditRulesOpen] = useState(false);
   const [isAddTradeDialogOpen, setIsAddTradeDialogOpen] = useState(false);
   const [isImportTradeDialogOpen, setIsImportTradeDialogOpen] = useState(false);
   const [isAddPayoutDialogOpen, setIsAddPayoutDialogOpen] = useState(false);
@@ -436,6 +438,9 @@ export function AccountAnalyticsView({
         setIsAddPayoutDialogOpen={setIsAddPayoutDialogOpen}
       />
 
+      <div className="flex justify-end"><button type="button" onClick={()=>setEditRulesOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-400/[.07] px-3 text-xs font-semibold text-cyan-200"><Pencil size={14}/> Edit Account Rules</button></div>
+      <EditAccountRulesDialog open={editRulesOpen} onOpenChange={setEditRulesOpen} account={account} accountType={accountType}/>
+      
       {/* ── Account Data Strip ────────────────────────────────────────────── */}
       <div
         className="rounded-xl p-3 sm:p-4 transition-all duration-300"
