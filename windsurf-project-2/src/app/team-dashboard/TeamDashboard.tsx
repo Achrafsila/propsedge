@@ -150,11 +150,11 @@ function TeamPerformance({ teamId }: { teamId: string }) {
   const consistentTraders = [...stats.traders].flatMap(t=>{
     const own=consistencyResults.filter(r=>r.ownerId===t.ownerId);
     if(!own.length)return [];
-    // Rank by the best qualifying account, while showing its exact rule.
-    const best=[...own].sort((a,b)=>Number(b.compliant)-Number(a.compliant)||a.utilization-b.utilization||b.tradeCount-a.tradeCount)[0];
+    // A lower actual best-day concentration is better; show account limit separately.
+    const best=[...own].sort((a,b)=>a.concentration-b.concentration||b.tradeCount-a.tradeCount)[0];
     return [{...best,ownerId:t.ownerId}];
   });
-  const topConsistent=[...consistentTraders].sort((a,b)=>Number(b.compliant)-Number(a.compliant)||a.utilization-b.utilization||b.tradeCount-a.tradeCount)[0];
+  const topConsistent=[...consistentTraders].sort((a,b)=>a.concentration-b.concentration||b.tradeCount-a.tradeCount)[0];
   const accolades = [
     {title:"P&L Champion", kicker:"TOP TRADER",name:topPnl?traderName(topPnl.ownerId):"No results yet",metric:topPnl?money(topPnl.pnl):"—",note:"Highest realized trading P&L",icon:Trophy,accent:"text-amber-300",border:"border-amber-400/25"},
     {title:"Funding Legend",kicker:"TOP ACCOUNT FUNDER",name:topFunder?traderName(topFunder.ownerId):"The funding throne is still empty 👑",metric:topFunder?`${topFunder.fundedConversions} funded`:"🚀",note:topFunder?"Most evaluations successfully converted into funded accounts":"First trader to pass a challenge claims the crown!",icon:Crown,accent:"text-violet-300",border:"border-violet-400/25"},
