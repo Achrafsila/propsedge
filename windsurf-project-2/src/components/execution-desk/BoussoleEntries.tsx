@@ -68,7 +68,47 @@ export default function BoussoleEntries(){
       return {...p,status,priority};
     }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority).slice(0,3);
   },[result.options,liquidity,data]);
-  const active=candidates.find(x=>x.id===selected);
+  const assessed=useMemo(()=>{
+    const closed=data.slice(0,-1);
+    const recent=closed.at(-1);
+    const previous=closed.at(-2);
+    const a=result.atr;
+    const e20=ema(closed.map(x=>x.close),20);
+    const fresh=Number.isFinite(a)&&a>0&&!!recent&&!!previous;
+    return candidates.map(p=>{
+      if(!fresh)return {...p,confidence:0,setupStatus:"Invalidated" as const};
+      const price=recent!.close;
+      const direction=p.side;
+      const distance=Math.abs(price-p.entry);
+      const candleDirection=(recent!.close-recent!.open)*direction>0;
+      const trendAligned=(direction===1&&result.trend==="EMA aligned bullish")||(direction===-1&&result.trend==="EMA aligned bearish");
+      const structureAligned=p.status==="Structure aligned";
+      const momentum=(recent!.close-previous!.close)*direction>0;
+      const correctStop=(p.entry-p.sl)*direction>0;
+      const risk=Math.abs(p.entry-p.sl);
+      const reward=Math.abs(p.tp-p.entry);
+      const rrValid=correctStop&&risk>0&&reward/risk>=rr-0.05;
+      const triggerCrossed=(previous!.close-p.entry)*direction<0&&(recent!.close-p.entry)*direction>=0;
+      const emaTouched=recent!.low<=e20&&recent!.high>=e20;
+      const reboundConfirmed=emaTouched&&candleDirection&&Math.abs(price-e20)<=0.75*a;
+      const marketConfirmed=p.type==="market"&&candleDirection&&trendAligned&&distance<=0.5*a;
+      const breakoutConfirmed=p.type==="breakout"&&triggerCrossed&&candleDirection;
+      const reversalConfirmed=p.type==="reversal"&&triggerCrossed&&candleDirection;
+      const confirmed=p.type==="rebound"?reboundConfirmed:p.type==="market"?marketConfirmed:p.type==="breakout"?breakoutConfirmed:reversalConfirmed;
+      // A stale level is never advertised as an executable entry.
+      const farBeyond=distance>1.5*a;
+      const passedWithoutFreshTrigger=(price-p.entry)*direction>0.75*a&&!triggerCrossed;
+      const invalidated=!rrValid||(p.type==="rebound"&&farBeyond)||(p.type!=="rebound"&&passedWithoutFreshTrigger);
+      const setupStatus=invalidated?"Invalidated":confirmed?"Confirmed":"Waiting";
+      // Technical confluence score, not a calibrated probability of winning.
+      const confidence=Math.max(0,Math.min(100,Math.round(
+        (trendAligned?25:8)+(structureAligned?20:10)+(momentum?15:5)+
+        (candleDirection?15:5)+(rrValid?15:0)+(distance<=0.5*a?10:distance<=a?6:0)
+      )));
+      return {...p,confidence,setupStatus};
+    }).sort((a,b)=>Number(a.setupStatus==="Confirmed")-Number(b.setupStatus==="Confirmed")||b.confidence-a.confidence).reverse();
+  },[candidates,data,result.atr,result.trend,rr]);
+  const active=assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated");
   const [position,setPosition]=useState<{id:string;proposal:Proposal;actualEntry:number;startedAt:number;status:"active"|"closed";lastAlert:string}|null>(null);
   const [saving,setSaving]=useState(false);
   useEffect(()=>{let mounted=true;const supabase=createClient();void (async()=>{
@@ -177,25 +217,25 @@ export default function BoussoleEntries(){
       <button type="button" onClick={()=>void closePosition()} disabled={saving} className="min-h-9 rounded-lg border border-white/20 px-3 text-[11px]">End tracking</button>
     </div>}
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-      <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {candidates.length}</button>
+      <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {assessed.filter(p=>p.setupStatus!=="Invalidated").length}</button>
       <div className="flex items-center gap-3">
         {alerts.length>0 ? <div className="flex items-center gap-1"><span role="status" title={alerts[0]} className="max-w-52 truncate text-[11px] text-amber-300">● {alerts[0]}</span><button type="button" onClick={dismissCurrentAlert} aria-label="Dismiss this alert" title="Dismiss alert" className="rounded-md border border-white/20 p-1 text-slate-300"><X size={12}/></button></div> : <span className="text-[11px] text-slate-400">No new alerts · monitoring on page</span>}
         <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts on":"Enable alerts"}</button>
       </div>
     </div>
     {showWatchlist&&<>
-    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{candidates.map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
+    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{assessed.filter(p=>p.setupStatus!=="Invalidated").map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
       <div className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-white sm:text-sm">{p.title}</strong><span className={"shrink-0 text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div>
-      <p className="mt-1 text-[10px] text-amber-200">{p.status}</p>
+      <div className="mt-1 flex items-center justify-between gap-2"><p className={"text-[10px] font-semibold "+(p.setupStatus==="Confirmed"?"text-emerald-300":"text-amber-200")}>{p.setupStatus}</p><span className="text-[11px] font-bold tabular-nums text-cyan-200" title="Technical confluence score, not a win probability">Confidence {p.confidence}/100</span></div>
       <div className="mt-3 grid grid-cols-3 gap-2">{[{key:"Entry",value:p.entry,style:"text-amber-200"},{key:"Stop",value:p.sl,style:"text-rose-300"},{key:"Target",value:p.tp,style:"text-emerald-300"}].map(x=><div key={x.key} className="min-w-0"><p className="text-[10px] text-slate-400">{x.key}</p><p className={"text-xs font-bold tabular-nums sm:text-sm "+x.style}>{n(x.value)}</p></div>)}</div>
       {selected===p.id&&<div className="mt-3 border-t border-white/10 pt-2"><p className="text-xs leading-5 text-slate-300">{p.reason}. Invalidation : {n(p.sl)}.</p><span className="mt-2 inline-block rounded-md border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-200">Select this setup to commit manually below</span></div>}
     </button>)}</div>
     </>}
     {active && position?.status!=="active" && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{fired(active)?"Trigger level touched (not an executed order)":"Awaiting trigger · conditional setup"}</p></div><button type="button" onClick={()=>{setCommitCandidate(active);setEntryInput(String(active.entry));}} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white">Commit position</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{active.setupStatus==="Confirmed"?"Trigger confirmed on the latest closed candle":"Waiting for a new, validated trigger"}</p></div><button type="button" onClick={()=>{if(active.setupStatus!=="Confirmed")return;setCommitCandidate(active);setEntryInput(String(active.entry));}} disabled={active.setupStatus!=="Confirmed"} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white disabled:opacity-40">Commit position</button></div>
     </div>}
     {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={saving || !(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>void commitPosition()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
-    {!busy&&!candidates.length&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
+    {!busy&&!assessed.some(p=>p.setupStatus!=="Invalidated")&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
 
   </section>;
 }
