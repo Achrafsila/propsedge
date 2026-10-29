@@ -443,16 +443,16 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       const account = fundedAccounts.find((a) => a.id === accountId);
       if (!account) return;
       // maxDrawdown is stored as a percentage (e.g. 10 = 10%)
-      const maxDDDollars = (account.maxDrawdown / 100) * account.accountSize;
+      const maxDDDollars = account.maxDrawdown <= 100 ? account.accountSize * account.maxDrawdown / 100 : account.maxDrawdown;
       const lossAmount = Math.max(0, -totalPnL);
       const remainingDollars = Math.max(0, maxDDDollars - lossAmount);
       const newCurrentProfit = totalPnL;
       const paidWithdrawals = payouts.filter(p=>p.fundedAccountId===accountId && p.status==="paid")
         .reduce((sum,p)=>sum+p.requestedPayoutAmount,0);
       const newCurrentBalance = account.initialBalance + totalPnL - paidWithdrawals;
-      const newRemainingDrawdown = account.accountSize > 0
-        ? (remainingDollars / account.accountSize) * 100
-        : 0;
+      // remaining_buffer stores USD, not a percentage. This is a simplified
+      // realized-P&L estimate; broker trailing drawdown can differ.
+      const newRemainingDrawdown = remainingDollars;
       setFundedAccounts((prev) =>
         prev.map((a) =>
           a.id === accountId

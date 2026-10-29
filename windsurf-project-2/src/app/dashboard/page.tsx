@@ -14,6 +14,7 @@ import {
   PieChart, Pie, Cell,
 } from "recharts";
 import { useAccounts } from "@/context/AccountsContext";
+import { computeDrawdown } from "@/lib/drawdown";
 import { getRootChallenges } from "@/lib/challenges";
 import { groupByNormalizedFirm } from "@/lib/propFirms";
 import { AddChallengeDialog } from "@/components/AddChallengeDialog";
@@ -392,7 +393,9 @@ export default function Dashboard() {
               const firm = account.data.propFirmName;
               const size = account.data.accountSize;
               const profit = account.data.currentProfit;
-              const remaining = account.data.remainingDrawdown;
+              // Recompute from configured limit; old funded rows may contain
+              // a percentage mistakenly saved into remaining_buffer.
+              const remaining = computeDrawdown(account.data.maxDrawdown,size,profit).remainingDrawdownDollars;
               const status = account.data.status;
               const statusColor = status === "active" ? "#10B981" : status === "passed" || status === "step1_completed" ? "#60A5FA" : status === "failed" || status === "breached" ? "#EF4444" : "#94A3B8";
               const phase = isChallenge ? (account.data.challengeKind === "instant" ? "Instant" : account.data.challengeStep === "2" ? "Phase 2" : account.data.challengeKind === "2-step" ? "Phase 1" : "Challenge") : (account.data.fundingPath === "instant" ? "Instant Funded" : "Funded");
@@ -415,8 +418,8 @@ export default function Dashboard() {
                     <div><p className="text-[9px] sm:text-xs text-[#94A3B8]">Current Balance</p><p className="mt-1 text-xs sm:text-base font-bold tabular-nums text-white">{fmt$(equity)}</p></div>
                     <div><p className="text-[9px] sm:text-xs text-[#94A3B8]">Net P&L</p><p className="mt-1 text-xs sm:text-base font-bold tabular-nums" style={{ color: profit >= 0 ? "#10B981" : "#EF4444" }}>{profit > 0 ? "+" : ""}{fmt$(profit)}</p></div>
                     <div className="col-span-3">
-                      <div className="flex justify-between gap-3 text-xs"><span className="text-[#94A3B8]">Remaining drawdown</span><span className="font-semibold tabular-nums" style={{ color: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#CBD5E1" }}>{fmt$(remaining)}</span></div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full" style={{ width: Math.max(0, Math.min(100, remaining / (account.data.maxDrawdown || 1) * 100)) + "%", background: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#10B981" }} /></div>
+                      <div className="flex justify-between gap-3 text-xs"><span className="text-[#94A3B8]" title="Estimate based on realized P&L and configured drawdown. Verify any trailing or intraday drawdown with your broker.">Estimated DD buffer</span><span className="font-semibold tabular-nums" style={{ color: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#CBD5E1" }}>{fmt$(remaining)}</span></div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full" style={{ width: Math.max(0, Math.min(100, remaining / (computeDrawdown(account.data.maxDrawdown,size,profit).maxDrawdownDollars || 1) * 100)) + "%", background: remaining <= 0 ? "#EF4444" : remaining < size * 0.02 ? "#F59E0B" : "#10B981" }} /></div>
                     </div>
                   </div>
                   <button type="button" onClick={() => router.push(isChallenge ? `/challenges/${account.data.id}` : `/funded/${account.data.id}`)}
