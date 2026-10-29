@@ -109,6 +109,34 @@ export default function BoussoleEntries(){
     }).sort((a,b)=>Number(a.setupStatus==="Confirmed")-Number(b.setupStatus==="Confirmed")||b.confidence-a.confidence).reverse();
   },[candidates,data,result.atr,result.trend,rr]);
   const active=assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated");
+  const [ai,setAi]=useState<{assessment:string;summary:string;supportingFactors:string[];concerns:string[];watchFor:string;model:string}|null>(null);
+  const [aiBusy,setAiBusy]=useState(false);
+  const [aiError,setAiError]=useState("");
+  const [aiSnapshot,setAiSnapshot]=useState("");
+  const aiCandidate=assessed.find(x=>x.id===selected&&x.setupStatus!=="Invalidated");
+  const snapshotKey=aiCandidate ? [tf,asOf,aiCandidate.id,aiCandidate.entry,aiCandidate.setupStatus,data.at(-1)?.time].join("|"):"";
+  useEffect(()=>{setAi(null);setAiError("");setAiSnapshot("")},[snapshotKey]);
+  const analyzeWithAI=async()=>{
+    if(!aiCandidate||aiBusy)return;
+    setAiBusy(true);setAiError("");
+    const requestKey=snapshotKey;
+    try{
+      const response=await fetch("/api/execution-desk/ai-analysis",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          timeframe:tf,asOf,trend:result.trend,atr:result.atr,
+          candles:data.slice(-100),
+          setup:{title:aiCandidate.title,side:aiCandidate.side===1?"BUY":"SELL",entry:aiCandidate.entry,
+            sl:aiCandidate.sl,tp:aiCandidate.tp,status:aiCandidate.setupStatus,confidence:aiCandidate.confidence}
+        })
+      });
+      const json=await response.json();
+      if(!response.ok)throw Error(json.error||"AI analysis unavailable");
+      setAi(json);setAiSnapshot(requestKey);
+    }catch(e){setAiError(e instanceof Error?e.message:"AI analysis unavailable")}
+    finally{setAiBusy(false)}
+  };
+
   const [position,setPosition]=useState<{id:string;proposal:Proposal;actualEntry:number;startedAt:number;status:"active"|"closed";lastAlert:string}|null>(null);
   const [saving,setSaving]=useState(false);
   useEffect(()=>{let mounted=true;const supabase=createClient();void (async()=>{
@@ -233,6 +261,21 @@ export default function BoussoleEntries(){
     </>}
     {active && position?.status!=="active" && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{active.setupStatus==="Confirmed"?"Trigger confirmed on the latest closed candle":"Waiting for a new, validated trigger"}</p></div><button type="button" onClick={()=>{if(active.setupStatus!=="Confirmed")return;setCommitCandidate(active);setEntryInput(String(active.entry));}} disabled={active.setupStatus!=="Confirmed"} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white disabled:opacity-40">Commit position</button></div>
+    </div>}
+    {active&&position?.status!=="active"&&<div className="mt-2 rounded-xl border border-cyan-400/20 bg-white/[.025] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><p className="text-xs font-semibold text-cyan-200">Groq AI · Scenario Critic</p><p className="text-[10px] text-slate-400">Independent commentary · cannot change status or trading levels</p></div>
+        <button type="button" disabled={aiBusy} onClick={()=>void analyzeWithAI()} className="min-h-9 rounded-lg border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200 disabled:opacity-50">{aiBusy?"Analyzing…":ai?"Re-analyze with AI":"Analyze with AI"}</button>
+      </div>
+      {aiError&&<p role="alert" className="mt-2 text-xs text-amber-300">{aiError}</p>}
+      {ai&&aiSnapshot===snapshotKey&&<div className="mt-3 space-y-2 text-xs text-slate-200">
+        <p className="font-semibold">AI assessment · {ai.assessment}</p>
+        <p>{ai.summary}</p>
+        {!!ai.supportingFactors?.length&&<p><span className="text-emerald-300">Supporting:</span> {ai.supportingFactors.join(" · ")}</p>}
+        {!!ai.concerns?.length&&<p><span className="text-amber-300">Risks:</span> {ai.concerns.join(" · ")}</p>}
+        {ai.watchFor&&<p><span className="text-cyan-300">Watch:</span> {ai.watchFor}</p>}
+        <p className="text-[10px] text-slate-500">Model: {ai.model} · Analytical commentary only; not a win probability or an execution signal.</p>
+      </div>}
     </div>}
     {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={saving || !(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>void commitPosition()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
     {!busy&&!assessed.some(p=>p.setupStatus!=="Invalidated")&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
