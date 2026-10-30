@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw, AlertTriangle, Bell, Check, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { analyzeLiquidityStructure } from "@/lib/execution/liquidityStructure";
+import { recordForecast } from "./TimesFMAccuracyTracker";
 
 type Candle = {time:number;open:number;high:number;low:number;close:number};
 type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"|"correction"|"reversal";status?:string};
@@ -147,6 +148,7 @@ export default function BoussoleEntries(){
       const parsed=await response.json();
       if(!response.ok||!Array.isArray(parsed.predictions)||parsed.predictions.length!==12)throw new Error(parsed.error||"Forecast unavailable");
       if(signal?.aborted)return;
+      recordForecast(parsed);
       setForecastContext({tf,lastClose:parsed.lastClose,predictions:parsed.predictions,baseTime:parsed.lastClosedCandleAt});
       setIntelligence({tf,summary:String(parsed.aiSummary||"Analyse indisponible"),source:String(parsed.interpretationSource||"rules"),structure:String(parsed.marketStructure||"Unknown"),strength:String(parsed.forecastStrength||"weak"),price:parsed.lastClose,future:parsed.predictions[11]});
     }catch(e){if(signal?.aborted)return;setIntelligence(null);setForecastContext(null);setIntelligenceError(e instanceof Error?e.message:"Forecast unavailable");}
