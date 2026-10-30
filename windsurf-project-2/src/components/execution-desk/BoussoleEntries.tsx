@@ -142,7 +142,7 @@ export default function BoussoleEntries(){
   const freshnessLimit=Math.max(minutes*120000,600000);
   const dataFresh=loadedTf===tf && data.length>=220 && candleLag>=-minutes*60000 &&
     candleLag < freshnessLimit && Date.now()-feedAsOf < freshnessLimit;
-  const feedStatus=remaining>0 ? "Crédits Twelve Data épuisés · reprise dans "+String(Math.floor(remaining/60)).padStart(2,"0")+":"+String(remaining%60).padStart(2,"0") : error ? "Feed unavailable · "+error :
+  const feedStatus=remaining>0 ? "Données de marché temporairement indisponibles · reprise dans "+String(Math.floor(remaining/60)).padStart(2,"0")+":"+String(remaining%60).padStart(2,"0") : error ? "Feed unavailable · "+error :
     busy && !data.length ? "Loading market candles…" :
     !data.length ? "Waiting for market candles…" :
     !dataFresh ? "Market feed delayed · setups paused" : "Feed live";
@@ -229,7 +229,7 @@ export default function BoussoleEntries(){
       const path=freshForecast ? forecastContext!.predictions : [];
       const forecastMove=path.length ? path[11]-forecastContext!.lastClose : null;
       const meaningful=forecastMove!==null && Math.abs(forecastMove)>0.25*a;
-      const forecastContextLabel=!meaningful?"TimesFM · no clear bias":forecastMove!*p.side>0?"TimesFM · same direction":"TimesFM · counter-direction";
+      const forecastContextLabel=!meaningful?"Prévision · direction incertaine":forecastMove!*p.side>0?"Prévision · même direction":"Prévision · direction opposée";
       // Forecast price is an indicative future CLOSE, not a stop, a limit order or a guaranteed high/low.
       // A nearby forecast turning point helps contextualize a pullback/scalp, not confirm execution.
       let turningPoint:number|null=null;
@@ -383,7 +383,7 @@ export default function BoussoleEntries(){
       const merged=[...new Set([...stored,...fresh.map(e=>position.id+":"+e)])];
       try{sessionStorage.setItem(key,JSON.stringify(merged))}catch{}
       setSeenAlerts(merged);
-      fresh.forEach(e=>pushAlert(e+" · Indicative Twelve Data candles; verify MT5 execution."));
+      fresh.forEach(e=>pushAlert(e+" · Prix indicatifs ; vérifier l'exécution chez votre broker."));
     }
   },[latest?.time,position?.id,position?.startedAt,data,liquidity.lastEvent?.time,seenAlerts,pushAlert]);
   const currentR=position && latest ? (latest.close-position.actualEntry)*position.proposal.side/Math.abs(position.actualEntry-position.proposal.sl) : null;
@@ -402,11 +402,11 @@ export default function BoussoleEntries(){
     </div>
     <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[.045] px-3 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-bold text-cyan-200">Market Intelligence · TimesFM + Groq</p>
+        <p className="text-[11px] font-bold text-cyan-200">Market Intelligence</p>
         <button type="button" disabled={intelligenceLoading} onClick={()=>void refreshIntelligence()} className="rounded-lg border border-cyan-400/20 px-2 py-1 text-[10px] text-cyan-200 disabled:opacity-50">{intelligenceLoading?"Analyse…":"Recalculer l'IA"}</button>
       </div>
       {intelligence?.tf===tf?<p className="mt-1 text-xs leading-5 text-slate-200">{intelligence.summary}</p>:<p className="mt-1 text-xs text-slate-400">{intelligenceLoading?"Lecture du marché en cours…":"Analyse IA indisponible · les scénarios techniques restent opérationnels."}</p>}
-      {intelligence?.tf===tf&&<p className="mt-1 text-[10px] text-slate-400">Prix de référence {n(intelligence.price)} · clôture prévue à {minutes*12} min : {n(intelligence.future)} · projection {intelligence.strength==="weak"?"faible":"plus marquée"} · {intelligence.source==="groq"?"interprétation Groq":"lecture de secours"}</p>}
+      {intelligence?.tf===tf&&<p className="mt-1 text-[10px] text-slate-400">Prix de référence {n(intelligence.price)} · clôture prévue à {minutes*12} min : {n(intelligence.future)} · projection {intelligence.strength==="weak"?"faible":"plus marquée"} · {intelligence.source==="groq"?"analyse actualisée":"lecture de secours"}</p>}
       {intelligenceError&&<p className="mt-1 text-[10px] text-amber-300">{intelligenceError}</p>}
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
@@ -436,7 +436,7 @@ export default function BoussoleEntries(){
     </div>}
     {active&&position?.status!=="active"&&<div className="mt-2 rounded-xl border border-cyan-400/20 bg-white/[.025] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><p className="text-xs font-semibold text-cyan-200">Groq AI · Scenario Critic</p><p className="text-[10px] text-slate-400">Independent commentary · cannot change status or trading levels</p></div>
+        <div><p className="text-xs font-semibold text-cyan-200">Analyse du scénario</p><p className="text-[10px] text-slate-400">Independent commentary · cannot change status or trading levels</p></div>
         <button type="button" disabled={aiBusy} onClick={()=>void analyzeWithAI()} className="min-h-9 rounded-lg border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200 disabled:opacity-50">{aiBusy?"Analyzing…":ai?"Re-analyze with AI":"Analyze with AI"}</button>
       </div>
       {aiError&&<p role="alert" className="mt-2 text-xs text-amber-300">{aiError}</p>}
