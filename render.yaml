@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: propsedge-timesfm
+    runtime: docker
+    dockerfilePath: ./services/timesfm/Dockerfile
+    dockerContext: ./services/timesfm
+    plan: pro
+    healthCheckPath: /health
+    envVars:
+      - key: TIMESFM_API_KEY
+        generateValue: true
