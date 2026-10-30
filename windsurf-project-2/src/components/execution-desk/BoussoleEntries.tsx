@@ -69,10 +69,36 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
 }
 export default function BoussoleEntries(){
   const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
+  const [loadedTf,setLoadedTf]=useState("");
+  const [feedAsOf,setFeedAsOf]=useState(0);
+  const minutes=({"5m":5,"15m":15,"30m":30,"1h":60,"4h":240} as Record<string,number>)[tf]??15;
   useEffect(()=>{window.dispatchEvent(new CustomEvent("propsedge-timeframe",{detail:tf}));},[tf]);
-  const load=useCallback(async()=>{setBusy(true);setError("");try{const r=await fetch("/api/execution-desk/candles?tf="+tf,{cache:"no-store"});const j=await r.json();if(!r.ok||!Array.isArray(j.candles))throw Error(j.error||"No data");if(j.candles.length<220)throw Error(`Historique insuffisant : ${j.candles.length} bougies reçues, 220 minimum`);setData(j.candles);setAsOf(j.asOf||"");}catch(e){setError(e instanceof Error?e.message:"No data");setData([]);}finally{setBusy(false)}},[tf]);
-  useEffect(()=>{void load();const t=setInterval(()=>void load(),300000);return()=>clearInterval(t)},[load]);
-  const result=useMemo(()=>proposals(data,rr),[data,rr]);
+  const load=useCallback(async(signal?:AbortSignal)=>{
+    setBusy(true);setError("");
+    try {
+      const r=await fetch("/api/execution-desk/candles?tf="+tf,{cache:"no-store",signal});
+      const j=await r.json();
+      if(!r.ok||!Array.isArray(j.candles))throw Error(j.error||"No data");
+      if(j.candles.length<220)throw Error("Historique insuffisant");
+      if(signal?.aborted)return;
+      setData(j.candles);setAsOf(j.asOf||"");setLoadedTf(tf);setFeedAsOf(Date.now());
+    }catch(e){
+      if(signal?.aborted)return;
+      setError(e instanceof Error?e.message:"No data");setData([]);setLoadedTf("");
+    }finally{if(!signal?.aborted)setBusy(false);}
+  },[tf]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    setData([]);setLoadedTf("");setSelected(null);
+    void load(controller.signal);
+    const timer=setInterval(()=>void load(controller.signal),Math.max(60000,minutes*60000));
+    return()=>{controller.abort();clearInterval(timer);};
+  },[load,minutes]);
+  const lastClosedTime=data.at(-2)?.time??0;
+  const dataFresh=loadedTf===tf && !!lastClosedTime &&
+    Date.now()-(lastClosedTime+minutes*60)*1000 < Math.max(minutes*120000,600000) &&
+    Date.now()-feedAsOf < Math.max(minutes*120000,600000);
+  const result=useMemo(()=>proposals(dataFresh?data:[],rr),[data,rr,dataFresh]);
   useEffect(()=>{if(selected&&!result.options.some(o=>o.id===selected))setSelected(null)},[result.options,selected]);
   const liquidity=useMemo(()=>analyzeLiquidityStructure(data),[data]);
   const candidates=useMemo(()=>{
@@ -83,7 +109,7 @@ export default function BoussoleEntries(){
       const status=p.type==="reversal"||p.type==="correction"?"Waiting for trigger":opposite?"Against liquidity":aligned?"Structure aligned":"Conditional";
       const priority=p.type==="reversal"?3:p.type==="correction"?2:opposite?0:aligned?2:1;
       return {...p,status,priority};
-    }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority).slice(0,3);
+    }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority);
   },[result.options,liquidity,data]);
   const [forecastContext,setForecastContext]=useState<{tf:string;lastClose:number;predictions:number[];baseTime:string}|null>(null);
   useEffect(()=>{const listener=(event:Event)=>{const detail=(event as CustomEvent<{tf:string;lastClose:number;predictions:number[];baseTime:string}>).detail;if(detail?.tf) setForecastContext(detail);};window.addEventListener("propsedge-timesfm-forecast",listener);return()=>window.removeEventListener("propsedge-timesfm-forecast",listener);},[]);
@@ -93,7 +119,7 @@ export default function BoussoleEntries(){
     const previous=closed.at(-2);
     const a=result.atr;
     const e20=ema(closed.map(x=>x.close),20);
-    const fresh=Number.isFinite(a)&&a>0&&!!recent&&!!previous;
+    const fresh=dataFresh&&Number.isFinite(a)&&a>0&&!!recent&&!!previous;
     return candidates.map(p=>{
       if(!fresh)return {...p,confidence:0,setupStatus:"Invalidated" as const,forecastContextLabel:"Forecast unavailable"};
       const price=recent!.close;
@@ -118,7 +144,11 @@ export default function BoussoleEntries(){
       // A stale level is never advertised as an executable entry.
       const farBeyond=distance>1.5*a;
       const passedWithoutFreshTrigger=(price-p.entry)*direction>0.75*a&&!triggerCrossed;
-      const invalidated=!rrValid||(p.type==="rebound"&&farBeyond)||(p.type!=="rebound"&&passedWithoutFreshTrigger);
+      // Every family has a separate invalidation, including already crossed stops.
+      const stopBreached=direction===1?recent!.low<=p.sl:recent!.high>=p.sl;
+      const movedTooFar=distance>1.25*a && p.type!=="rebound";
+      const pullbackMissed=p.type==="rebound" && (farBeyond || Math.abs(price-p.entry)>2*a);
+      const invalidated=!rrValid||stopBreached||pullbackMissed||movedTooFar||passedWithoutFreshTrigger;
       const setupStatus=invalidated?"Invalidated":confirmed?"Confirmed":"Waiting";
       // Technical confluence score, not a calibrated probability of winning.
       const confidence=Math.max(0,Math.min(100,Math.round(
@@ -129,8 +159,8 @@ export default function BoussoleEntries(){
       const forecastMove=freshForecast?forecastContext!.predictions[11]-forecastContext!.lastClose:null;
       const forecastContextLabel=forecastMove===null?"Forecast unavailable":forecastMove*p.side>0?"TimesFM aligned":forecastMove*p.side<0?"TimesFM opposing":"TimesFM neutral";
       return {...p,confidence,setupStatus,forecastContextLabel};
-    }).sort((a,b)=>Number(a.setupStatus==="Confirmed")-Number(b.setupStatus==="Confirmed")||b.confidence-a.confidence).reverse();
-  },[candidates,data,result.atr,result.trend,rr,forecastContext,tf]);
+    }).sort((a,b)=>Number(b.setupStatus==="Confirmed")-Number(a.setupStatus==="Confirmed")||b.confidence-a.confidence).slice(0,6);
+  },[candidates,data,result.atr,result.trend,rr,forecastContext,tf,dataFresh]);
   const active=assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated");
   const [ai,setAi]=useState<{assessment:string;summary:string;supportingFactors:string[];concerns:string[];watchFor:string;model:string}|null>(null);
   const [aiBusy,setAiBusy]=useState(false);
@@ -258,7 +288,7 @@ export default function BoussoleEntries(){
       </div>
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
-      <span>Close <b className="text-white">{n(result.price)}</b></span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
+      <span>Close <b className="text-white">{n(result.price)}</b></span><span className={dataFresh?"text-emerald-300":"text-amber-300"}>{dataFresh?"Feed fresh":"Feed stale · setups paused"}</span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
       <label className="ml-auto">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] px-1 py-0.5">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label>
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
