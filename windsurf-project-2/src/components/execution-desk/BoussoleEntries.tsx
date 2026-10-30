@@ -117,13 +117,18 @@ export default function BoussoleEntries(){
     const controller=new AbortController();
     setData([]);setLoadedTf("");setSelected(null);
     void load(controller.signal);
-    const timer=setInterval(()=>void load(controller.signal),Math.max(60000,minutes*60000));
+    const timer=setInterval(()=>void load(controller.signal),60000);
     return()=>{controller.abort();clearInterval(timer);};
   },[load,minutes]);
   const lastClosedTime=data.at(-2)?.time??0;
-  const dataFresh=loadedTf===tf && !!lastClosedTime &&
-    Date.now()-(lastClosedTime+minutes*60)*1000 < Math.max(minutes*120000,600000) &&
-    Date.now()-feedAsOf < Math.max(minutes*120000,600000);
+  const candleLag=lastClosedTime ? Date.now()-(lastClosedTime+minutes*60)*1000 : Infinity;
+  const freshnessLimit=Math.max(minutes*120000,600000);
+  const dataFresh=loadedTf===tf && data.length>=220 && candleLag>=-minutes*60000 &&
+    candleLag < freshnessLimit && Date.now()-feedAsOf < freshnessLimit;
+  const feedStatus=error ? "Feed unavailable · "+error :
+    busy && !data.length ? "Loading market candles…" :
+    !data.length ? "Waiting for market candles…" :
+    !dataFresh ? "Market feed delayed · setups paused" : "Feed live";
   const result=useMemo(()=>proposals(dataFresh?data:[],rr),[data,rr,dataFresh]);
   useEffect(()=>{if(selected&&!result.options.some(o=>o.id===selected))setSelected(null)},[result.options,selected]);
   const liquidity=useMemo(()=>analyzeLiquidityStructure(data),[data]);
@@ -375,7 +380,7 @@ export default function BoussoleEntries(){
       </div>
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
-      <span>Close <b className="text-white">{n(result.price)}</b></span><span className={dataFresh?"text-emerald-300":"text-amber-300"}>{dataFresh?"Feed fresh":"Feed stale · setups paused"}</span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
+      <span>Close <b className="text-white">{n(result.price)}</b></span><span className={dataFresh?"text-emerald-300":"text-amber-300"}>{feedStatus}</span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
       <label className="ml-auto">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] px-1 py-0.5">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label>
     </div>
     <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[.045] px-3 py-3">
