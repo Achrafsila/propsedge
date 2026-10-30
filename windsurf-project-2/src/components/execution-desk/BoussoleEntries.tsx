@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { analyzeLiquidityStructure } from "@/lib/execution/liquidityStructure";
 
 type Candle = {time:number;open:number;high:number;low:number;close:number};
-type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"|"reversal";status?:string};
+type Proposal = {id:string;title:string;side:1|-1;entry:number;sl:number;tp:number;reason:string;type:"market"|"rebound"|"breakout"|"correction"|"reversal";status?:string};
 const n=(v:number)=>Number.isFinite(v)?v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
 const ema=(arr:number[],len:number)=>{if(arr.length<len)return NaN;let value=arr.slice(0,len).reduce((a,b)=>a+b,0)/len;for(let i=len;i<arr.length;i++)value=value+(arr[i]-value)*2/(len+1);return value};
 function atr(c:Candle[]){if(c.length<16)return NaN;let result=0;for(let i=1;i<=14;i++) result+=Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close));result/=14;for(let i=15;i<c.length;i++){const t=Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close));result=(result*13+t)/14}return result}
@@ -28,12 +28,28 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
   for(const side of [1,-1] as const){
     const label=side===1?"Achat":"Vente";
     const structural=side===1?Math.min(...closed.slice(-6).map(x=>x.low))-.2*a:Math.max(...closed.slice(-6).map(x=>x.high))+.2*a;
-    if((side===1&&up||side===-1&&down) && (price-structural)*side>0 && (last.close-last.open)*side>0)push("market",label+" au marché",price,structural,"EMA alignées et dernière bougie clôturée dans le sens du mouvement · confirmation structurelle à vérifier",side);
+    if((side===1&&up||side===-1&&down) && (price-structural)*side>0 && (last.close-last.open)*side>0)push("market","Continuation · "+label+" au marché",price,structural,"EMA alignées et dernière bougie clôturée dans le sens du mouvement · confirmation structurelle à vérifier",side);
     const pullback=side===1?Math.min(e50-.3*a,e20-a):Math.max(e50+.3*a,e20+a);
-    if((side===1&&up||side===-1&&down) && (e20-pullback)*side>0)push("rebound",label+" sur rebond EMA20",e20,pullback,"Ordre limite théorique au repli EMA20 · attendre sweep / retest confirmé",side);
+    if((side===1&&up||side===-1&&down) && (e20-pullback)*side>0)push("rebound","Continuation · "+label+" sur rebond EMA20",e20,pullback,"Ordre limite théorique au repli EMA20 · attendre sweep / retest confirmé",side);
     const breakout=(side===1?high:low)+side*.1*a;
-    if(side===1&&up||side===-1&&down)push("breakout",label+" sur cassure 20 bougies",breakout,breakout-side*1.5*a,"Ordre stop conditionnel au-delà du range 20 bougies + 0,1 ATR · retest du playbook non encore confirmé",side);
+    if(side===1&&up||side===-1&&down)push("breakout","Continuation · "+label+" sur cassure 20 bougies",breakout,breakout-side*1.5*a,"Ordre stop conditionnel au-delà du range 20 bougies + 0,1 ATR · retest du playbook non encore confirmé",side);
   }
+  // Family 2: scalp of a short correction against the established trend.
+  if ((up || down) && Number.isFinite(a) && a>0) {
+    const trendSide:1|-1=up?1:-1;
+    const scalpSide:1|-1=trendSide===1?-1:1;
+    const extreme=trendSide===1?high:low;
+    const exhausted=trendSide===1?last.close<last.open:last.close>last.open;
+    const nearExtreme=Math.abs(price-extreme)<0.6*a;
+    const entry=scalpSide===1?last.high+0.1*a:last.low-0.1*a;
+    const stop=scalpSide===1?low-0.25*a:high+0.25*a;
+    const risk=Math.abs(entry-stop);
+    if (exhausted && nearExtreme && risk>0 && risk<5*a && (entry-stop)*scalpSide>0)
+      opts.push({id:"correction-"+scalpSide,title:"Correction scalp · "+(scalpSide===1?"BUY":"SELL"),
+        side:scalpSide,entry,sl:stop,tp:entry+scalpSide*1.5*risk,type:"correction",
+        reason:"Scalp contre la tendance · attendre la cassure du déclencheur après essoufflement",status:"conditional"});
+  }
+  // Families 1 and 3 remain continuation (market/pullback/breakout) and reversal (liquidity sweep).
   // Sweep reversal: opposite-direction conditional alternative, not an immediate order.
   const liquidity=analyzeLiquidityStructure(c);
   const event=liquidity.lastEvent;
@@ -46,7 +62,7 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
       const trigger=bearish?Math.min(...lookback.slice(-5).map(x=>x.low)):Math.max(...lookback.slice(-5).map(x=>x.high));
       const stop=bearish?Math.max(event.level,...lookback.map(x=>x.high))+.15*a:Math.min(event.level,...lookback.map(x=>x.low))-.15*a;
       const entry=trigger+side*.1*a,risk=Math.abs(entry-stop);
-      if(risk>0 && Number.isFinite(risk)&&risk<8*a)opts.push({id:"reversal-"+side,title:bearish?"SELL · Liquidity reversal":"BUY · Liquidity reversal",side,entry,sl:stop,tp:entry+side*rr*risk,type:"reversal",reason:"Sweep récent identifié · attendre la rupture du niveau de déclenchement · scénario non confirmé",status:"conditional"});
+      if(risk>0 && Number.isFinite(risk)&&risk<8*a)opts.push({id:"reversal-"+side,title:bearish?"Retournement · SELL":"Retournement · BUY",side,entry,sl:stop,tp:entry+side*rr*risk,type:"reversal",reason:"Sweep récent identifié · attendre la rupture du niveau de déclenchement · scénario non confirmé",status:"conditional"});
     }
   }
   return {options:opts,trend,atr:a,price};
@@ -63,8 +79,8 @@ export default function BoussoleEntries(){
     return result.options.map(p=>{
       const opposite=event && event.time>= (data.at(-14)?.time??Infinity) && (p.side===1?event.kind.startsWith("bearish"):event.kind.startsWith("bullish"));
       const aligned=event && event.time >=(data.at(-14)?.time??Infinity) && (p.side===1?event.kind.startsWith("bullish"):event.kind.startsWith("bearish"));
-      const status=p.type==="reversal"?"Waiting for trigger":opposite?"Against liquidity":aligned?"Structure aligned":"Conditional";
-      const priority=p.type==="reversal"?3:opposite?0:aligned?2:1;
+      const status=p.type==="reversal"||p.type==="correction"?"Waiting for trigger":opposite?"Against liquidity":aligned?"Structure aligned":"Conditional";
+      const priority=p.type==="reversal"?3:p.type==="correction"?2:opposite?0:aligned?2:1;
       return {...p,status,priority};
     }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority).slice(0,3);
   },[result.options,liquidity,data]);
@@ -93,7 +109,7 @@ export default function BoussoleEntries(){
       const reboundConfirmed=emaTouched&&candleDirection&&Math.abs(price-e20)<=0.75*a;
       const marketConfirmed=p.type==="market"&&candleDirection&&trendAligned&&distance<=0.5*a;
       const breakoutConfirmed=p.type==="breakout"&&triggerCrossed&&candleDirection;
-      const reversalConfirmed=p.type==="reversal"&&triggerCrossed&&candleDirection;
+      const reversalConfirmed=(p.type==="reversal"||p.type==="correction")&&triggerCrossed&&candleDirection;
       const confirmed=p.type==="rebound"?reboundConfirmed:p.type==="market"?marketConfirmed:p.type==="breakout"?breakoutConfirmed:reversalConfirmed;
       // A stale level is never advertised as an executable entry.
       const farBeyond=distance>1.5*a;
