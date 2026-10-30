@@ -218,8 +218,14 @@ export default function BoussoleEntries(){
       const stopBreached=direction===1?recent!.low<=p.sl:recent!.high>=p.sl;
       const movedTooFar=distance>1.25*a && p.type!=="rebound";
       const pullbackMissed=p.type==="rebound" && (farBeyond || Math.abs(price-p.entry)>2*a);
-      const invalidated=!rrValid||stopBreached||pullbackMissed||movedTooFar||passedWithoutFreshTrigger;
-      const setupStatus=invalidated?"Invalidated":confirmed?"Confirmed":"Waiting";
+      const missedEntry=rrValid && !stopBreached && (
+        (p.type==="market" && distance>0.5*a) ||
+        (p.type==="breakout" && (price-p.entry)*direction>0.5*a) ||
+        (p.type==="reversal" || p.type==="correction") && (price-p.entry)*direction>0.75*a ||
+        (p.type==="rebound" && (price-p.entry)*direction>0.75*a)
+      );
+      const invalidated=!rrValid||stopBreached||(!missedEntry&&(pullbackMissed||movedTooFar||passedWithoutFreshTrigger));
+      const setupStatus=missedEntry?"Missed Entry":invalidated?"Invalidated":confirmed?"Confirmed":"Waiting";
       // Technical confluence score, not a calibrated probability of winning.
       const confidence=Math.max(0,Math.min(100,Math.round(
         (trendAligned?25:8)+(structureAligned?20:10)+(momentum?15:5)+
@@ -332,6 +338,7 @@ export default function BoussoleEntries(){
   useEffect(()=>{setCommitCandidate(null);},[tf]);
   const [entryInput,setEntryInput]=useState("");
   const [alerts,setAlerts]=useState<string[]>([]);
+  const [entryPopup,setEntryPopup]=useState<{title:string;side:string;entry:number;sl:number;tp:number}|null>(null);
   const [notifyEnabled,setNotifyEnabled]=useState(false);
   const [showWatchlist,setShowWatchlist]=useState(false);
   const latest=data.at(-2);
@@ -340,6 +347,28 @@ export default function BoussoleEntries(){
     setAlerts(current=>[message,...current].slice(0,6));
     if(typeof Notification!=="undefined" && Notification.permission==="granted") new Notification("PropEdge · Execution Desk",{body:message});
   },[]);
+  useEffect(()=>{
+    if(!dataFresh || position?.status==="active" || !latest)return;
+    const confirmed=assessed.filter(p=>p.setupStatus==="Confirmed");
+    if(!confirmed.length)return;
+    const store="propsedge:entry-alerts:v1";
+    let known:string[]=[];
+    try{known=JSON.parse(localStorage.getItem(store)||"[]");if(!Array.isArray(known))known=[];}catch{}
+    const fresh=confirmed.filter(p=>!known.includes([tf,latest.time,p.id,p.entry.toFixed(2)].join(":")));
+    if(!fresh.length)return;
+    const keys=fresh.map(p=>[tf,latest.time,p.id,p.entry.toFixed(2)].join(":"));
+    try{localStorage.setItem(store,JSON.stringify([...known,...keys].slice(-300)));}catch{}
+    const first=fresh[0];
+    const side=first.side===1?"BUY":"SELL";
+    setEntryPopup({title:first.title,side,entry:first.entry,sl:first.sl,tp:first.tp});
+    for(const p of fresh){
+      const message="Nouvelle opportunité "+(p.side===1?"BUY":"SELL")+" · "+p.title+" · Entry "+n(p.entry);
+      setAlerts(current=>[message,...current].slice(0,6));
+      if(typeof Notification!=="undefined" && Notification.permission==="granted"){
+        try{new Notification("PropsEdge · Nouvelle opportunité",{body:message});}catch{}
+      }
+    }
+  },[assessed,dataFresh,tf,latest?.time,position?.status]);
   const [seenAlerts,setSeenAlerts]=useState<string[]>([]);
   const [dismissedAlerts,setDismissedAlerts]=useState<string[]>([]);
   useEffect(()=>{
@@ -416,12 +445,18 @@ export default function BoussoleEntries(){
       <button type="button" onClick={()=>void closePosition()} disabled={saving} className="min-h-9 rounded-lg border border-white/20 px-3 text-[11px]">End tracking</button>
     </div>}
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-      <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {assessed.filter(p=>p.setupStatus!=="Invalidated").length}</button>
+      <button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="min-h-9 rounded-lg border border-white/15 px-3 text-xs font-semibold text-slate-200">{showWatchlist?"Hide":"Show"} watchlist · {assessed.filter(p=>p.setupStatus!=="Invalidated"&&p.setupStatus!=="Missed Entry").length}</button>
       <div className="flex items-center gap-3">
         {alerts.length>0 ? <div className="flex items-center gap-1"><span role="status" title={alerts[0]} className="max-w-52 truncate text-[11px] text-amber-300">● {alerts[0]}</span><button type="button" onClick={dismissCurrentAlert} aria-label="Dismiss this alert" title="Dismiss alert" className="rounded-md border border-white/20 p-1 text-slate-300"><X size={12}/></button></div> : <span className="text-[11px] text-slate-400">No new alerts · monitoring on page</span>}
         <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts on":"Enable alerts"}</button>
       </div>
     </div>
+    {entryPopup&&<div role="dialog" aria-label="Nouvelle opportunité" className="fixed bottom-5 right-5 z-[80] w-[min(420px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/40 bg-[#101b2c] p-4 shadow-2xl">
+      <div className="flex items-center justify-between gap-2"><p className="text-sm font-bold text-cyan-200">Nouvelle opportunité · {entryPopup.side}</p><button type="button" onClick={()=>setEntryPopup(null)} aria-label="Fermer la notification"><X size={18}/></button></div>
+      <p className="mt-2 text-xs text-slate-200">{entryPopup.title}</p>
+      <p className="mt-2 text-xs text-slate-300">Entrée {n(entryPopup.entry)} · SL {n(entryPopup.sl)} · TP {n(entryPopup.tp)}</p>
+      <p className="mt-2 text-[10px] text-slate-400">Signal indicatif : vérifier les prix avant toute entrée.</p>
+    </div>}
     {samplesOnTf.length>0&&<p className="mt-2 text-[10px] text-slate-400">Shadow validation (not actual trades) · {(["Continuation","Correction","Reversal"] as const).map(f=>{const rows=samplesOnTf.filter(x=>x.family===f);const done=rows.filter(x=>x.outcome==="TP"||x.outcome==="SL");const wins=done.filter(x=>x.outcome==="TP").length;return f+": "+(done.length?wins+"/"+done.length+" TP-first":"no evaluated samples");}).join(" · ")} · ambiguous candles excluded</p>}
     {showWatchlist&&<>
     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{assessed.filter(p=>p.setupStatus!=="Invalidated").map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
