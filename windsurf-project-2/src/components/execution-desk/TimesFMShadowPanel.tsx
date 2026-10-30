@@ -15,6 +15,8 @@ type ShadowForecast = {
   lowerBand: number[];
   upperBand: number[];
   affectsTrading: false;
+  marketStructure?: "Bullish" | "Bearish" | "Mixed" | "Unknown";
+  atr?: number | null;
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -48,6 +50,23 @@ export default function TimesFMShadowPanel() {
     }
   }
 
+  const forecasts = data ? [3, 6, 12].map(h => {
+    const target = data.predictions[h - 1];
+    const diff = target - data.lastClose;
+    return { h, target, diff, percent: diff / data.lastClose * 100 };
+  }) : [];
+  const finalDiff = data ? data.predictions[11] - data.lastClose : 0;
+  const volatility = data?.atr && data.atr > 0 ? finalDiff / data.atr : null;
+  const bias = data ? (volatility !== null
+    ? volatility > 0.25 ? "Bullish" : volatility < -0.25 ? "Bearish" : "Neutral"
+    : Math.abs(finalDiff / data.lastClose) < 0.0005 ? "Neutral" : finalDiff > 0 ? "Bullish" : "Bearish") : "Unknown";
+  const structure = data?.marketStructure ?? "Unknown";
+  const alignment = structure === "Unknown" || structure === "Mixed" || bias === "Neutral" ? "Inconclusive" : structure === bias ? "Aligned" : "Divergent";
+  const interpretation = alignment === "Divergent"
+    ? `TimesFM anticipe un mouvement ${bias === "Bullish" ? "haussier" : "baissier"} à court terme, contre une structure EMA ${structure === "Bullish" ? "haussière" : "baissière"}. Un retracement est possible, mais aucun retournement n'est confirmé.`
+    : alignment === "Aligned"
+    ? "La direction projetée et les EMA sont concordantes. Ce constat ne confirme pas une entrée ni sa probabilité de réussite."
+    : "La projection est faible ou la structure EMA est mixte. Aucun consensus directionnel exploitable.";
   const values = data ? [data.lastClose, ...data.predictions, ...data.lowerBand, ...data.upperBand] : [];
   const min = values.length ? Math.min(...values) : 0;
   const max = values.length ? Math.max(...values) : 1;
@@ -70,6 +89,30 @@ export default function TimesFMShadowPanel() {
       </div>
       {error && <p role="status" className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-200">{error === "TimesFM cloud service not configured" ? "Service TimesFM non configuré : une URL HTTPS et une clé serveur sont nécessaires." : error}</p>}
       {data && (
+        <>
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            { label: "Forecast bias", value: bias, detail: volatility === null ? "ATR unavailable" : `${volatility >= 0 ? "+" : ""}${volatility.toFixed(2)} ATR` },
+            { label: "EMA structure", value: structure, detail: "EMA 20 / 50 / 200 · M5" },
+            { label: "Market alignment", value: alignment, detail: "Shadow · non-trading" }
+          ].map(item => <div key={item.label} className="rounded-xl border border-white/10 bg-white/[.04] p-3">
+            <p className="text-[11px] text-slate-400">{item.label}</p>
+            <p className="mt-1 text-base font-semibold">{item.value}</p>
+            <p className="text-[10px] text-slate-500">{item.detail}</p>
+          </div>)}
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {forecasts.map(f => <div key={f.h} className="rounded-xl border border-white/10 bg-white/[.03] p-3">
+            <p className="text-[11px] text-slate-400">{f.h * 5} min · {f.h} bars</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums">{fmt(f.target)}</p>
+            <p className={`text-xs tabular-nums ${f.diff > 0 ? "text-emerald-300" : f.diff < 0 ? "text-rose-300" : "text-slate-300"}`}>{f.diff >= 0 ? "+" : ""}{f.percent.toFixed(3)}%</p>
+          </div>)}
+        </div>
+        <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[.04] p-3">
+          <p className="text-xs font-semibold text-cyan-200">AI Market Interpretation · règles transparentes</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-300">{interpretation}</p>
+          <p className="mt-1 text-[10px] text-slate-500">Biais calculé à partir de la projection TimesFM et de l'ATR, sans appel Groq ni score de confiance probabiliste.</p>
+        </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
           <div className="min-w-0 rounded-xl border border-white/10 bg-[#080e1b] p-2">
             <svg viewBox="0 0 340 130" className="h-36 w-full" role="img" aria-label="Forecast path and indicative quantile bounds">
@@ -87,6 +130,7 @@ export default function TimesFMShadowPanel() {
             <p className="text-[11px] text-slate-400">Dernière bougie : {new Date(data.lastClosedCandleAt).toLocaleString()} · {data.provider}</p>
           </div>
         </div>
+        </>
       )}
       {!data && !error && <p className="mt-3 text-xs text-slate-500">Clique sur « Calculer la prévision » pour lancer une analyse ponctuelle. Aucun ordre ni score n'est modifié.</p>}
     </section>
