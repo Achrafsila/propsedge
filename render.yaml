@@ -1,10 +1,14 @@
+# Zero-cost-only configuration. Free Render web instances have 512 MB RAM
+# and are NOT sufficient to run TimesFM 2.5 (~925 MB weights alone).
+# Keep this as a non-billable prototype; do not deploy until a viable
+# free compute option is found. Never upgrade the plan automatically.
 services:
   - type: web
     name: propsedge-timesfm
     runtime: docker
     dockerfilePath: ./services/timesfm/Dockerfile
     dockerContext: ./services/timesfm
-    plan: pro
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: TIMESFM_API_KEY
