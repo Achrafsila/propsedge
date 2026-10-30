@@ -38,10 +38,10 @@ export function recordForecast(f:{lastClosedCandleAt:string;lastClose:number;pre
 }
 
 function actualFor(bars:Bar[], base:number, step:number):number|null {
-  const target = base + step*300000;
-  // Twelve Data time is candle OPEN. Evaluate only a fully closed candle,
+  const target = base + (step+1)*300000;
+  // Twelve Data time is candle OPEN. Forecast starts after base candle closes. Evaluate only a fully closed candle,
   // comparing its closing price to the forecast at the matching horizon.
-  const bar = bars.find(x=>x.time*1000===target-300000);
+  const bar = bars.find(x=>x.time*1000===base+step*300000);
   return bar && Date.now()>=target && Number.isFinite(bar.close)?bar.close:null;
 }
 export default function TimesFMAccuracyTracker() {
@@ -67,9 +67,9 @@ export default function TimesFMAccuracyTracker() {
   },[reloadRecords,refresh]);
   const latest=records[0];
   const now=Date.now();
-  const status=!latest?"NO DATA":now < latest.baseTime+300000?"ACTIVE":
-    now > latest.baseTime+3600000 && STEPS.every(s=>actualFor(bars,latest.baseTime,s)!==null)?"EVALUATED":
-    now>latest.baseTime+3600000?"EXPIRED / DATA PENDING":
+  const status=!latest?"NO DATA":now < latest.baseTime+600000?"ACTIVE":
+    now > latest.baseTime+3900000 && STEPS.every(s=>actualFor(bars,latest.baseTime,s)!==null)?"EVALUATED":
+    now>latest.baseTime+3900000?"EXPIRED / DATA PENDING":
     bars.length && bars[bars.length-1].time*1000 < latest.baseTime?"STALE":"ACTIVE";
   const evaluated=records.flatMap(r=>STEPS.map(h=>{
     const actual=actualFor(bars,r.baseTime,h);
@@ -89,7 +89,7 @@ export default function TimesFMAccuracyTracker() {
         {STEPS.map(h=>{
           const observed=actualFor(bars,latest.baseTime,h);
           const target=latest.predictions[h-1];
-          const due=new Date(latest.baseTime+h*300000);
+          const due=new Date(latest.baseTime+(h+1)*300000);
           const pending=now<due.getTime();
           const mismatch=observed!==null ? observed-target : null;
           return <div key={h} className="rounded-xl border border-white/10 bg-white/[.04] p-3">
