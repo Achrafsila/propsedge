@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
+import { recordForecast } from "./TimesFMAccuracyTracker";
 
 type ShadowForecast = {
   mode: "shadow";
@@ -42,6 +43,7 @@ export default function TimesFMShadowPanel() {
           !Array.isArray(f.lowerBand) || f.lowerBand.length !== 12 ||
           !Array.isArray(f.upperBand) || f.upperBand.length !== 12 ||
           !Number.isFinite(f.lastClose)) throw new Error("Forecast format not recognized");
+      recordForecast(f);
       setData(f);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Forecast unavailable");
