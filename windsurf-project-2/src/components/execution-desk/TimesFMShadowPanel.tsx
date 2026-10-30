@@ -98,7 +98,7 @@ export default function TimesFMShadowPanel() {
           <div className="flex items-center gap-2 text-sm font-semibold"><Activity size={16} className="text-cyan-300"/> TimesFM 2.5 · AI Forecast <span className="rounded-full border border-cyan-300/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">Shadow mode</span></div>
           <p className="mt-1 text-xs text-slate-400">XAU/USD · {tf.toUpperCase()} · 12 bougies ({12*barMinutes} min) · Analyse uniquement</p>
         </div>
-        <button type="button" disabled={loading} onClick={refresh} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/20 disabled:opacity-50">
+        <button type="button" disabled={loading} onClick={()=>void refresh()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/20 disabled:opacity-50">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""}/>{loading ? "Calcul en cours…" : "Calculer la prévision"}
         </button>
       </div>
