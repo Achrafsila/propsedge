@@ -121,7 +121,7 @@ export default function BoussoleEntries(){
     const e20=ema(closed.map(x=>x.close),20);
     const fresh=dataFresh&&Number.isFinite(a)&&a>0&&!!recent&&!!previous;
     return candidates.map(p=>{
-      if(!fresh)return {...p,confidence:0,setupStatus:"Invalidated" as const,forecastContextLabel:"Forecast unavailable"};
+      if(!fresh)return {...p,confidence:0,setupStatus:"Invalidated" as const,forecastContextLabel:"Forecast unavailable",forecastRanking:0};
       const price=recent!.close;
       const direction=p.side;
       const distance=Math.abs(price-p.entry);
@@ -156,10 +156,31 @@ export default function BoussoleEntries(){
         (candleDirection?15:5)+(rrValid?15:0)+(distance<=0.5*a?10:distance<=a?6:0)
       )));
       const freshForecast=forecastContext?.tf===tf && forecastContext.predictions.length===12 && Math.abs((recent!.close-forecastContext.lastClose))<=2*a && Date.now()-(Date.parse(forecastContext.baseTime)+minutes*60000)<minutes*3*60000;
-      const forecastMove=freshForecast?forecastContext!.predictions[11]-forecastContext!.lastClose:null;
-      const forecastContextLabel=forecastMove===null?"Forecast unavailable":forecastMove*p.side>0?"TimesFM aligned":forecastMove*p.side<0?"TimesFM opposing":"TimesFM neutral";
-      return {...p,confidence,setupStatus,forecastContextLabel};
-    }).sort((a,b)=>Number(b.setupStatus==="Confirmed")-Number(a.setupStatus==="Confirmed")||b.confidence-a.confidence).slice(0,6);
+      const path=freshForecast ? forecastContext!.predictions : [];
+      const forecastMove=path.length ? path[11]-forecastContext!.lastClose : null;
+      const meaningful=forecastMove!==null && Math.abs(forecastMove)>0.25*a;
+      const forecastContextLabel=!meaningful?"TimesFM · no clear bias":forecastMove!*p.side>0?"TimesFM · same direction":"TimesFM · counter-direction";
+      // Forecast price is an indicative future CLOSE, not a stop, a limit order or a guaranteed high/low.
+      // A nearby forecast turning point helps contextualize a pullback/scalp, not confirm execution.
+      let turningPoint:number|null=null;
+      if(path.length>=3){
+        const extrema=path.slice(1,-1).map((value,i)=>{
+          const before=path[i],after=path[i+2];
+          const isHigh=value>before&&value>after;
+          const isLow=value<before&&value<after;
+          return (isHigh||isLow)&&Math.abs(value-forecastContext!.lastClose)>=0.25*a?value:null;
+        }).filter((value):value is number=>value!==null);
+        turningPoint=extrema.length?extrema[0]:null;
+      }
+      const nearTurn=turningPoint!==null&&Math.abs(turningPoint-p.entry)<=Math.max(0.75*a,Math.abs(p.entry)*0.0001);
+      const isCountertrend=p.type==="correction"||p.type==="reversal";
+      const contextual=nearTurn && (p.type==="rebound"||isCountertrend) ?
+        " · projected turn near entry (unconfirmed)" : "";
+      const scenarioNote=meaningful && forecastMove!*p.side<0 ?
+        (isCountertrend?" · possible countertrend movement":" · pullback risk") : "";
+      return {...p,confidence,setupStatus,forecastContextLabel:forecastContextLabel+contextual+scenarioNote,
+        forecastRanking:nearTurn?1:0};
+    }).sort((a,b)=>Number(b.setupStatus==="Confirmed")-Number(a.setupStatus==="Confirmed")||b.forecastRanking-a.forecastRanking||b.confidence-a.confidence).slice(0,6);
   },[candidates,data,result.atr,result.trend,rr,forecastContext,tf,dataFresh]);
   const active=dataFresh?assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated"):undefined;
   const [ai,setAi]=useState<{assessment:string;summary:string;supportingFactors:string[];concerns:string[];watchFor:string;model:string}|null>(null);
