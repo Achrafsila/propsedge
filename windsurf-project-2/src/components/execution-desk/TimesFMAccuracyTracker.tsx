@@ -75,7 +75,7 @@ export default function TimesFMAccuracyTracker() {
   const now=Date.now();
   const status=!latest?"NO DATA":now < latest.baseTime+2*duration?"ACTIVE":
     now > latest.baseTime+13*duration && STEPS.every(s=>actualFor(bars,latest.baseTime,s,minutes)!==null)?"EVALUATED":
-    now>latest.baseTime+3900000?"EXPIRED / DATA PENDING":
+    now>latest.baseTime+13*duration?"EXPIRED / DATA PENDING":
     bars.length && bars[bars.length-1].time*1000 < latest.baseTime?"STALE":"ACTIVE";
   const evaluated=records.flatMap(r=>STEPS.map(h=>{
     const actual=actualFor(bars,r.baseTime,h,minutes);
@@ -110,7 +110,7 @@ export default function TimesFMAccuracyTracker() {
     </>:<p className="mt-3 text-xs text-slate-500">La première prévision sur cette timeframe activera le suivi.</p>}
     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
       {STEPS.map(h=><div key={h} className="rounded-lg bg-white/[.03] p-3">
-        <p className="text-[11px] text-slate-400">Accuracy · {h*5} min</p>
+        <p className="text-[11px] text-slate-400">Accuracy · {h*minutes} min</p>
         <p className="mt-1 text-sm font-semibold">{mae(h)===null?"—":`MAE ${fmt(mae(h)!)}`}</p>
         <p className="text-xs text-slate-400">Direction : {direction(h)===null?"—":`${direction(h)!.toFixed(0)}%`} · n={evaluated.filter(x=>x.h===h).length}</p>
       </div>)}
