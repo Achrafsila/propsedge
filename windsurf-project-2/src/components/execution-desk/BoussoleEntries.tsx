@@ -130,6 +130,13 @@ export default function BoussoleEntries(){
     const timer=setInterval(()=>void load(controller.signal),60000);
     return()=>{controller.abort();clearInterval(timer);};
   },[load,minutes]);
+  useEffect(()=>{
+    if(!retryAt)return;
+    const delay=retryAt-Date.now();
+    if(delay<=0){void load();return;}
+    const timeout=setTimeout(()=>void load(),delay+150);
+    return()=>clearTimeout(timeout);
+  },[retryAt,load]);
   const lastClosedTime=data.at(-2)?.time??0;
   const candleLag=lastClosedTime ? Date.now()-(lastClosedTime+minutes*60)*1000 : Infinity;
   const freshnessLimit=Math.max(minutes*120000,600000);
