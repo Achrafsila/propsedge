@@ -69,6 +69,7 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
 }
 export default function BoussoleEntries(){
   const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
+  useEffect(()=>{window.dispatchEvent(new CustomEvent("propsedge-timeframe",{detail:tf}));},[tf]);
   const load=useCallback(async()=>{setBusy(true);setError("");try{const r=await fetch("/api/execution-desk/candles?tf="+tf,{cache:"no-store"});const j=await r.json();if(!r.ok||!Array.isArray(j.candles))throw Error(j.error||"No data");if(j.candles.length<220)throw Error(`Historique insuffisant : ${j.candles.length} bougies reçues, 220 minimum`);setData(j.candles);setAsOf(j.asOf||"");}catch(e){setError(e instanceof Error?e.message:"No data");setData([]);}finally{setBusy(false)}},[tf]);
   useEffect(()=>{void load();const t=setInterval(()=>void load(),300000);return()=>clearInterval(t)},[load]);
   const result=useMemo(()=>proposals(data,rr),[data,rr]);
@@ -84,6 +85,8 @@ export default function BoussoleEntries(){
       return {...p,status,priority};
     }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority).slice(0,3);
   },[result.options,liquidity,data]);
+  const [forecastContext,setForecastContext]=useState<{tf:string;lastClose:number;predictions:number[];baseTime:string}|null>(null);
+  useEffect(()=>{const listener=(event:Event)=>{const detail=(event as CustomEvent<{tf:string;lastClose:number;predictions:number[];baseTime:string}>).detail;if(detail?.tf) setForecastContext(detail);};window.addEventListener("propsedge-timesfm-forecast",listener);return()=>window.removeEventListener("propsedge-timesfm-forecast",listener);},[]);
   const assessed=useMemo(()=>{
     const closed=data.slice(0,-1);
     const recent=closed.at(-1);
@@ -121,9 +124,12 @@ export default function BoussoleEntries(){
         (trendAligned?25:8)+(structureAligned?20:10)+(momentum?15:5)+
         (candleDirection?15:5)+(rrValid?15:0)+(distance<=0.5*a?10:distance<=a?6:0)
       )));
-      return {...p,confidence,setupStatus};
+      const freshForecast=forecastContext?.tf===tf && forecastContext.predictions.length===12 && Math.abs((recent!.close-forecastContext.lastClose))<=2*a && Date.now()-Date.parse(forecastContext.baseTime)<Math.max(15,parseInt(tf)*3)*60000;
+      const forecastMove=freshForecast?forecastContext!.predictions[11]-forecastContext!.lastClose:null;
+      const forecastContextLabel=forecastMove===null?"Forecast unavailable":forecastMove*p.side>0?"TimesFM aligned":forecastMove*p.side<0?"TimesFM opposing":"TimesFM neutral";
+      return {...p,confidence,setupStatus,forecastContextLabel};
     }).sort((a,b)=>Number(a.setupStatus==="Confirmed")-Number(b.setupStatus==="Confirmed")||b.confidence-a.confidence).reverse();
-  },[candidates,data,result.atr,result.trend,rr]);
+  },[candidates,data,result.atr,result.trend,rr,forecastContext,tf]);
   const active=assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated");
   const [ai,setAi]=useState<{assessment:string;summary:string;supportingFactors:string[];concerns:string[];watchFor:string;model:string}|null>(null);
   const [aiBusy,setAiBusy]=useState(false);
@@ -270,7 +276,7 @@ export default function BoussoleEntries(){
     {showWatchlist&&<>
     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{assessed.filter(p=>p.setupStatus!=="Invalidated").map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
       <div className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-white sm:text-sm">{p.title}</strong><span className={"shrink-0 text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div>
-      <div className="mt-1 flex items-center justify-between gap-2"><p className={"text-[10px] font-semibold "+(p.setupStatus==="Confirmed"?"text-emerald-300":"text-amber-200")}>{p.setupStatus}</p><span className="text-[11px] font-bold tabular-nums text-cyan-200" title="Technical confluence score, not a win probability">Confidence {p.confidence}/100</span></div>
+      <div className="mt-1 flex items-center justify-between gap-2"><p className={"text-[10px] font-semibold "+(p.setupStatus==="Confirmed"?"text-emerald-300":"text-amber-200")}>{p.setupStatus} · {p.forecastContextLabel}</p><span className="text-[11px] font-bold tabular-nums text-cyan-200" title="Technical confluence score, not a win probability">Confidence {p.confidence}/100</span></div>
       <div className="mt-3 grid grid-cols-3 gap-2">{[{key:"Entry",value:p.entry,style:"text-amber-200"},{key:"Stop",value:p.sl,style:"text-rose-300"},{key:"Target",value:p.tp,style:"text-emerald-300"}].map(x=><div key={x.key} className="min-w-0"><p className="text-[10px] text-slate-400">{x.key}</p><p className={"text-xs font-bold tabular-nums sm:text-sm "+x.style}>{n(x.value)}</p></div>)}</div>
       {selected===p.id&&<div className="mt-3 border-t border-white/10 pt-2"><p className="text-xs leading-5 text-slate-300">{p.reason}. Invalidation : {n(p.sl)}.</p><span className="mt-2 inline-block rounded-md border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-200">Select this setup to commit manually below</span></div>}
     </button>)}</div>
