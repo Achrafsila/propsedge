@@ -95,7 +95,7 @@ export default function BoussoleEntries(){
     const e20=ema(closed.map(x=>x.close),20);
     const fresh=Number.isFinite(a)&&a>0&&!!recent&&!!previous;
     return candidates.map(p=>{
-      if(!fresh)return {...p,confidence:0,setupStatus:"Invalidated" as const};
+      if(!fresh)return {...p,confidence:0,setupStatus:"Invalidated" as const,forecastContextLabel:"Forecast unavailable"};
       const price=recent!.close;
       const direction=p.side;
       const distance=Math.abs(price-p.entry);
