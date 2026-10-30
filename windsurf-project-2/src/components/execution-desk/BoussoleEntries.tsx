@@ -67,6 +67,31 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
   }
   return {options:opts,trend,atr:a,price};
 }
+
+type ScenarioFamily = "Continuation"|"Correction"|"Reversal";
+type PaperSample = { id:string; timeframe:string; family:ScenarioFamily; side:1|-1; entry:number; sl:number; tp:number; createdAt:number; endAt:number; outcome?:"TP"|"SL"|"AMBIGUOUS"|"EXPIRED" };
+const SAMPLE_KEY="propsedge:scenario-validation:v1";
+const familyOf=(p:Proposal):ScenarioFamily=>p.type==="correction"?"Correction":p.type==="reversal"?"Reversal":"Continuation";
+function readSamples():PaperSample[] {
+  try {const v=JSON.parse(localStorage.getItem(SAMPLE_KEY)??"[]");return Array.isArray(v)?v.filter((x:PaperSample)=>x&&typeof x.id==="string").slice(-300):[];}catch{return [];}
+}
+function evaluateSamples(rows:PaperSample[], candles:Candle[], tf:string):PaperSample[] {
+  const closed=candles.slice(0,-1);
+  return rows.map(sample=>{
+    if(sample.timeframe!==tf||sample.outcome)return sample;
+    const following=closed.filter(x=>x.time>sample.createdAt && x.time<=sample.endAt);
+    for(const bar of following){
+      const hitSL=sample.side===1?bar.low<=sample.sl:bar.high>=sample.sl;
+      const hitTP=sample.side===1?bar.high>=sample.tp:bar.low<=sample.tp;
+      if(hitSL&&hitTP)return {...sample,outcome:"AMBIGUOUS"};
+      if(hitSL)return {...sample,outcome:"SL"};
+      if(hitTP)return {...sample,outcome:"TP"};
+    }
+    if(closed.at(-1)?.time! < sample.endAt)return sample;
+    return {...sample,outcome:"EXPIRED"};
+  });
+}
+
 export default function BoussoleEntries(){
   const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
   const [loadedTf,setLoadedTf]=useState("");
@@ -182,6 +207,23 @@ export default function BoussoleEntries(){
         forecastRanking:nearTurn?1:0};
     }).sort((a,b)=>Number(b.setupStatus==="Confirmed")-Number(a.setupStatus==="Confirmed")||b.forecastRanking-a.forecastRanking||b.confidence-a.confidence).slice(0,6);
   },[candidates,data,result.atr,result.trend,rr,forecastContext,tf,dataFresh]);
+  const [paperSamples,setPaperSamples]=useState<PaperSample[]>([]);
+  useEffect(()=>{setPaperSamples(readSamples());},[]);
+  useEffect(()=>{
+    if(!dataFresh||!data.length)return;
+    const old=readSamples();
+    const resolved=evaluateSamples(old,data,tf);
+    const origin=data.at(-2)?.time??0;
+    const additions:PaperSample[]=assessed.filter(p=>p.setupStatus==="Confirmed").map(p=>({
+      id:[tf,origin,p.id,p.entry.toFixed(3)].join(":"),
+      timeframe:tf,family:familyOf(p),side:p.side,entry:p.entry,sl:p.sl,tp:p.tp,
+      createdAt:origin,endAt:origin+12*minutes*60
+    })).filter(sample=>!resolved.some(x=>x.id===sample.id));
+    const next=[...resolved,...additions].slice(-300);
+    try{localStorage.setItem(SAMPLE_KEY,JSON.stringify(next));}catch{}
+    setPaperSamples(next);
+  },[dataFresh,data,tf,minutes,assessed]);
+  const samplesOnTf=paperSamples.filter(x=>x.timeframe===tf);
   const active=dataFresh?assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated"):undefined;
   const [ai,setAi]=useState<{assessment:string;summary:string;supportingFactors:string[];concerns:string[];watchFor:string;model:string}|null>(null);
   const [aiBusy,setAiBusy]=useState(false);
@@ -326,6 +368,7 @@ export default function BoussoleEntries(){
         <button type="button" onClick={async()=>{if(typeof Notification!=="undefined"){const permission=await Notification.requestPermission();setNotifyEnabled(permission==="granted");}}} className="inline-flex min-h-9 items-center gap-1 text-[11px] text-cyan-200"><Bell size={13}/>{notifyEnabled?"Browser alerts on":"Enable alerts"}</button>
       </div>
     </div>
+    {samplesOnTf.length>0&&<p className="mt-2 text-[10px] text-slate-400">Shadow validation (not actual trades) · {(["Continuation","Correction","Reversal"] as const).map(f=>{const rows=samplesOnTf.filter(x=>x.family===f);const done=rows.filter(x=>x.outcome==="TP"||x.outcome==="SL");const wins=done.filter(x=>x.outcome==="TP").length;return f+": "+(done.length?wins+"/"+done.length+" TP-first":"no evaluated samples");}).join(" · ")} · ambiguous candles excluded</p>}
     {showWatchlist&&<>
     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{assessed.filter(p=>p.setupStatus!=="Invalidated").map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
       <div className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-white sm:text-sm">{p.title}</strong><span className={"shrink-0 text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div>
