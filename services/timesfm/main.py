@@ -33,8 +33,8 @@ def forecast(data: ForecastRequest, authorization: str | None = Header(default=N
         raise HTTPException(status_code=503, detail="API key not configured")
     if not secrets.compare_digest(authorization or "", f"Bearer {secret}"):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    if data.symbol != "XAUUSD" or data.timeframe != "5m":
-        raise HTTPException(status_code=422, detail="Only XAUUSD 5m enabled")
+    if data.symbol != "XAUUSD" or data.timeframe not in ("5m", "15m", "30m", "1h", "4h"):
+        raise HTTPException(status_code=422, detail="Unsupported instrument or timeframe")
     prices = np.asarray(data.closes, dtype=np.float32)
     if not np.all(np.isfinite(prices)) or np.any(prices <= 0):
         raise HTTPException(status_code=422, detail="Invalid closing prices")
