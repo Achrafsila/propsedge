@@ -73,12 +73,14 @@ export default function TimesFMShadowPanel() {
   const finalDiff = data ? data.predictions[11] - data.lastClose : 0;
   const volatility = data?.atr && data.atr > 0 ? finalDiff / data.atr : null;
   const bias = data ? (volatility !== null
-    ? volatility > 0.25 ? "Bullish" : volatility < -0.25 ? "Bearish" : "Neutral"
+    ? volatility >= 0.75 ? "Bullish" : volatility <= -0.75 ? "Bearish" : volatility >= 0.25 ? "Weak bullish" : volatility <= -0.25 ? "Weak bearish" : "Neutral"
     : Math.abs(finalDiff / data.lastClose) < 0.0005 ? "Neutral" : finalDiff > 0 ? "Bullish" : "Bearish") : "Unknown";
   const structure = data?.marketStructure ?? "Unknown";
-  const alignment = structure === "Unknown" || structure === "Mixed" || bias === "Neutral" ? "Inconclusive" : structure === bias ? "Aligned" : "Divergent";
-  const interpretation = alignment === "Divergent"
-    ? `TimesFM anticipe un mouvement ${bias === "Bullish" ? "haussier" : "baissier"} à court terme, contre une structure EMA ${structure === "Bullish" ? "haussière" : "baissière"}. Un retracement est possible, mais aucun retournement n'est confirmé.`
+  const direction = bias.includes("bullish") || bias === "Bullish" ? "Bullish" : bias.includes("bearish") || bias === "Bearish" ? "Bearish" : "Neutral";
+  const weakBias = bias.startsWith("Weak");
+  const alignment = structure === "Unknown" || structure === "Mixed" || direction === "Neutral" ? "Inconclusive" : structure === direction ? "Aligned" : "Divergent";
+  const interpretation = weakBias && structure === "Bearish" && direction === "Bullish" ? "Tendance baissière. Léger rebond possible. Surveiller un rejet avant un éventuel SELL de continuation ; pas de retournement confirmé." : weakBias && structure === "Bullish" && direction === "Bearish" ? "Tendance haussière. Léger repli possible. Surveiller une reprise avant un éventuel BUY de continuation ; pas de retournement confirmé." : alignment === "Divergent"
+    ? `TimesFM anticipe un mouvement ${direction === "Bullish" ? "haussier" : "baissier"} à court terme, contre une structure EMA ${structure === "Bullish" ? "haussière" : "baissière"}. Un retracement est possible, mais aucun retournement n'est confirmé.`
     : alignment === "Aligned"
     ? "La direction projetée et les EMA sont concordantes. Ce constat ne confirme pas une entrée ni sa probabilité de réussite."
     : "La projection est faible ou la structure EMA est mixte. Aucun consensus directionnel exploitable.";
