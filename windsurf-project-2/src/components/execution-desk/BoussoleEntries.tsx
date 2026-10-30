@@ -341,6 +341,8 @@ export default function BoussoleEntries(){
   const [entryPopup,setEntryPopup]=useState<{title:string;side:string;entry:number;sl:number;tp:number}|null>(null);
   const [notifyEnabled,setNotifyEnabled]=useState(false);
   const [showWatchlist,setShowWatchlist]=useState(false);
+  const [advancedOpen,setAdvancedOpen]=useState(false);
+  const [showMissed,setShowMissed]=useState(false);
   const latest=data.at(-2);
   const fired=(p:Proposal)=>!!latest && (p.side===1?latest.high>=p.entry:latest.low<=p.entry);
   const pushAlert=useCallback((message:string)=>{
@@ -415,6 +417,13 @@ export default function BoussoleEntries(){
       fresh.forEach(e=>pushAlert(e+" · Prix indicatifs ; vérifier l'exécution chez votre broker."));
     }
   },[latest?.time,position?.id,position?.startedAt,data,liquidity.lastEvent?.time,seenAlerts,pushAlert]);
+  const relevant=assessed.filter(p=>p.setupStatus==="Confirmed"||p.setupStatus==="Waiting");
+  const missed=assessed.filter(p=>p.setupStatus==="Missed Entry");
+  const primary=relevant[0];
+  const alternative=relevant.find(p=>p.id!==primary?.id);
+  const visibleSetups=showWatchlist?relevant:relevant.slice(0,2);
+  const simpleStatus=(status:string)=>status==="Confirmed"?"READY":status==="Waiting"?"WATCH":status==="Missed Entry"?"MISSED":"INVALID";
+  const quality=(score:number)=>score>=80?"High":score>=55?"Moderate":"Low";
   const currentR=position && latest ? (latest.close-position.actualEntry)*position.proposal.side/Math.abs(position.actualEntry-position.proposal.sl) : null;
 
   return <section className="rounded-2xl border border-white/10 bg-[#0c1325]/90 p-3 sm:p-4">
@@ -426,16 +435,16 @@ export default function BoussoleEntries(){
       </div>
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
-      <span>Close <b className="text-white">{n(result.price)}</b></span><span className={dataFresh?"text-emerald-300":"text-amber-300"}>{feedStatus}</span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
+      <span>Close <b className="text-white">{n(result.price)}</b></span><span className={dataFresh?"text-emerald-300":"text-amber-300"}>{feedStatus}</span><span className="text-slate-300">{result.trend==="EMA aligned bearish"?"Tendance baissière":result.trend==="EMA aligned bullish"?"Tendance haussière":"Marché sans direction claire"}</span>
       <label className="ml-auto">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] px-1 py-0.5">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label>
     </div>
     <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[.045] px-3 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-bold text-cyan-200">Market Intelligence</p>
+        <p className="text-[11px] font-bold text-cyan-200">Market view</p>
         <button type="button" disabled={intelligenceLoading} onClick={()=>void refreshIntelligence()} className="rounded-lg border border-cyan-400/20 px-2 py-1 text-[10px] text-cyan-200 disabled:opacity-50">{intelligenceLoading?"Analyse…":"Recalculer l'IA"}</button>
       </div>
       {intelligence?.tf===tf?<p className="mt-1 text-xs leading-5 text-slate-200">{intelligence.summary}</p>:<p className="mt-1 text-xs text-slate-400">{intelligenceLoading?"Lecture du marché en cours…":"Analyse IA indisponible · les scénarios techniques restent opérationnels."}</p>}
-      {intelligence?.tf===tf&&<p className="mt-1 text-[10px] text-slate-400">Prix de référence {n(intelligence.price)} · clôture prévue à {minutes*12} min : {n(intelligence.future)} · projection {intelligence.strength==="weak"?"faible":"plus marquée"}</p>}
+      
       {intelligenceError&&<p className="mt-1 text-[10px] text-amber-300">{intelligenceError}</p>}
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
@@ -457,15 +466,40 @@ export default function BoussoleEntries(){
       <p className="mt-2 text-xs text-slate-300">Entrée {n(entryPopup.entry)} · SL {n(entryPopup.sl)} · TP {n(entryPopup.tp)}</p>
       <p className="mt-2 text-[10px] text-slate-400">Signal indicatif : vérifier les prix avant toute entrée.</p>
     </div>}
-    {samplesOnTf.length>0&&<p className="mt-2 text-[10px] text-slate-400">Shadow validation (not actual trades) · {(["Continuation","Correction","Reversal"] as const).map(f=>{const rows=samplesOnTf.filter(x=>x.family===f);const done=rows.filter(x=>x.outcome==="TP"||x.outcome==="SL");const wins=done.filter(x=>x.outcome==="TP").length;return f+": "+(done.length?wins+"/"+done.length+" TP-first":"no evaluated samples");}).join(" · ")} · ambiguous candles excluded</p>}
-    {showWatchlist&&<>
-    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">{assessed.filter(p=>p.setupStatus!=="Invalidated").map(p=><button key={p.id} onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/70 bg-cyan-500/[.08]":"border-white/10 bg-white/[.025]")}>
-      <div className="flex items-center justify-between gap-2"><strong className="text-xs font-semibold text-white sm:text-sm">{p.title}</strong><span className={"shrink-0 text-[10px] font-bold "+(p.side===1?"text-emerald-300":"text-rose-300")}>{p.side===1?"BUY":"SELL"}</span></div>
-      <div className="mt-1 flex items-center justify-between gap-2"><p className={"text-[10px] font-semibold "+(p.setupStatus==="Confirmed"?"text-emerald-300":"text-amber-200")}>{p.setupStatus} · {p.forecastContextLabel}</p><span className="text-[11px] font-bold tabular-nums text-cyan-200" title="Technical confluence score, not a win probability">Confidence {p.confidence}/100</span></div>
-      <div className="mt-3 grid grid-cols-3 gap-2">{[{key:"Entry",value:p.entry,style:"text-amber-200"},{key:"Stop",value:p.sl,style:"text-rose-300"},{key:"Target",value:p.tp,style:"text-emerald-300"}].map(x=><div key={x.key} className="min-w-0"><p className="text-[10px] text-slate-400">{x.key}</p><p className={"text-xs font-bold tabular-nums sm:text-sm "+x.style}>{n(x.value)}</p></div>)}</div>
-      {selected===p.id&&<div className="mt-3 border-t border-white/10 pt-2"><p className="text-xs leading-5 text-slate-300">{p.reason}. Invalidation : {n(p.sl)}.</p><span className="mt-2 inline-block rounded-md border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-200">Select this setup to commit manually below</span></div>}
-    </button>)}</div>
-    </>}
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs font-semibold text-white">Opportunités {relevant.length? "· "+relevant.length:""}</p>
+      <div className="flex items-center gap-2">
+        {relevant.length>2&&<button type="button" onClick={()=>setShowWatchlist(v=>!v)} className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] text-slate-300">{showWatchlist?"Réduire":"Toutes les opportunités"}</button>}
+        <button type="button" onClick={()=>setAdvancedOpen(v=>!v)} className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] text-slate-300">{advancedOpen?"Masquer les détails":"Détails"}</button>
+      </div>
+    </div>
+    {relevant.length>0&&<div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+      {visibleSetups.map((p,i)=><button key={p.id} type="button" onClick={()=>setSelected(selected===p.id?null:p.id)} className={"w-full rounded-xl border p-3 text-left "+(selected===p.id?"border-cyan-400/60 bg-cyan-500/[.07]":"border-white/10 bg-white/[.025]")}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{i===0?"Priority setup":i===1?"Alternative":"Opportunity"}</p>
+          <span className={"text-[10px] font-semibold "+(p.setupStatus==="Confirmed"?"text-emerald-300":"text-amber-300")}>{simpleStatus(p.setupStatus)}</span>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <strong className="text-sm text-white">{p.title}</strong>
+          <span className={p.side===1?"text-xs font-semibold text-emerald-300":"text-xs font-semibold text-rose-300"}>{p.side===1?"BUY":"SELL"}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[{label:"Entry",v:p.entry,color:"text-white"},{label:"Stop",v:p.sl,color:"text-rose-300"},{label:"Target",v:p.tp,color:"text-emerald-300"}].map(x=><div key={x.label}><p className="text-[10px] text-slate-400">{x.label}</p><p className={"text-sm font-semibold tabular-nums "+x.color}>{n(x.v)}</p></div>)}
+        </div>
+        {selected===p.id&&<p className="mt-3 border-t border-white/10 pt-2 text-xs leading-5 text-slate-300">{p.reason} · Invalidation : {n(p.sl)}.</p>}
+        {advancedOpen&&<p className="mt-2 text-[10px] text-slate-400">Qualité indicative : {quality(p.confidence)} · {p.forecastContextLabel}</p>}
+      </button>)}
+    </div>}
+    {relevant.length===0&&<p className="mt-2 text-xs text-slate-400">Aucune entrée exploitable pour le moment. Attendre une nouvelle confirmation.</p>}
+    {(missed.length>0||advancedOpen)&&<div className="mt-3 text-[11px] text-slate-400">
+      {missed.length>0&&<button type="button" onClick={()=>setShowMissed(v=>!v)} className="text-slate-400 underline underline-offset-2">{showMissed?"Masquer":"Afficher"} les entrées manquées ({missed.length})</button>}
+      {showMissed&&missed.map(p=><p key={p.id} className="mt-2">{p.title} · MISSED · ancien niveau {n(p.entry)}</p>)}
+      {advancedOpen&&<div className="mt-2 rounded-lg border border-white/10 p-3">
+        <p>ATR {n(result.atr)} · {result.trend} · R:R {rr}</p>
+        <p className="mt-1">Validation théorique : {(["Continuation","Correction","Reversal"] as const).map(f=>{const rows=samplesOnTf.filter(x=>x.family===f);const done=rows.filter(x=>x.outcome==="TP"||x.outcome==="SL");return f+" "+(done.length?done.filter(x=>x.outcome==="TP").length+"/"+done.length:"n/a");}).join(" · ")}</p>
+        <p className="mt-1">Historique indicatif, pas des trades exécutés.</p>
+      </div>}
+    </div>}
     {active && position?.status!=="active" && <div className="mt-3 rounded-xl border border-white/10 bg-white/[.035] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold">Selected: {active.title}</p><p className="text-[11px] text-amber-200">{active.setupStatus==="Confirmed"?"Trigger confirmed on the latest closed candle":"Waiting for a new, validated trigger"}</p></div><button type="button" onClick={()=>{if(active.setupStatus!=="Confirmed")return;setCommitCandidate(active);setEntryInput(String(active.entry));}} disabled={active.setupStatus!=="Confirmed"} className="min-h-10 rounded-lg bg-cyan-600 px-4 text-xs font-bold text-white disabled:opacity-40">Commit position</button></div>
     </div>}
