@@ -15,7 +15,7 @@ export default function MarketContextPanel(){
   if(live){setResults(next);setLoading(false);}
  }void load();const timer=setInterval(()=>void load(),300000);return()=>{live=false;clearInterval(timer)}},[]);
  return <section className="rounded-2xl border border-cyan-500/20 bg-[#0c1325]/90 p-3 sm:p-4" aria-label="Multi timeframe market context">
-  <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold text-white sm:text-base">Market Context · H1 / M15</h2><span className="text-[10px] text-slate-400">OHLC Twelve Data · closed candles</span></div>
+  <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold text-white sm:text-base">Market Context · H1 / M15</h2><span className="text-[10px] text-slate-400">Prix de marché · bougies clôturées</span></div>
   <div className="grid grid-cols-2 gap-2">{["1h","15m"].map(tf=>{const r=results.find(x=>x.tf===tf),c=r?.context;
    return <div key={tf} className="min-w-0 rounded-xl border border-white/10 bg-white/[.03] p-2.5 sm:p-3">
     <p className="text-[10px] font-semibold text-slate-400">{tf==="1h"?"H1 · Direction":"M15 · Structure"}</p>

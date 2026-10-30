@@ -11,7 +11,7 @@ export async function POST(req:NextRequest) {
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return NextResponse.json({error:"Sign in to use AI analysis."},{status:401});
   const key=process.env.GROQ_API_KEY;
-  if(!key)return NextResponse.json({error:"GROQ_API_KEY is not configured."},{status:503});
+  if(!key)return NextResponse.json({error:"Service d'analyse non configuré."},{status:503});
   let body:Record<string,unknown>;
   try{body=await req.json()}catch{return NextResponse.json({error:"Invalid JSON."},{status:400})}
   const candles=body.candles;
@@ -43,7 +43,7 @@ export async function POST(req:NextRequest) {
         ]
       })
     });
-    if(!response.ok)return NextResponse.json({error:"Groq analysis unavailable. Check model access, API limits and configuration."},{status:502});
+    if(!response.ok)return NextResponse.json({error:"Analyse temporairement indisponible."},{status:502});
     const payload=await response.json();
     const parsed=JSON.parse(payload.choices?.[0]?.message?.content||"{}");
     const short=(value:unknown,max:number)=>typeof value==="string"?value.slice(0,max):"";

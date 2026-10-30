@@ -80,7 +80,7 @@ export default function TimesFMShadowPanel() {
   const weakBias = bias.startsWith("Weak");
   const alignment = structure === "Unknown" || structure === "Mixed" || direction === "Neutral" ? "Inconclusive" : structure === direction ? "Aligned" : "Divergent";
   const interpretation = weakBias && structure === "Bearish" && direction === "Bullish" ? "Tendance baissière. Léger rebond possible. Surveiller un rejet avant un éventuel SELL de continuation ; pas de retournement confirmé." : weakBias && structure === "Bullish" && direction === "Bearish" ? "Tendance haussière. Léger repli possible. Surveiller une reprise avant un éventuel BUY de continuation ; pas de retournement confirmé." : alignment === "Divergent"
-    ? `TimesFM anticipe un mouvement ${direction === "Bullish" ? "haussier" : "baissier"} à court terme, contre une structure EMA ${structure === "Bullish" ? "haussière" : "baissière"}. Un retracement est possible, mais aucun retournement n'est confirmé.`
+    ? `La prévision anticipe un mouvement ${direction === "Bullish" ? "haussier" : "baissier"} à court terme, contre une structure EMA ${structure === "Bullish" ? "haussière" : "baissière"}. Un retracement est possible, mais aucun retournement n'est confirmé.`
     : alignment === "Aligned"
     ? "La direction projetée et les EMA sont concordantes. Ce constat ne confirme pas une entrée ni sa probabilité de réussite."
     : "La projection est faible ou la structure EMA est mixte. Aucun consensus directionnel exploitable.";
@@ -97,14 +97,14 @@ export default function TimesFMShadowPanel() {
     <section className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-[#0c1325]/85 p-4 text-slate-100" aria-label="TimesFM shadow forecast">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold"><Activity size={16} className="text-cyan-300"/> TimesFM 2.5 · AI Forecast <span className="rounded-full border border-cyan-300/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">Shadow mode</span></div>
+          <div className="flex items-center gap-2 text-sm font-semibold"><Activity size={16} className="text-cyan-300"/> Market Forecast <span className="rounded-full border border-cyan-300/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">Shadow mode</span></div>
           <p className="mt-1 text-xs text-slate-400">XAU/USD · {tf.toUpperCase()} · 12 bougies ({12*barMinutes} min) · Analyse uniquement</p>
         </div>
         <button type="button" disabled={loading} onClick={()=>void refresh()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/20 disabled:opacity-50">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""}/>{loading ? "Calcul en cours…" : "Calculer la prévision"}
         </button>
       </div>
-      {error && <p role="status" className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-200">{error === "TimesFM cloud service not configured" ? "Service TimesFM non configuré : une URL HTTPS et une clé serveur sont nécessaires." : error}</p>}
+      {error && <p role="status" className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-200">{error === "TimesFM cloud service not configured" ? "Service de prévision non configuré : une URL HTTPS et une clé serveur sont nécessaires." : error}</p>}
       {data && (
         <>
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -128,7 +128,7 @@ export default function TimesFMShadowPanel() {
         <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[.04] p-3">
           <p className="text-xs font-semibold text-cyan-200">AI Market Interpretation · règles transparentes</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-300">{interpretation}</p>
-          <p className="mt-1 text-[10px] text-slate-500">Biais calculé à partir de la projection TimesFM et de l'ATR, sans appel Groq ni score de confiance probabiliste.</p>
+          <p className="mt-1 text-[10px] text-slate-500">Projection indicative et volatilité, sans probabilité de gain.</p>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
           <div className="min-w-0 rounded-xl border border-white/10 bg-[#080e1b] p-2">

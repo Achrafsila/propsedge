@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const token = process.env.TIMESFM_API_KEY;
   const twelveDataKey = process.env.TWELVEDATA_API_KEY;
   if (!engine || !token || !twelveDataKey) {
-    return NextResponse.json({ status: "unconfigured", error: "TimesFM cloud service not configured" }, { status: 503 });
+    return NextResponse.json({ status: "unconfigured", error: "Service de prévision non configuré" }, { status: 503 });
   }
   let serviceUrl: URL;
   try {
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       throw new Error("HTTPS required");
     }
   } catch {
-    return NextResponse.json({ error: "Invalid TIMESFM_SERVICE_URL" }, { status: 503 });
+    return NextResponse.json({ error: "Configuration du service de prévision invalide" }, { status: 503 });
   }
 
   const tf = req.nextUrl.searchParams.get("tf") ?? "5m";
@@ -87,13 +87,13 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
       signal: AbortSignal.timeout(30000),
     });
-    if (!forecastRes.ok) return NextResponse.json({ error: "TimesFM service unavailable" }, { status: 503 });
+    if (!forecastRes.ok) return NextResponse.json({ error: "Service de prévision momentanément indisponible" }, { status: 503 });
     const result = await forecastRes.json() as {
       predictions?: number[]; lower_band?: number[]; upper_band?: number[];
     };
     if (![result.predictions, result.lower_band, result.upper_band].every(
       arr => Array.isArray(arr) && arr.length === 12 && arr.every(v => typeof v === "number" && Number.isFinite(v))
-    )) return NextResponse.json({ error: "Invalid TimesFM output" }, { status: 502 });
+    )) return NextResponse.json({ error: "Résultat de prévision non valide" }, { status: 502 });
 
     // Fused backend: numerical forecast from TimesFM, guarded plain-language
     // interpretation from Groq. Groq never owns the trade levels/status.

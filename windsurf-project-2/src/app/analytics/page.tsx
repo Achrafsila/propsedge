@@ -300,9 +300,9 @@ export default function GlobalAnalyticsPage() {
         <div className="flex flex-col items-center gap-4 sm:flex-row">
           <EdgePilotAvatar state="reviewing" size={112} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2"><BrainCircuit className="h-4 w-4 text-[#7DBCFF]"/><h2 className="text-base font-bold text-white">Trader DNA Coach</h2><span className="rounded-full border border-[#6FAEFF]/25 px-2 py-0.5 text-[10px] font-semibold text-[#9CCFFF]">Groq · Planned</span></div>
+            <div className="flex items-center gap-2"><BrainCircuit className="h-4 w-4 text-[#7DBCFF]"/><h2 className="text-base font-bold text-white">Trader DNA Coach</h2><span className="rounded-full border border-[#6FAEFF]/25 px-2 py-0.5 text-[10px] font-semibold text-[#9CCFFF]">Coming soon</span></div>
             <p className="mt-2 max-w-3xl text-sm text-[#C0CFE2]">Explore your trading identity, the sessions where you perform best, your execution habits, and what your history does not yet prove.</p>
-            <p className="mt-1 text-xs text-[#8EA5BF]">We will define its coaching role and Groq API access together before enabling conversation.</p>
+            <p className="mt-1 text-xs text-[#8EA5BF]">Personalized coaching will be available soon.</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-[#9DC6F4]"><Sparkles className="h-4 w-4"/> Behavioural intelligence</div>
         </div>

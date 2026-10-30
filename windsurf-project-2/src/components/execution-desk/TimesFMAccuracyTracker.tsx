@@ -85,7 +85,7 @@ export default function TimesFMAccuracyTracker() {
   const direction=(h:number)=>{const v=evaluated.filter(x=>x.h===h && x.predicted!==x.base && x.actual!==x.base);return v.length? v.filter(x=>Math.sign(x.predicted-x.base)===Math.sign(x.actual-x.base)).length/v.length*100:null;};
   return <section className="rounded-2xl border border-white/10 bg-[#0c1325]/85 p-4 text-slate-100" aria-label="Forecast accuracy tracking">
     <div className="flex flex-wrap justify-between gap-2">
-      <div><h3 className="text-sm font-semibold">Forecast vs Reality</h3><p className="mt-1 text-xs text-slate-400">{tf.toUpperCase()} · Prévisions figées · clôtures réelles Twelve Data · historique local</p></div>
+      <div><h3 className="text-sm font-semibold">Forecast vs Reality</h3><p className="mt-1 text-xs text-slate-400">{tf.toUpperCase()} · Prévisions figées · clôtures réelles du marché · historique local</p></div>
       <span className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-slate-300">{status}</span>
     </div>
     {error && <p role="status" className="mt-3 text-xs text-amber-300">{error}</p>}
