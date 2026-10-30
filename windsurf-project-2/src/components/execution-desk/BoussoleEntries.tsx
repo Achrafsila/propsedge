@@ -406,7 +406,7 @@ export default function BoussoleEntries(){
         <button type="button" disabled={intelligenceLoading} onClick={()=>void refreshIntelligence()} className="rounded-lg border border-cyan-400/20 px-2 py-1 text-[10px] text-cyan-200 disabled:opacity-50">{intelligenceLoading?"Analyse…":"Recalculer l'IA"}</button>
       </div>
       {intelligence?.tf===tf?<p className="mt-1 text-xs leading-5 text-slate-200">{intelligence.summary}</p>:<p className="mt-1 text-xs text-slate-400">{intelligenceLoading?"Lecture du marché en cours…":"Analyse IA indisponible · les scénarios techniques restent opérationnels."}</p>}
-      {intelligence?.tf===tf&&<p className="mt-1 text-[10px] text-slate-400">Prix de référence {n(intelligence.price)} · clôture prévue à {minutes*12} min : {n(intelligence.future)} · projection {intelligence.strength==="weak"?"faible":"plus marquée"} · {intelligence.source==="groq"?"analyse actualisée":"lecture de secours"}</p>}
+      {intelligence?.tf===tf&&<p className="mt-1 text-[10px] text-slate-400">Prix de référence {n(intelligence.price)} · clôture prévue à {minutes*12} min : {n(intelligence.future)} · projection {intelligence.strength==="weak"?"faible":"plus marquée"}</p>}
       {intelligenceError&&<p className="mt-1 text-[10px] text-amber-300">{intelligenceError}</p>}
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
