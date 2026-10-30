@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { recordForecast } from "./TimesFMAccuracyTracker";
 
@@ -24,15 +24,18 @@ const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2,
 
 export default function TimesFMShadowPanel() {
   const [data, setData] = useState<ShadowForecast | null>(null);
+  const [tf,setTf] = useState("15m");
+  const requested = useRef(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function refresh() {
+  async function refresh(timeframe = tf) {
+    const request = ++requested.current;
     setLoading(true);
     setError("");
     setData(null);
     try {
-      const response = await fetch("/api/execution-desk/timesfm?tf=5m", { cache: "no-store" });
+      const response = await fetch("/api/execution-desk/timesfm?tf="+encodeURIComponent(timeframe), { cache: "no-store" });
       const result: unknown = await response.json();
       if (!response.ok) {
         const message = result && typeof result === "object" && "error" in result ? String(result.error) : "Unavailable";
@@ -43,15 +46,25 @@ export default function TimesFMShadowPanel() {
           !Array.isArray(f.lowerBand) || f.lowerBand.length !== 12 ||
           !Array.isArray(f.upperBand) || f.upperBand.length !== 12 ||
           !Number.isFinite(f.lastClose)) throw new Error("Forecast format not recognized");
-      recordForecast(f);
+      if(request !== requested.current) return;
+      if(timeframe==="5m") recordForecast(f);
+      window.dispatchEvent(new CustomEvent("propsedge-timesfm-forecast",{detail:{tf:timeframe,lastClose:f.lastClose,predictions:f.predictions,baseTime:f.lastClosedCandleAt}}));
       setData(f);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Forecast unavailable");
+      if(request===requested.current)setError(e instanceof Error ? e.message : "Forecast unavailable");
     } finally {
-      setLoading(false);
+      if(request===requested.current)setLoading(false);
     }
   }
 
+  useEffect(()=>{
+    const onTf=(event:Event)=>{const next=(event as CustomEvent<string>).detail; if(!["5m","15m","30m","1h","4h"].includes(next))return;setTf(next);};
+    window.addEventListener("propsedge-timeframe",onTf);
+    return()=>window.removeEventListener("propsedge-timeframe",onTf);
+  },[]);
+  useEffect(()=>{void refresh(tf);/* Recompute whenever Execution Desk timeframe changes. */},[tf]);
+  const minutes:Record<string,number>={"5m":5,"15m":15,"30m":30,"1h":60,"4h":240};
+  const barMinutes=minutes[tf]??5;
   const forecasts = data ? [3, 6, 12].map(h => {
     const target = data.predictions[h - 1];
     const diff = target - data.lastClose;
@@ -83,7 +96,7 @@ export default function TimesFMShadowPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold"><Activity size={16} className="text-cyan-300"/> TimesFM 2.5 · AI Forecast <span className="rounded-full border border-cyan-300/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">Shadow mode</span></div>
-          <p className="mt-1 text-xs text-slate-400">XAU/USD · M5 · 12 prochaines bougies clôturées (60 min) · Analyse uniquement</p>
+          <p className="mt-1 text-xs text-slate-400">XAU/USD · {tf.toUpperCase()} · 12 bougies ({12*barMinutes} min) · Analyse uniquement</p>
         </div>
         <button type="button" disabled={loading} onClick={refresh} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/20 disabled:opacity-50">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""}/>{loading ? "Calcul en cours…" : "Calculer la prévision"}
@@ -95,7 +108,7 @@ export default function TimesFMShadowPanel() {
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
             { label: "Forecast bias", value: bias, detail: volatility === null ? "ATR unavailable" : `${volatility >= 0 ? "+" : ""}${volatility.toFixed(2)} ATR` },
-            { label: "EMA structure", value: structure, detail: "EMA 20 / 50 / 200 · M5" },
+            { label: "EMA structure", value: structure, detail: "EMA 20 / 50 / 200 · {tf.toUpperCase()}" },
             { label: "Market alignment", value: alignment, detail: "Shadow · non-trading" }
           ].map(item => <div key={item.label} className="rounded-xl border border-white/10 bg-white/[.04] p-3">
             <p className="text-[11px] text-slate-400">{item.label}</p>
