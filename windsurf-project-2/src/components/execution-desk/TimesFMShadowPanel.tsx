@@ -47,7 +47,7 @@ export default function TimesFMShadowPanel() {
           !Array.isArray(f.upperBand) || f.upperBand.length !== 12 ||
           !Number.isFinite(f.lastClose)) throw new Error("Forecast format not recognized");
       if(request !== requested.current) return;
-      if(timeframe==="5m") recordForecast(f);
+      recordForecast(f);
       window.dispatchEvent(new CustomEvent("propsedge-timesfm-forecast",{detail:{tf:timeframe,lastClose:f.lastClose,predictions:f.predictions,baseTime:f.lastClosedCandleAt}}));
       setData(f);
     } catch (e) {
@@ -108,7 +108,7 @@ export default function TimesFMShadowPanel() {
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
             { label: "Forecast bias", value: bias, detail: volatility === null ? "ATR unavailable" : `${volatility >= 0 ? "+" : ""}${volatility.toFixed(2)} ATR` },
-            { label: "EMA structure", value: structure, detail: "EMA 20 / 50 / 200 · {tf.toUpperCase()}" },
+            { label: "EMA structure", value: structure, detail: `EMA 20 / 50 / 200 · ${tf.toUpperCase()}` },
             { label: "Market alignment", value: alignment, detail: "Shadow · non-trading" }
           ].map(item => <div key={item.label} className="rounded-xl border border-white/10 bg-white/[.04] p-3">
             <p className="text-[11px] text-slate-400">{item.label}</p>
@@ -118,7 +118,7 @@ export default function TimesFMShadowPanel() {
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {forecasts.map(f => <div key={f.h} className="rounded-xl border border-white/10 bg-white/[.03] p-3">
-            <p className="text-[11px] text-slate-400">{f.h * 5} min · {f.h} bars</p>
+            <p className="text-[11px] text-slate-400">{f.h * barMinutes} min · {f.h} bars</p>
             <p className="mt-1 text-sm font-semibold tabular-nums">{fmt(f.target)}</p>
             <p className={`text-xs tabular-nums ${f.diff > 0 ? "text-emerald-300" : f.diff < 0 ? "text-rose-300" : "text-slate-300"}`}>{f.diff >= 0 ? "+" : ""}{f.percent.toFixed(3)}%</p>
           </div>)}
