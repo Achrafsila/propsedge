@@ -137,6 +137,27 @@ export default function BoussoleEntries(){
     }).filter(p=>p.priority>0).sort((a,b)=>b.priority-a.priority);
   },[result.options,liquidity,data]);
   const [forecastContext,setForecastContext]=useState<{tf:string;lastClose:number;predictions:number[];baseTime:string}|null>(null);
+  const [intelligence,setIntelligence]=useState<{tf:string;summary:string;source:string;structure:string;strength:string;price:number;future:number}|null>(null);
+  const [intelligenceLoading,setIntelligenceLoading]=useState(false);
+  const [intelligenceError,setIntelligenceError]=useState("");
+  const refreshIntelligence=useCallback(async(signal?:AbortSignal)=>{
+    setIntelligenceLoading(true);setIntelligenceError("");
+    try{
+      const response=await fetch("/api/execution-desk/timesfm?tf="+encodeURIComponent(tf),{cache:"no-store",signal});
+      const parsed=await response.json();
+      if(!response.ok||!Array.isArray(parsed.predictions)||parsed.predictions.length!==12)throw new Error(parsed.error||"Forecast unavailable");
+      if(signal?.aborted)return;
+      setForecastContext({tf,lastClose:parsed.lastClose,predictions:parsed.predictions,baseTime:parsed.lastClosedCandleAt});
+      setIntelligence({tf,summary:String(parsed.aiSummary||"Analyse indisponible"),source:String(parsed.interpretationSource||"rules"),structure:String(parsed.marketStructure||"Unknown"),strength:String(parsed.forecastStrength||"weak"),price:parsed.lastClose,future:parsed.predictions[11]});
+    }catch(e){if(signal?.aborted)return;setIntelligence(null);setForecastContext(null);setIntelligenceError(e instanceof Error?e.message:"Forecast unavailable");}
+    finally{if(!signal?.aborted)setIntelligenceLoading(false);}
+  },[tf]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    setForecastContext(null);setIntelligence(null);
+    void refreshIntelligence(controller.signal);
+    return()=>controller.abort();
+  },[refreshIntelligence]);
   useEffect(()=>{const listener=(event:Event)=>{const detail=(event as CustomEvent<{tf:string;lastClose:number;predictions:number[];baseTime:string}>).detail;if(detail?.tf) setForecastContext(detail);};window.addEventListener("propsedge-timesfm-forecast",listener);return()=>window.removeEventListener("propsedge-timesfm-forecast",listener);},[]);
   const assessed=useMemo(()=>{
     const closed=data.slice(0,-1);
@@ -354,6 +375,15 @@ export default function BoussoleEntries(){
     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
       <span>Close <b className="text-white">{n(result.price)}</b></span><span className={dataFresh?"text-emerald-300":"text-amber-300"}>{dataFresh?"Feed fresh":"Feed stale · setups paused"}</span><span>ATR <b className="text-white">{n(result.atr)}</b></span><span>{result.trend}</span>
       <label className="ml-auto">R:R <select aria-label="Target ratio" value={rr} onChange={e=>setRr(Number(e.target.value))} className="rounded bg-[#182239] px-1 py-0.5">{[1.5,2,3].map(r=><option key={r} value={r}>1:{r}</option>)}</select></label>
+    </div>
+    <div className="mt-3 rounded-xl border border-cyan-400/15 bg-cyan-400/[.045] px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-bold text-cyan-200">Market Intelligence · TimesFM + Groq</p>
+        <button type="button" disabled={intelligenceLoading} onClick={()=>void refreshIntelligence()} className="rounded-lg border border-cyan-400/20 px-2 py-1 text-[10px] text-cyan-200 disabled:opacity-50">{intelligenceLoading?"Analyse…":"Recalculer l'IA"}</button>
+      </div>
+      {intelligence?.tf===tf?<p className="mt-1 text-xs leading-5 text-slate-200">{intelligence.summary}</p>:<p className="mt-1 text-xs text-slate-400">{intelligenceLoading?"Lecture du marché en cours…":"Analyse IA indisponible · les scénarios techniques restent opérationnels."}</p>}
+      {intelligence?.tf===tf&&<p className="mt-1 text-[10px] text-slate-400">Prix de référence {n(intelligence.price)} · clôture prévue à {minutes*12} min : {n(intelligence.future)} · projection {intelligence.strength==="weak"?"faible":"plus marquée"} · {intelligence.source==="groq"?"interprétation Groq":"lecture de secours"}</p>}
+      {intelligenceError&&<p className="mt-1 text-[10px] text-amber-300">{intelligenceError}</p>}
     </div>
     {error&&<p role="alert" className="mt-3 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">{error}</p>}
     {position?.status==="active" && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-400/30 bg-emerald-400/[.07] px-3 py-2.5">
