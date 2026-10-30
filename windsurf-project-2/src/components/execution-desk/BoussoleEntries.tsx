@@ -97,9 +97,14 @@ export default function BoussoleEntries(){
   const [tf,setTf]=useState("15m"),[data,setData]=useState<Candle[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string|null>(null),[rr,setRr]=useState(2),[asOf,setAsOf]=useState("");
   const [loadedTf,setLoadedTf]=useState("");
   const [feedAsOf,setFeedAsOf]=useState(0);
+  const [retryAt,setRetryAt]=useState(0);
+  const [clock,setClock]=useState(Date.now());
+  useEffect(()=>{const tick=setInterval(()=>setClock(Date.now()),1000);return()=>clearInterval(tick);},[]);
+  const remaining=Math.max(0,Math.ceil((retryAt-clock)/1000));
   const minutes=({"5m":5,"15m":15,"30m":30,"1h":60,"4h":240} as Record<string,number>)[tf]??15;
   useEffect(()=>{window.dispatchEvent(new CustomEvent("propsedge-timeframe",{detail:tf}));},[tf]);
   const load=useCallback(async(signal?:AbortSignal)=>{
+    if(Date.now()<retryAt)return;
     setBusy(true);setError("");
     try {
       const r=await fetch("/api/execution-desk/candles?tf="+tf,{cache:"no-store",signal});
@@ -107,12 +112,17 @@ export default function BoussoleEntries(){
       if(!r.ok||!Array.isArray(j.candles))throw Error(j.error||"No data");
       if(j.candles.length<220)throw Error("Historique insuffisant");
       if(signal?.aborted)return;
-      setData(j.candles);setAsOf(j.asOf||"");setLoadedTf(tf);setFeedAsOf(Date.now());
+      setData(j.candles);setAsOf(j.asOf||"");setLoadedTf(tf);setFeedAsOf(Date.now());setRetryAt(0);
     }catch(e){
       if(signal?.aborted)return;
-      setError(e instanceof Error?e.message:"No data");setData([]);setLoadedTf("");
+      const message=e instanceof Error?e.message:"No data";
+      if(/run out of API credits|current minute|rate.limit|429/i.test(message)){
+        // Next minute boundary plus a small buffer; no unnecessary retries.
+        setRetryAt(Math.ceil(Date.now()/60000)*60000+3000);
+      }
+      setError(message);setData([]);setLoadedTf("");
     }finally{if(!signal?.aborted)setBusy(false);}
-  },[tf]);
+  },[tf,retryAt]);
   useEffect(()=>{
     const controller=new AbortController();
     setData([]);setLoadedTf("");setSelected(null);
@@ -125,7 +135,7 @@ export default function BoussoleEntries(){
   const freshnessLimit=Math.max(minutes*120000,600000);
   const dataFresh=loadedTf===tf && data.length>=220 && candleLag>=-minutes*60000 &&
     candleLag < freshnessLimit && Date.now()-feedAsOf < freshnessLimit;
-  const feedStatus=error ? "Feed unavailable · "+error :
+  const feedStatus=remaining>0 ? "Crédits Twelve Data épuisés · reprise dans "+String(Math.floor(remaining/60)).padStart(2,"0")+":"+String(remaining%60).padStart(2,"0") : error ? "Feed unavailable · "+error :
     busy && !data.length ? "Loading market candles…" :
     !data.length ? "Waiting for market candles…" :
     !dataFresh ? "Market feed delayed · setups paused" : "Feed live";
@@ -376,7 +386,7 @@ export default function BoussoleEntries(){
       <div><h2 className="text-base font-bold text-white">Trade opportunities</h2><p className="text-[11px] text-slate-400">Top conditional setups · XAU/USD</p></div>
       <div className="flex items-center gap-2">
         <select aria-label="Timeframe" value={tf} onChange={e=>{setTf(e.target.value);setSelected(null)}} className="rounded-lg border border-white/10 bg-[#182239] px-2 py-2 text-xs">{["5m","15m","30m","1h","4h"].map(t=><option key={t}>{t}</option>)}</select>
-        <button onClick={()=>void load()} disabled={busy} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200"><RefreshCcw size={13} className={busy?"animate-spin":""}/> Refresh</button>
+        <button onClick={()=>void load()} disabled={busy||remaining>0} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200"><RefreshCcw size={13} className={busy?"animate-spin":""}/> Refresh</button>
       </div>
     </div>
     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
