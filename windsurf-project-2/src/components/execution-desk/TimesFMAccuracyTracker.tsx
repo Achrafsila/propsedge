@@ -74,7 +74,7 @@ export default function TimesFMAccuracyTracker() {
   const evaluated=records.flatMap(r=>STEPS.map(h=>{
     const actual=actualFor(bars,r.baseTime,h);
     return actual===null?null:{h,actual,predicted:r.predictions[h-1],base:r.baseClose};
-  }).filter((v):v is {h:number;actual:number;predicted:number;base:number}=>v!==null));
+  }).filter((v):v is {h:3|6|12;actual:number;predicted:number;base:number}=>v!==null));
   const mae=(h:number)=>{const v=evaluated.filter(x=>x.h===h);return v.length? v.reduce((a,b)=>a+Math.abs(b.actual-b.predicted),0)/v.length:null;};
   const direction=(h:number)=>{const v=evaluated.filter(x=>x.h===h && x.predicted!==x.base && x.actual!==x.base);return v.length? v.filter(x=>Math.sign(x.predicted-x.base)===Math.sign(x.actual-x.base)).length/v.length*100:null;};
   return <section className="rounded-2xl border border-white/10 bg-[#0c1325]/85 p-4 text-slate-100" aria-label="Forecast accuracy tracking">
