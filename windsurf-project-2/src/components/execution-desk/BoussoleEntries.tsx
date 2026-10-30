@@ -155,18 +155,18 @@ export default function BoussoleEntries(){
         (trendAligned?25:8)+(structureAligned?20:10)+(momentum?15:5)+
         (candleDirection?15:5)+(rrValid?15:0)+(distance<=0.5*a?10:distance<=a?6:0)
       )));
-      const freshForecast=forecastContext?.tf===tf && forecastContext.predictions.length===12 && Math.abs((recent!.close-forecastContext.lastClose))<=2*a && Date.now()-Date.parse(forecastContext.baseTime)<Math.max(15,parseInt(tf)*3)*60000;
+      const freshForecast=forecastContext?.tf===tf && forecastContext.predictions.length===12 && Math.abs((recent!.close-forecastContext.lastClose))<=2*a && Date.now()-(Date.parse(forecastContext.baseTime)+minutes*60000)<minutes*3*60000;
       const forecastMove=freshForecast?forecastContext!.predictions[11]-forecastContext!.lastClose:null;
       const forecastContextLabel=forecastMove===null?"Forecast unavailable":forecastMove*p.side>0?"TimesFM aligned":forecastMove*p.side<0?"TimesFM opposing":"TimesFM neutral";
       return {...p,confidence,setupStatus,forecastContextLabel};
     }).sort((a,b)=>Number(b.setupStatus==="Confirmed")-Number(a.setupStatus==="Confirmed")||b.confidence-a.confidence).slice(0,6);
   },[candidates,data,result.atr,result.trend,rr,forecastContext,tf,dataFresh]);
-  const active=assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated");
+  const active=dataFresh?assessed.find(x=>x.id===selected && x.setupStatus!=="Invalidated"):undefined;
   const [ai,setAi]=useState<{assessment:string;summary:string;supportingFactors:string[];concerns:string[];watchFor:string;model:string}|null>(null);
   const [aiBusy,setAiBusy]=useState(false);
   const [aiError,setAiError]=useState("");
   const [aiSnapshot,setAiSnapshot]=useState("");
-  const aiCandidate=assessed.find(x=>x.id===selected&&x.setupStatus!=="Invalidated");
+  const aiCandidate=dataFresh?assessed.find(x=>x.id===selected&&x.setupStatus!=="Invalidated"):undefined;
   const snapshotKey=aiCandidate ? [tf,asOf,aiCandidate.id,aiCandidate.entry,aiCandidate.setupStatus,data.at(-1)?.time].join("|"):"";
   useEffect(()=>{setAi(null);setAiError("");setAiSnapshot("")},[snapshotKey]);
   const analyzeWithAI=async()=>{
@@ -207,7 +207,7 @@ export default function BoussoleEntries(){
     setSaving(false);
   };
   const commitPosition=async()=>{
-    if(!commitCandidate||saving||position?.status==="active")return;
+    if(!commitCandidate||saving||position?.status==="active"||!dataFresh)return;
     const price=Number(entryInput);
     if(!(price>0))return;
     setSaving(true);setError("");
@@ -221,6 +221,7 @@ export default function BoussoleEntries(){
     setAlerts([]);setSeenAlerts([]);setDismissedAlerts([]);setCommitCandidate(null);setSaving(false);
   };
   const [commitCandidate,setCommitCandidate]=useState<Proposal|null>(null);
+  useEffect(()=>{setCommitCandidate(null);},[tf]);
   const [entryInput,setEntryInput]=useState("");
   const [alerts,setAlerts]=useState<string[]>([]);
   const [notifyEnabled,setNotifyEnabled]=useState(false);
@@ -330,7 +331,7 @@ export default function BoussoleEntries(){
         <p className="text-[10px] text-slate-500">Model: {ai.model} · Analytical commentary only; not a win probability or an execution signal.</p>
       </div>}
     </div>}
-    {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={saving || !(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>void commitPosition()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
+    {commitCandidate && <div role="dialog" aria-modal="true" aria-label="Confirm manual position" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-3"><div className="w-full max-w-sm rounded-2xl border border-cyan-400/20 bg-[#101a2b] p-5 text-white"><div className="flex justify-between"><h3 className="text-lg font-bold">Confirm manual position</h3><button aria-label="Cancel" onClick={()=>setCommitCandidate(null)}><X size={20}/></button></div><p className="mt-2 text-xs text-slate-300">Commit means you already entered with your broker. This does not send an order.</p><label className="mt-4 block text-xs">Actual executed price<input type="number" step="any" min="0" value={entryInput} onChange={e=>setEntryInput(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-white/15 bg-slate-950 px-3 text-base"/></label><button type="button" disabled={saving || !dataFresh || !(Number(entryInput)>0) || (commitCandidate.side===1?Number(entryInput)<=commitCandidate.sl:Number(entryInput)>=commitCandidate.sl)} onClick={()=>void commitPosition()} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold disabled:opacity-40"><Check size={16}/> Start monitoring</button></div></div>}
     {!busy&&!assessed.some(p=>p.setupStatus!=="Invalidated")&&<p className="mt-3 text-xs text-slate-400">No qualified setups to watch right now.</p>}
 
   </section>;
