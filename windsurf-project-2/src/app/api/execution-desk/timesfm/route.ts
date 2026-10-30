@@ -27,12 +27,14 @@ export async function GET(req: NextRequest) {
   }
 
   const tf = req.nextUrl.searchParams.get("tf") ?? "5m";
-  if (tf !== "5m") return NextResponse.json({ error: "Only 5m is enabled for shadow validation" }, { status: 400 });
+  const intervals: Record<string,{api:string,minutes:number}> = { "5m":{api:"5min",minutes:5}, "15m":{api:"15min",minutes:15}, "30m":{api:"30min",minutes:30}, "1h":{api:"1h",minutes:60}, "4h":{api:"4h",minutes:240} };
+  const selected = intervals[tf];
+  if (!selected) return NextResponse.json({ error: "Unsupported timeframe" }, { status: 400 });
 
   try {
     const url = new URL("https://api.twelvedata.com/time_series");
     url.searchParams.set("symbol", "XAU/USD");
-    url.searchParams.set("interval", "5min");
+    url.searchParams.set("interval", selected.api);
     url.searchParams.set("outputsize", "300");
     url.searchParams.set("timezone", "UTC");
     url.searchParams.set("apikey", twelveDataKey);
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest) {
     const now = Date.now();
     const candles = market.values
       .map(v => ({ time: Date.parse(v.datetime.replace(" ", "T") + "Z"), close: Number(v.close), high: Number(v.high), low: Number(v.low) }))
-      .filter(v => Number.isFinite(v.time) && v.time + 300000 <= now && Number.isFinite(v.close) && v.close > 0 && Number.isFinite(v.high) && Number.isFinite(v.low))
+      .filter(v => Number.isFinite(v.time) && v.time + selected.minutes*60000 <= now && Number.isFinite(v.close) && v.close > 0 && Number.isFinite(v.high) && Number.isFinite(v.low))
       .sort((a, b) => a.time - b.time);
     if (candles.length < 128) {
       return NextResponse.json({ error: "Not enough closed candles", count: candles.length }, { status: 503 });
@@ -81,7 +83,7 @@ export async function GET(req: NextRequest) {
     const forecastRes = await fetch(serviceUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ symbol: "XAUUSD", timeframe: "5m", closes }),
+      body: JSON.stringify({ symbol: "XAUUSD", timeframe: tf, closes }),
       cache: "no-store",
       signal: AbortSignal.timeout(30000),
     });
@@ -97,7 +99,8 @@ export async function GET(req: NextRequest) {
       mode: "shadow",
       model: "TimesFM 2.5",
       symbol: "XAUUSD",
-      timeframe: "5m",
+      timeframe: tf,
+      candleMinutes: selected.minutes,
       provider: "Twelve Data",
       lastClosedCandleAt: new Date(candles[candles.length - 1].time).toISOString(),
       lastClose: closes[closes.length - 1],
