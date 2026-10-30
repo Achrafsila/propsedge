@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     url.searchParams.set("apikey", twelveDataKey);
     const marketRes = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(12000) });
     const market = await marketRes.json() as {
-      values?: Array<{ datetime: string; close: string }>;
+      values?: Array<{ datetime: string; close: string; high: string; low: string }>;
       message?: string;
     };
     if (!marketRes.ok || !Array.isArray(market.values)) {
@@ -47,13 +47,37 @@ export async function GET(req: NextRequest) {
 
     const now = Date.now();
     const candles = market.values
-      .map(v => ({ time: Date.parse(v.datetime.replace(" ", "T") + "Z"), close: Number(v.close) }))
-      .filter(v => Number.isFinite(v.time) && v.time + 300000 <= now && Number.isFinite(v.close) && v.close > 0)
+      .map(v => ({ time: Date.parse(v.datetime.replace(" ", "T") + "Z"), close: Number(v.close), high: Number(v.high), low: Number(v.low) }))
+      .filter(v => Number.isFinite(v.time) && v.time + 300000 <= now && Number.isFinite(v.close) && v.close > 0 && Number.isFinite(v.high) && Number.isFinite(v.low))
       .sort((a, b) => a.time - b.time);
     if (candles.length < 128) {
       return NextResponse.json({ error: "Not enough closed candles", count: candles.length }, { status: 503 });
     }
-    const closes = candles.slice(-300).map(v => v.close);
+    const closedCandles = candles.slice(-300);
+    const closes = closedCandles.map(v => v.close);
+    // Same timestamped, closed-candle snapshot as TimesFM: no cross-feed comparisons.
+    const ema = (length: number) => {
+      let value = closes.slice(0, length).reduce((a, b) => a + b, 0) / length;
+      for (let i = length; i < closes.length; i++) value += (closes[i] - value) * (2 / (length + 1));
+      return value;
+    };
+    const e20 = closes.length >= 20 ? ema(20) : NaN;
+    const e50 = closes.length >= 50 ? ema(50) : NaN;
+    const e200 = closes.length >= 200 ? ema(200) : NaN;
+    const structure = ![e20, e50, e200].every(Number.isFinite) ? "Unknown"
+      : e20 > e50 && e50 > e200 ? "Bullish"
+      : e20 < e50 && e50 < e200 ? "Bearish" : "Mixed";
+    let atr: number | null = null;
+    if (closedCandles.length >= 15) {
+      const trs = closedCandles.slice(1).map((bar, i) => Math.max(
+        bar.high - bar.low,
+        Math.abs(bar.high - closedCandles[i].close),
+        Math.abs(bar.low - closedCandles[i].close)
+      ));
+      let value = trs.slice(0, 14).reduce((a, b) => a + b, 0) / 14;
+      for (const tr of trs.slice(14)) value = (value * 13 + tr) / 14;
+      atr = Number.isFinite(value) && value > 0 ? value : null;
+    }
     const forecastRes = await fetch(serviceUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -78,6 +102,8 @@ export async function GET(req: NextRequest) {
       lastClosedCandleAt: new Date(candles[candles.length - 1].time).toISOString(),
       lastClose: closes[closes.length - 1],
       horizon: 12,
+      marketStructure: structure,
+      atr,
       predictions: result.predictions,
       lowerBand: result.lower_band,
       upperBand: result.upper_band,
