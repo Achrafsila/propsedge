@@ -106,7 +106,8 @@ export default function BoussoleEntries(){
       const correctStop=(p.entry-p.sl)*direction>0;
       const risk=Math.abs(p.entry-p.sl);
       const reward=Math.abs(p.tp-p.entry);
-      const rrValid=correctStop&&risk>0&&reward/risk>=rr-0.05;
+      const minRR=p.type==="correction"?1.5:rr;
+      const rrValid=correctStop&&risk>0&&reward/risk>=minRR-0.05;
       const triggerCrossed=(previous!.close-p.entry)*direction<0&&(recent!.close-p.entry)*direction>=0;
       const emaTouched=recent!.low<=e20&&recent!.high>=e20;
       const reboundConfirmed=emaTouched&&candleDirection&&Math.abs(price-e20)<=0.75*a;
