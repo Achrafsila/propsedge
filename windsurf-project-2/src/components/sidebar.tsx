@@ -13,7 +13,7 @@ import {
   Shield,
   Compass,
   Activity,
-  Crosshair,
+  Crosshair, FlaskConical,
   Users, UserRound
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -39,6 +39,7 @@ export function Sidebar() {
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     { name: "Execution Desk", href: "/execution-desk", icon: Crosshair },
+    { name: "Strategy Lab", href: "/strategy-lab", icon: FlaskConical },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
