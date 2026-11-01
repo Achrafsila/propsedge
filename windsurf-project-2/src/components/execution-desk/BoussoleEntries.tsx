@@ -35,20 +35,41 @@ function proposals(c:Candle[],rr:number):{options:Proposal[];trend:string;atr:nu
     const breakout=(side===1?high:low)+side*.1*a;
     if(side===1&&up||side===-1&&down)push("breakout","Continuation · "+label+" sur cassure 20 bougies",breakout,breakout-side*1.5*a,"Ordre stop conditionnel au-delà du range 20 bougies + 0,1 ATR · retest du playbook non encore confirmé",side);
   }
-  // Family 2: scalp of a short correction against the established trend.
-  if ((up || down) && Number.isFinite(a) && a>0) {
-    const trendSide:1|-1=up?1:-1;
-    const scalpSide:1|-1=trendSide===1?-1:1;
-    const extreme=trendSide===1?high:low;
-    const exhausted=trendSide===1?last.close<last.open:last.close>last.open;
-    const nearExtreme=Math.abs(price-extreme)<0.6*a;
-    const entry=scalpSide===1?last.high+0.1*a:last.low-0.1*a;
-    const stop=scalpSide===1?low-0.25*a:high+0.25*a;
-    const risk=Math.abs(entry-stop);
-    if (exhausted && nearExtreme && risk>0 && risk<5*a && (entry-stop)*scalpSide>0)
-      opts.push({id:"correction-"+scalpSide,title:"Correction scalp · "+(scalpSide===1?"BUY":"SELL"),
-        side:scalpSide,entry,sl:stop,tp:entry+scalpSide*rr*risk,type:"correction",
-        reason:"Scalp contre la tendance · attendre la cassure du déclencheur après essoufflement",status:"conditional"});
+  // Counter-trend corrections require a local liquidity sweep AND a confirmed
+  // micro-structure break on CLOSED candles. Exhaustion alone is not a setup.
+  if ((up || down) && Number.isFinite(a) && a>0 && closed.length>=230) {
+    const side:1|-1=down?1:-1;
+    const signal=closed.at(-1)!;
+    const previous=closed.at(-2)!;
+    const reference=closed.slice(-10,-2);
+    const referenceLow=Math.min(...reference.map(x=>x.low));
+    const referenceHigh=Math.max(...reference.map(x=>x.high));
+    const swept=side===1
+      ? previous.low<referenceLow && previous.close>referenceLow
+      : previous.high>referenceHigh && previous.close<referenceHigh;
+    const microBreak=side===1
+      ? signal.close>previous.high && signal.close>signal.open
+      : signal.close<previous.low && signal.close<signal.open;
+    const swingStop=side===1
+      ? Math.min(previous.low,signal.low,referenceLow)-0.2*a
+      : Math.max(previous.high,signal.high,referenceHigh)+0.2*a;
+    const entry=signal.close;
+    const risk=(entry-swingStop)*side;
+    // Target must be attainable BEFORE the nearest previously tested
+    // opposing level. Never advertise an invented 2R target past resistance.
+    const earlier=closed.slice(-65,-10);
+    const obstacles=earlier.flatMap(bar=>[bar.high,bar.low])
+      .filter(level=>(level-entry)*side>0.05*a)
+      .sort((x,y)=>(x-y)*side);
+    const firstObstacle=obstacles[0];
+    const target=entry+side*rr*risk;
+    const room=firstObstacle===undefined?0:(firstObstacle-entry)*side;
+    if(swept&&microBreak&&risk>=0.3*a&&risk<=3*a&&room>=rr*risk+0.1*a){
+      opts.push({id:"correction-"+side,title:"Correction scalp · "+(side===1?"BUY":"SELL"),
+        side,entry,sl:swingStop,tp:target,type:"correction",
+        reason:"Countertrend · liquidity sweep + closed-candle micro-break confirmed · structural swing stop · 2R room before nearby liquidity",
+        status:"conditional"});
+    }
   }
   // Families 1 and 3 remain continuation (market/pullback/breakout) and reversal (liquidity sweep).
   // Sweep reversal: opposite-direction conditional alternative, not an immediate order.
@@ -209,8 +230,9 @@ export default function BoussoleEntries(){
       const reboundConfirmed=emaTouched&&candleDirection&&Math.abs(price-e20)<=0.75*a;
       const marketConfirmed=p.type==="market"&&candleDirection&&trendAligned&&distance<=0.5*a;
       const breakoutConfirmed=p.type==="breakout"&&triggerCrossed&&candleDirection;
-      const reversalConfirmed=(p.type==="reversal"||p.type==="correction")&&triggerCrossed&&candleDirection;
-      const confirmed=p.type==="rebound"?reboundConfirmed:p.type==="market"?marketConfirmed:p.type==="breakout"?breakoutConfirmed:reversalConfirmed;
+      const correctionConfirmed=p.type==="correction" && Math.abs(price-p.entry)<=0.15*a && candleDirection;
+      const reversalConfirmed=p.type==="reversal"&&triggerCrossed&&candleDirection;
+      const confirmed=p.type==="rebound"?reboundConfirmed:p.type==="market"?marketConfirmed:p.type==="breakout"?breakoutConfirmed:p.type==="correction"?correctionConfirmed:reversalConfirmed;
       // A stale level is never advertised as an executable entry.
       const farBeyond=distance>1.5*a;
       const passedWithoutFreshTrigger=(price-p.entry)*direction>0.75*a&&!triggerCrossed;
