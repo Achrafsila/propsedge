@@ -40,6 +40,7 @@ import { AddPayoutDialog } from "@/components/AddPayoutDialog";
 import { glassmorphism, borderRadius, typography, gradientText } from "@/design-system";
 import { EditAccountRulesDialog } from "@/components/account/EditAccountRulesDialog";
 import { ConsistencySimulator } from "@/components/account/ConsistencySimulator";
+import { TraderDNAIntelligence } from "@/components/analytics/TraderDNAIntelligence";
 import { updatePayoutDb } from "@/lib/supabase/payouts";
 import { parseConsistencyLimitPercent } from "@/lib/analytics/payoutEligibility";
 import { getAccountOptionLabel, ORIGIN_LABEL, ORIGIN_COLOR } from "@/lib/accountLabels";
@@ -351,7 +352,7 @@ export function AccountAnalyticsView({
   }) => (
     <motion.div variants={cardVariants} whileHover="hover">
       <div
-        className="rounded-xl p-4 transition-all duration-300"
+        className="rounded-lg px-3 py-2.5 transition-all duration-300"
         style={{
           background: glassmorphism.card.background,
           backdropFilter: glassmorphism.card.backdropBlur,
@@ -359,12 +360,12 @@ export function AccountAnalyticsView({
           borderRadius: borderRadius.xl,
         }}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-2.5">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{ background: `${color}1A` }}
           >
-            <Icon className="w-5 h-5" style={{ color }} />
+            <Icon className="h-4 w-4" style={{ color }} />
           </div>
           <div className="min-w-0">
             <p
@@ -446,7 +447,7 @@ export function AccountAnalyticsView({
 
   // ─── Main view ──────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-[1500px] space-y-5 pb-8">
       <Header
         account={account}
         accountType={accountType}
@@ -483,81 +484,57 @@ export function AccountAnalyticsView({
         for(const t of cycleTrades){const day=String(t.exitDate||t.entryDate).slice(0,10);days.set(day,(days.get(day)??0)+t.pnl);}
         const net=cycleTrades.reduce((a,t)=>a+t.pnl,0);
         const best=Math.max(0,...days.values());
-        const ratio=net>0 && days.size>0?Math.min(100,days.size===1?100:100*best/net):null;
-        const state=ratio===null?"Not measurable":!hasLimit?"Limit not configured":ratio<=limit?`Within ${limit}% limit`:`Above ${limit}% limit`;
-        return <div className="relative mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        const rawRatio=net>0 && days.size>0?(days.size===1?100:100*best/net):null;
+        const ratio=rawRatio===null?null:Math.min(100,rawRatio);
+        const targetAmount=accountType==="challenge"?Number(account.profitTarget):0;
+        const targetConfigured=Number.isFinite(targetAmount)&&targetAmount>0;
+        const targetPct=targetConfigured?Math.max(0,totalPnL/targetAmount*100):null;
+        const targetRemaining=targetConfigured?Math.max(0,targetAmount-totalPnL):null;
+        const state=rawRatio===null?"Not measurable":!hasLimit?"Limit not configured":rawRatio<=limit?`Within ${limit}% limit`:`Above ${limit}% limit`;
+        return <div className="relative mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
           {[
-            {label:"Recorded balance",value:fmt$(accountType==="funded"?account.currentBalance:startBalance+totalPnL),sub:"Not live equity",tone:"text-white"},
-            {label:"Current cycle P&L",value:fmt$(accountType==="funded"?cyclePnL:totalPnL),sub:accountType==="funded"?(lastPaidDate?"Since "+lastPaidDate:"Since funding"):"Evaluation",tone:(accountType==="funded"?cyclePnL:totalPnL)>=0?"text-emerald-300":"text-rose-300"},
+            {label:accountType==="funded"?"Total Payout Generated":"Total P&L",value:fmt$(accountType==="funded"?paidPayouts.reduce((sum,p)=>sum+p.requestedPayoutAmount,0):totalPnL),sub:accountType==="funded"?`${paidPayouts.length} paid payout${paidPayouts.length===1?"":"s"}`:"Evaluation performance",tone:"text-white"},
+            {label:accountType==="challenge"?"Profit target reached":"Current cycle P&L",value:accountType==="challenge"?(targetPct===null?"Not configured":`${targetPct.toFixed(1)}%`):fmt$(cyclePnL),sub:accountType==="challenge"?(targetRemaining===null?"Set a profit target in account rules":targetRemaining===0?`Target achieved · ${fmt$(totalPnL)} / ${fmt$(targetAmount)}`:`${fmt$(targetRemaining)} remaining · ${fmt$(totalPnL)} / ${fmt$(targetAmount)}`):(lastPaidDate?"Since "+lastPaidDate:"Since funding"),tone:accountType==="challenge"?(targetPct!==null&&targetPct>=100?"text-emerald-300":"text-cyan-200"):(cyclePnL>=0?"text-emerald-300":"text-rose-300")},
             {label:"Estimated DD buffer",value:fmt$(remainingDDDollars),sub:"Simplified · check broker",tone:remainingDDDollars<=0?"text-rose-300":"text-amber-200"},
-            {label:"Win rate",value:fmtPct(winRate),sub:`${trades.length} recorded trades`,tone:"text-cyan-200"},
-            {label:"Consistency",value:ratio===null?"—":`${ratio.toFixed(1)}%`,sub:state,tone:ratio!==null&&hasLimit&&ratio>limit?"text-rose-300":"text-cyan-200"},
+            {label:"Current consistency / Targeted consistency",value:ratio===null?"—":hasLimit?`${ratio.toFixed(1)}% / ${limit}%`:`${ratio.toFixed(1)}%`,sub:state,tone:rawRatio!==null&&hasLimit&&rawRatio>limit?"text-rose-300":"text-cyan-200"},
           ].map(item=><div key={item.label} className="min-w-0 rounded-xl border border-white/[.08] bg-[#0b1422]/70 p-3">
-            <p className="text-[10px] text-slate-400">{item.label}</p><p className={`mt-1 break-words text-lg font-extrabold tabular-nums sm:text-2xl ${item.tone}`}>{item.value}</p><p className="mt-1 text-[10px] text-slate-500">{item.sub}</p>
+            <p className="text-[10px] text-slate-400">{item.label}</p><p className={`mt-1 break-words text-lg font-extrabold tabular-nums sm:text-xl xl:text-2xl ${item.tone}`}>{item.value}</p><p className="mt-1 text-[10px] text-slate-500">{item.sub}</p>{accountType==="challenge"&&item.label==="Profit target reached"&&targetPct!==null&&<div role="progressbar" aria-label="Profit target reached" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100,targetPct)} className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${targetPct>=100?"bg-emerald-400":"bg-cyan-400"}`} style={{width:`${Math.min(100,targetPct)}%`}}/></div>}
           </div>)}
         </div>;
       })()}
+        {accountType === "funded" && account.fundingPath && account.fundingPath !== "evaluation" && (() => {
+          const rules=account.payoutRules as PayoutRules | undefined;
+          const requirements:string[]=[];
+          if(rules?.minimumTradingDays.required && rules.minimumTradingDays.days!=null)requirements.push(`Minimum trading days: ${rules.minimumTradingDays.days}`);
+          const qualifying=rules?.minimumTradingDays.qualifyingDailyProfit;
+          if(qualifying)requirements.push(`Qualifying day: ≥ ${qualifying.type==="fixed"?fmt$(qualifying.value):`${qualifying.value}% of initial balance`}`);
+          return requirements.length?<div className="relative mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">{requirements.map(t=><span key={t} className="rounded-md border border-cyan-400/15 bg-cyan-400/[.05] px-2.5 py-1 text-[11px] text-cyan-100">{t}</span>)}</div>:null;
+        })()}
         <div className="relative mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[.08] pt-3">
           <p className="text-xs text-slate-300">{remainingDDDollars<=0?"Review risk limits before placing another trade.":trades.length<5?"Early sample · focus on rule compliance and clean execution.":"Review drawdown and consistency limits before setting today's risk."}</p>
           <button type="button" onClick={()=>document.getElementById("account-intelligence")?.scrollIntoView({behavior:"smooth",block:"start"})} className="min-h-9 rounded-lg border border-cyan-400/25 px-3 text-xs font-semibold text-cyan-200">Risk & consistency ↓</button>
         </div>
       </section>
 
-      {/* ── Secondary account data ────────────────────────────────────────── */}
-      <details className="group rounded-xl border border-white/[.08] bg-[#0d1728] p-3 sm:p-4">
-        <summary className="cursor-pointer text-xs font-semibold text-slate-300">Account details <span className="ml-1 font-normal text-slate-500">· firm, dates, targets and configuration</span></summary>
-      <div
-        className="mt-3 rounded-xl p-3 transition-all duration-300"
-        style={{
-          background: glassmorphism.card.background,
-          backdropFilter: glassmorphism.card.backdropBlur,
-          border: "1px solid rgba(148,163,184,0.08)",
-          borderRadius: borderRadius.xl,
-        }}
-      >
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 xl:grid-cols-6">
-          <DataField label="Prop Firm" value={account.propFirmName} />
-          <DataField
-            label="Type"
-            value={accountType === "challenge" ? (account.challengeType ?? "Challenge") : "Funded"}
-          />
-          <DataField
-            label="Start Date"
-            value={accountType === "challenge" ? account.purchaseDate : account.fundingDate}
-          />
-          <DataField label="Account Size" value={fmt$(account.accountSize)} />
-          <DataField label="Opening Balance" value={fmt$(startBalance)} />
-          <DataField
-            label="Current Balance"
-            value={
-              accountType === "funded"
-                ? fmt$(account.currentBalance)
-                : fmt$(account.accountSize + (account.currentProfit ?? 0))
-            }
-            colored={(account.currentProfit ?? 0) >= 0 ? "#10B981" : "#EF4444"}
-          />
-          <DataField
-            label={accountType === "funded" ? "Current Cycle P&L" : "Net P&L"}
-            value={fmt$(accountType === "funded" ? cyclePnL : totalPnL)}
-            colored={(accountType === "funded" ? cyclePnL : totalPnL) >= 0 ? "#10B981" : "#EF4444"}
-          />
-          {accountType === "challenge" && account.profitTarget > 0 && (
-            <DataField
-              label="Target"
-              value={`${fmt$(account.profitTarget)} (${fmtPct(targetProgress)})`}
-              colored="#D4AF37"
-            />
-          )}
-          <DataField
-            label="Drawdown Remaining"
-            value={`${fmtPct(remainingDDPercent)} · ${fmt$(remainingDDDollars)}`}
-            colored={remainingDDPercent < maxDDPercent * 0.3 ? "#EF4444" : "#94A3B8"}
-          />
-        </div>
-      </div>
-
-      </details>
-      <div id="account-intelligence" className="flex flex-wrap items-center justify-between gap-2 pt-1"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-cyan-300">Risk & rules</p><h3 className="text-lg font-bold text-white">Account Intelligence</h3></div><span className="text-[10px] text-slate-500">Calculated from recorded trades</span></div>
+      <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2 xl:gap-5">
+        <section className="min-w-0 rounded-2xl border border-white/10 bg-[#0d1728] p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-300">Performance</p><h3 className="mt-1 text-base font-bold text-white">Performance Statistics</h3></div>
+            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-slate-400">Trade history</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <StatCard icon={BarChart3} label="Total Trades" value={trades.length.toString()} color="#298DFF" sub={`${winningTrades.length}W · ${losingTrades.length}L`} />
+            <StatCard icon={TrendingUp} label="Win Rate" value={fmtPct(winRate)} color="#10B981" />
+            <StatCard icon={Target} label="Profit Factor" value={profitFactor===null?"—":Number.isFinite(profitFactor)?profitFactor.toFixed(2):"∞"} color="#D4AF37" />
+            <StatCard icon={Calendar} label="Profitable Days" value={`${winningDays.length} / ${dailyEntries.length}`} color="#10B981" />
+            <StatCard icon={Award} label="Best Day" value={bestDay?fmt$(bestDay[1].pnl):"—"} color="#10B981" />
+            <StatCard icon={TrendingUp} label="Average Win" value={fmt$(avgWin)} color="#10B981" />
+          </div>
+        </section>
+        <section id="account-intelligence" className="min-w-0 rounded-2xl border border-cyan-400/15 bg-[#0d1728] p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-300">Risk & rules</p><h3 className="mt-1 text-base font-bold text-white">Account Intelligence</h3></div>
+          </div>
       {(() => {
         const sourceChallenge = accountType === "funded" && account.sourceChallengeId
           ? challenges.find(c => c.id === account.sourceChallengeId) : null;
@@ -574,120 +551,18 @@ export function AccountAnalyticsView({
           acc[d].pnl+=t.pnl;acc[d].trades++;return acc;
         },{});
         const target=accountType==="challenge" && account.profitTarget>0?Number(account.profitTarget):null;
-        return <div className="space-y-1">{accountType==="funded"&&<p className="text-xs text-slate-400">Current consistency cycle: {lastPaidDate?`after paid payout on ${lastPaidDate}`:"from account funding · no paid payout yet"}. Closing dates determine inclusion.</p>}<ConsistencySimulator daily={cycleDaily} limit={rule!=null && pct>0 && pct<100?pct:null} target={target}/></div>;
+        return <div className="min-w-0"><ConsistencySimulator daily={cycleDaily} limit={rule!=null && pct>0 && pct<100?pct:null} target={target}/></div>;
       })()}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-      {/* ── Trading Requirements ──────────────────────────────────────────── */}
-      {/* Static payout-eligibility rules from PayoutRules — funded accounts
-          with their own native rules only (Instant Funded, etc.); a
-          converted account's rules live on its source Challenge instead and
-          are surfaced through AI Coach's payout-readiness checks, not here. */}
-      {accountType === "funded" && account.fundingPath && account.fundingPath !== "evaluation" && (() => {
-        const fundingPath = account.fundingPath as FundingPath;
-        return (
-        <div
-          className="rounded-xl p-5 transition-all duration-300"
-          style={{
-            background: glassmorphism.card.background,
-            backdropFilter: glassmorphism.card.backdropBlur,
-            border: "1px solid rgba(148,163,184,0.08)",
-            borderRadius: borderRadius.xl,
-          }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <p className="text-[#F8FAFC] font-bold" style={{ fontSize: typography.fontSize.section }}>
-              Trading Requirements
-            </p>
-            <span
-              className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-              style={{
-                background: `${ORIGIN_COLOR[fundingPath]}26`,
-                color: ORIGIN_COLOR[fundingPath],
-                border: `1px solid ${ORIGIN_COLOR[fundingPath]}66`,
-              }}
-            >
-              {ORIGIN_LABEL[fundingPath]}
-            </span>
-          </div>
-          {(() => {
-            const rules = account.payoutRules as PayoutRules | undefined;
-            const lines: { label: string; value: string }[] = [];
-            if (rules?.consistency.required && rules.consistency.limitPercent != null) {
-              lines.push({ label: "Consistency", value: `${rules.consistency.limitPercent}% maximum` });
-            }
-            if (rules?.minimumTradingDays.required && rules.minimumTradingDays.days != null) {
-              lines.push({
-                label: "Minimum trading days",
-                value: `${rules.minimumTradingDays.days} day${rules.minimumTradingDays.days === 1 ? "" : "s"}`,
-              });
-              const qualifying = rules.minimumTradingDays.qualifyingDailyProfit;
-              if (qualifying) {
-                const amount = qualifying.type === "fixed" ? fmt$(qualifying.value) : `${qualifying.value}% of initial balance`;
-                lines.push({ label: "Qualifying day", value: `≥ ${amount} net profit` });
-              }
-            }
-            if (lines.length === 0) {
-              return <p className="text-xs text-[#94A3B8]">No minimum trading-day or consistency requirement</p>;
-            }
-            return (
-              <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                {lines.map((line) => (
-                  <div key={line.label}>
-                    <p className="text-[#64748B] text-xs mb-0.5">{line.label}</p>
-                    <p className="text-[#F8FAFC] font-medium">{line.value}</p>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
-        );
-      })()}
+        </section>
+      </div>
 
-        <div className="rounded-xl border border-white/10 bg-[#0D1420] p-5 text-sm text-[#94A3B8]">
-          <h3 className="mb-3 font-semibold text-white">Risk guardrails</h3>
-          <p>Maximum drawdown: <strong className="text-white">{fmt$(maxDDDollars)}</strong></p>
-          <p className="mt-2">Remaining buffer: <strong className={remainingDDDollars > 0 ? "text-emerald-400" : "text-red-400"}>{fmt$(remainingDDDollars)}</strong></p>
-          <p className="mt-2">Drawdown floor: <strong className="text-white">{fmt$(drawdownFloor)}</strong></p>
-          <p className="mt-3 text-xs">Verify daily-loss, trailing and consistency rules in your prop firm agreement before placing trades.</p>
-        </div>
-      <div className="relative flex h-full min-w-0 flex-col justify-between overflow-hidden rounded-xl border border-[#298DFF]/20 bg-[#0B1422] p-5">
-        <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-[#298DFF]/10 blur-3xl" />
-        <div className="relative">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#298DFF]/15"><Activity className="h-5 w-5 text-[#68B5FF]" /></div>
-              <div><p className="text-sm font-bold tracking-tight text-white">EdgePilot <span className="text-[#7ABEFF]">Insights</span></p><p className="text-[10px] text-[#94A3B8]">ACCOUNT INTELLIGENCE · RULE-BASED</p></div>
-            </div>
-            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${remainingDDDollars <= 0 ? "border-red-500/30 bg-red-500/10 text-red-400" : remainingDDDollars < maxDDDollars * 0.3 ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"}`}>
-              {remainingDDDollars <= 0 ? "Buffer exhausted" : remainingDDDollars < maxDDDollars * 0.3 ? "Buffer low" : "Buffer available"}
-            </span>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">DD buffer*</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{fmt$(remainingDDDollars)}</p></div>
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">{accountType === "challenge" ? "Target progress" : "Lifetime Trade P&L"}</p><p className="mt-1 text-lg font-bold tabular-nums text-[#7ABEFF]">{accountType === "challenge" ? fmtPct(targetProgress) : fmt$(totalPnL)}</p></div>
-            <div className="rounded-lg border border-white/[0.06] bg-white/[0.035] p-2.5"><p className="text-[10px] text-[#94A3B8]">Trade sample</p><p className="mt-1 text-lg font-bold tabular-nums text-white">{trades.length} <span className="text-xs font-normal text-[#94A3B8]">trades</span></p></div>
-          </div>
-          <div className="mt-4 border-l-2 border-[#298DFF] pl-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#75B8FF]">Trading desk brief</p>
-            <p className="mt-1 text-sm font-medium leading-relaxed text-[#E2E8F0]">
-              {remainingDDDollars <= 0
-                ? "Estimated drawdown buffer is exhausted. Review account rules and balances before trading."
-                : remainingDDDollars < maxDDDollars * 0.3
-                ? "Drawdown buffer is limited. Prioritize capital preservation before new exposure."
-                : trades.length < 10
-                ? "Early trading sample. Protect the available drawdown buffer and build a consistent track record."
-                : "Keep position sizing aligned with the remaining drawdown buffer and account objectives."}
-            </p>
-          </div>
-        </div>
-        <div className="relative mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-white/[0.08] pt-3">
-          <p className="max-w-[230px] text-[10px] leading-relaxed text-[#64748B]">*Simplified estimate, not a live daily or trailing drawdown check.</p>
-          <button type="button" onClick={() => router.push("/edgepilot")} className="rounded-lg bg-[#298DFF] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#1D74D9]">Ask EdgePilot →</button>
-        </div>
+      <div id="account-trading-insights" className="mt-4 space-y-3 pt-4 sm:mt-5 sm:pt-5">
+        <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-cyan-300">Performance & behavior</p><h3 className="mt-1 text-lg font-bold text-white">Trading Insights</h3></div>
+        <TraderDNAIntelligence trades={trades} />
       </div>
-      </div>
+
+      <div className="pt-2"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-cyan-300">Historical performance</p><h3 className="mt-1 text-lg font-bold text-white">Equity & Daily Results</h3></div>
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
       {/* ── Equity Curve ──────────────────────────────────────────────────── */}
       <div
@@ -715,24 +590,6 @@ export function AccountAnalyticsView({
                 Equity Curve
               </h3>
               <p className="text-[#94A3B8] text-xs mt-0.5">Cumulative balance over time</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3 text-xs">
-            <div className="text-right">
-              <p className="text-[#64748B] text-xs mb-0.5">Net P&L</p>
-              <p className={`font-bold ${totalPnL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-                {fmt$(totalPnL)}
-              </p>
-            </div>
-            {accountType === "challenge" && account.profitTarget > 0 && (
-              <div className="text-right">
-                <p className="text-[#64748B] text-xs mb-0.5">Target Progress</p>
-                <p className="font-bold text-[#D4AF37]">{fmtPct(targetProgress)}</p>
-              </div>
-            )}
-            <div className="text-right">
-              <p className="text-[#64748B] text-xs mb-0.5">Drawdown Used</p>
-              <p className="font-bold text-[#EF4444]">{fmtPct(usedDDPercent)}</p>
             </div>
           </div>
         </div>
@@ -843,7 +700,7 @@ export function AccountAnalyticsView({
               >
                 Trading Calendar
               </h3>
-              <p className="text-[#94A3B8] text-xs mt-0.5">Daily P&L by session</p>
+              <p className="text-[#94A3B8] text-xs mt-0.5">Daily realized P&L · using available trade dates</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -964,49 +821,33 @@ export function AccountAnalyticsView({
       </div>
 
       </div>
-      {/* ── Statistics Grid ───────────────────────────────────────────────── */}
-      <div>
-        <h3
-          className="text-[#F8FAFC] font-bold mb-4"
-          style={{ fontSize: typography.fontSize.section }}
-        >
-          Performance Statistics
-        </h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          <StatCard icon={BarChart3} label="Total Trades" value={trades.length.toString()} color="#298DFF" sub={`${winningTrades.length}W · ${losingTrades.length}L`} />
-          <StatCard icon={TrendingUp} label="Win Rate" value={fmtPct(winRate)} color="#10B981" sub={`${winningTrades.length} winning trades`} />
-          <StatCard icon={Calendar} label="Winning Days" value={winningDays.length.toString()} color="#10B981" sub={`of ${dailyEntries.length} trading days`} />
-          <StatCard icon={Calendar} label="Losing Days" value={losingDays.length.toString()} color="#EF4444" sub={`of ${dailyEntries.length} trading days`} />
-          <StatCard
-            icon={Award}
-            label="Best Day"
-            value={bestDay ? fmt$(bestDay[1].pnl) : "$0"}
-            color="#10B981"
-            sub={bestDay ? bestDay[0] : "—"}
-          />
-          <StatCard
-            icon={AlertTriangle}
-            label="Worst Day"
-            value={worstDay ? fmt$(worstDay[1].pnl) : "—"}
-            color="#EF4444"
-            sub={worstDay ? worstDay[0] : "—"}
-          />
-          <StatCard icon={DollarSign} label="Avg Daily P&L" value={fmt$(avgDailyPnL)} color={avgDailyPnL >= 0 ? "#10B981" : "#EF4444"} sub="Per trading day" />
-          <StatCard icon={Target} label="Profit Factor" value={profitFactor === null ? "—" : Number.isFinite(profitFactor) ? profitFactor.toFixed(2) : "∞"} color="#D4AF37" sub={`${fmt$(avgWin)} avg win`} />
-          <StatCard icon={TrendingUp} label="Best Trade" value={winningTrades.length > 0 ? fmt$(Math.max(...winningTrades.map((t) => t.pnl))) : "$0"} color="#10B981" />
-          <StatCard icon={TrendingDown} label="Worst Trade" value={losingTrades.length > 0 ? fmt$(Math.min(...losingTrades.map((t) => t.pnl))) : "$0"} color="#EF4444" />
-          <StatCard icon={TrendingUp} label="Avg Win" value={fmt$(avgWin)} color="#10B981" sub={`${winningTrades.length} trades`} />
-          <StatCard icon={TrendingDown} label="Avg Loss" value={fmt$(avgLoss)} color="#EF4444" sub={`${losingTrades.length} trades`} />
+      {/* Account-scoped trade history; journal is no longer a primary navigation destination. */}
+      <section className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-4">
+        <h3 className="text-sm font-semibold text-white">Trade History · {trades.length} trades</h3>
+        <div className="mt-3 space-y-1.5">
+          {trades.length === 0 ? <p className="py-5 text-sm text-slate-400">No trades recorded for this account.</p> :
+            [...trades].sort((a,b) => String(b.exitDate || b.entryDate).localeCompare(String(a.exitDate || a.entryDate))).map(trade => (
+              <div key={trade.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-white/[.06] bg-white/[0.02] px-3 py-2 sm:grid-cols-[minmax(100px,1.3fr)_minmax(100px,1fr)_70px_75px_140px]">
+                <div className="min-w-0"><p className="truncate text-sm font-medium text-white">{trade.symbol || "Trade"}</p><p className="text-[11px] text-slate-400">{trade.direction || "—"}</p></div>
+                <p className="hidden text-xs text-slate-400 sm:block">{trade.exitDate || trade.entryDate}</p>
+                <p className="hidden text-xs text-slate-400 sm:block">{trade.status || "—"}</p>
+                <div className="text-right"><p className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt$(trade.pnl)}</p><p className="text-[11px] text-slate-400 sm:hidden">{trade.exitDate || trade.entryDate}</p></div>
+                <div className="col-span-2 flex justify-end gap-1 sm:col-span-1">
+                  <button type="button" onClick={() => setEditingTrade({...trade})} className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-white/15 px-2 text-xs text-slate-200"><Pencil className="h-3.5 w-3.5"/> Edit</button>
+                  <button type="button" onClick={() => setDeleteCandidate(trade)} className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-rose-500/30 px-2 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5"/> Delete</button>
+                </div>
+              </div>
+            ))}
         </div>
-      </div>
+      </section>
 
-      {accountType==="funded"&&<details className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-5">
-        <summary className="cursor-pointer text-sm font-semibold text-white">Payout History · {payouts.length} <span className="ml-2 text-xs font-normal text-slate-400">Edit payout date</span></summary>
+      {accountType==="funded"&&<section className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-4">
+        <h3 className="text-sm font-semibold text-white">Payout History · {payouts.length}</h3>
         <div className="mt-3 space-y-2">{payouts.length?payouts.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.03] p-3">
           <div><p className="text-sm font-semibold text-white">{fmt$(p.requestedPayoutAmount)} · {p.status}</p><p className="text-xs text-slate-400">{p.payoutDate}</p></div>
           <button type="button" onClick={()=>setEditingPayout({id:p.id,payoutDate:p.payoutDate})} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-white/20 px-3 text-xs text-cyan-200"><Pencil size={14}/> Edit date</button>
         </div>):<p className="text-xs text-slate-400">No payouts recorded.</p>}</div>
-      </details>}
+      </section>}
       {editingPayout&&<div role="dialog" aria-modal="true" aria-label="Edit payout date" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3">
         <div className="w-full max-w-sm rounded-xl border border-white/20 bg-[#101a2b] p-5 text-white"><h3 className="font-semibold">Edit payout date</h3>
           <p className="mt-1 text-xs text-slate-400">For paid payouts, this date defines the beginning of the next funded consistency cycle. Amounts and status are unchanged.</p>
@@ -1015,26 +856,6 @@ export function AccountAnalyticsView({
           <button type="button" onClick={()=>void savePayoutDate()} disabled={savingPayoutDate||!editingPayout.payoutDate} className="min-h-10 flex-1 rounded-lg bg-cyan-600 font-semibold disabled:opacity-40">Save date</button></div>
         </div>
       </div>}
-      {/* Account-scoped trade history; journal is no longer a primary navigation destination. */}
-      <details className="rounded-2xl border border-white/10 bg-[#0D121C] p-3 sm:p-5">
-        <summary className="cursor-pointer select-none text-sm font-semibold text-white">Trade History · {trades.length} trades <span className="ml-2 text-xs font-normal text-slate-400">View account journal</span></summary>
-        <div className="mt-4 max-h-[55dvh] space-y-2 overflow-y-auto overscroll-contain">
-          {trades.length === 0 ? <p className="py-5 text-sm text-slate-400">No trades recorded for this account.</p> :
-            [...trades].sort((a,b) => String(b.exitDate || b.entryDate).localeCompare(String(a.exitDate || a.entryDate))).map(trade => (
-              <div key={trade.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                <div className="min-w-0"><p className="truncate text-sm font-medium text-white">{trade.symbol || "Trade"}</p><p className="text-[11px] text-slate-400">{trade.direction || "—"}</p></div>
-                <p className="hidden text-xs text-slate-400 sm:block">{trade.exitDate || trade.entryDate}</p>
-                <p className="hidden text-xs text-slate-400 sm:block">{trade.status || "—"}</p>
-                <div className="text-right"><p className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt$(trade.pnl)}</p><p className="text-[11px] text-slate-400 sm:hidden">{trade.exitDate || trade.entryDate}</p></div>
-                <div className="col-span-2 flex justify-end gap-2 sm:col-span-4">
-                  <button type="button" onClick={() => setEditingTrade({...trade})} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-white/15 px-3 text-xs text-slate-200"><Pencil className="h-3.5 w-3.5"/> Edit</button>
-                  <button type="button" onClick={() => setDeleteCandidate(trade)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-rose-500/30 px-3 text-xs text-rose-300"><Trash2 className="h-3.5 w-3.5"/> Delete</button>
-                </div>
-              </div>
-            ))}
-        </div>
-      </details>
-
       {editingTrade && (
         <div role="dialog" aria-modal="true" aria-label="Edit trade" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3">
           <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/15 bg-[#101A2B] p-4 text-white">

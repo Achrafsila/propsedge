@@ -64,7 +64,7 @@ export default function SignupPage() {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <Link href="/welcome">
+          <Link href="/dashboard">
             <Logo size="medium" variant="full" src="/logo-sidebar.png" />
           </Link>
         </div>

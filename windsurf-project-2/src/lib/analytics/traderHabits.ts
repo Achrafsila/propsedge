@@ -1,3 +1,4 @@
+import { getHoldingMinutes, formatHoldingDuration } from "./holdingDuration";
 import { Trade } from "@/types";
 
 // ============================================================
@@ -91,32 +92,12 @@ function toTimestamp(dateStr: string, timeStr?: string): number | null {
 // (duration would be ambiguous), while multi-day trades are still measured
 // at day granularity even without times, defaulting the missing
 // time-of-day to 00:00.
-function getHoldingMinutes(trade: Trade): number | null {
-  if (!trade.entryDate || !trade.exitDate) return null;
-  const sameDay = trade.entryDate === trade.exitDate;
-  if (sameDay && (!trade.entryTime || !trade.exitTime)) return null;
-  const entry = toTimestamp(trade.entryDate, trade.entryTime);
-  const exit = toTimestamp(trade.exitDate, trade.exitTime);
-  if (entry === null || exit === null) return null;
-  const diff = (exit - entry) / MS_PER_MINUTE;
-  return diff >= 0 ? diff : null;
-}
+
 
 // Identical to traderIdentity.ts's formatter (duplicated, not imported) so
 // "Average Holding Time" here and the holding-time sentence there render
 // the exact same text for the exact same median.
-function formatHoldingDuration(minutes: number): string {
-  const rounded = Math.round(minutes);
-  if (rounded < MINUTES_PER_HOUR) {
-    return `${rounded} minute${rounded === 1 ? "" : "s"}`;
-  }
-  if (minutes < MINUTES_PER_DAY) {
-    const hours = Math.round(minutes / MINUTES_PER_HOUR);
-    return `${hours} hour${hours === 1 ? "" : "s"}`;
-  }
-  const days = Math.round(minutes / MINUTES_PER_DAY);
-  return `${days} day${days === 1 ? "" : "s"}`;
-}
+
 
 function groupBy<K extends string>(trades: Trade[], keyFn: (t: Trade) => K): Map<K, Trade[]> {
   const map = new Map<K, Trade[]>();
@@ -376,17 +357,18 @@ export function getTraderHabits(trades: Trade[]): TraderHabits {
 
   const holdingTimes = getHoldingTimes(sorted);
   const medianHoldingMinutes = holdingTimes.length > 0 ? median(holdingTimes) : null;
+  const meanHoldingMinutes = holdingTimes.length > 0 ? holdingTimes.reduce((sum, m) => sum + m, 0) / holdingTimes.length : null;
 
   const bounds = computeDailyEntryBounds(sorted);
   const { classification: routineStability, reason: routineStabilityReason } = computeRoutineStability(bounds);
   const { pace: executionPace, explanation: executionPaceExplanation } = computeExecutionPace(sampleSize, tradingDays);
 
   return {
-    averageHoldingTime: medianHoldingMinutes !== null ? formatHoldingDuration(medianHoldingMinutes) : NOT_ENOUGH_DATA,
+    averageHoldingTime: meanHoldingMinutes !== null ? formatHoldingDuration(meanHoldingMinutes) : NOT_ENOUGH_DATA,
     averageHoldingTimeExplanation:
       medianHoldingMinutes !== null
         ? holdingTimeNarrative(medianHoldingMinutes)
-        : "Not enough completed trades yet to identify a holding-time pattern.",
+        : "Entry and exit times are required to calculate holding time.",
     tradingWindow: computeTradingWindow(bounds),
     tradingWindowExplanation: tradingWindowNarrative(bounds),
     executionPace,

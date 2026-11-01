@@ -1,3 +1,4 @@
+import { getHoldingMinutes, formatHoldingDuration } from "./holdingDuration";
 import { Trade } from "@/types";
 
 // ============================================================
@@ -32,16 +33,7 @@ function toTimestamp(dateStr: string, timeStr?: string): number | null {
 // are excluded (duration would be ambiguous) rather than treated as
 // zero-length; multi-day trades are still measured at day granularity even
 // without times, defaulting the missing time-of-day to 00:00.
-function getHoldingMinutes(trade: Trade): number | null {
-  if (!trade.entryDate || !trade.exitDate) return null;
-  const sameDay = trade.entryDate === trade.exitDate;
-  if (sameDay && (!trade.entryTime || !trade.exitTime)) return null;
-  const entry = toTimestamp(trade.entryDate, trade.entryTime);
-  const exit = toTimestamp(trade.exitDate, trade.exitTime);
-  if (entry === null || exit === null) return null;
-  const diff = (exit - entry) / MS_PER_MINUTE;
-  return diff >= 0 ? diff : null;
-}
+
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;
@@ -130,18 +122,7 @@ const STYLE_CATEGORY_LABEL: Record<Exclude<TradingStyle, "Not enough data">, str
 // Also used verbatim by traderHabits.ts (duplicated there, not imported,
 // per this file's self-contained convention) so the two cards' holding-time
 // figures render as the exact same text, not just the same number.
-function formatHoldingDuration(minutes: number): string {
-  const rounded = Math.round(minutes);
-  if (rounded < MINUTES_PER_HOUR) {
-    return `${rounded} minute${rounded === 1 ? "" : "s"}`;
-  }
-  if (minutes < MINUTES_PER_DAY) {
-    const hours = Math.round(minutes / MINUTES_PER_HOUR);
-    return `${hours} hour${hours === 1 ? "" : "s"}`;
-  }
-  const days = Math.round(minutes / MINUTES_PER_DAY);
-  return `${days} day${days === 1 ? "" : "s"}`;
-}
+
 
 function explainTradingStyle(style: TradingStyle, medianHoldingMinutes: number): string {
   if (style === "Not enough data") {

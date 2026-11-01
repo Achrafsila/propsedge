@@ -13,7 +13,7 @@ import {
   Shield,
   Compass,
   Activity,
-  Crosshair, FlaskConical,
+  Crosshair, BrainCircuit, FlaskConical,
   Users, UserRound
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -34,11 +34,11 @@ export function Sidebar() {
   const propFirmItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
 
-    { name: "Trader DNA", href: "/analytics", icon: BarChart3 },
     { name: "Edge Pulse", href: "/edge-pulse", icon: Activity },
     { name: "Payouts", href: "/payouts", icon: DollarSign },
     { name: "EdgePilot", href: "/edgepilot", icon: Compass },
     { name: "Execution Desk", href: "/execution-desk", icon: Crosshair },
+    { name: "Trader DNA", href: "/trader-dna", icon: BrainCircuit },
     { name: "Strategy Lab", href: "/strategy-lab", icon: FlaskConical },
     ...(isAdmin ? [{ name: "Admin", href: "/admin", icon: Shield }] : []),
     { name: "Settings", href: "/settings", icon: Settings },
@@ -66,7 +66,7 @@ export function Sidebar() {
   return (
     <aside className="w-full lg:w-64 bg-[#050816] border-r border-[rgba(148,163,184,0.1)] min-h-full lg:min-h-screen flex flex-col">
       <div className="group px-5 py-4 border-b border-[rgba(148,163,184,0.1)] transition-all duration-200">
-        <Link href="/welcome" className="block transition-all duration-200 group-hover:drop-shadow-[0_0_14px_rgba(41,141,255,0.55)]">
+        <Link href="/dashboard" className="block transition-all duration-200 group-hover:drop-shadow-[0_0_14px_rgba(41,141,255,0.55)]">
           <Logo size="medium" variant="full" src="/logo-sidebar.png" />
         </Link>
       </div>
