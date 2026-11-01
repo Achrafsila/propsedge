@@ -31,3 +31,5 @@ __MACOSX/
 
 # Editor
 .vscode/
+.vercel
+.env*

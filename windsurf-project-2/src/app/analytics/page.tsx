@@ -35,7 +35,8 @@ import { getTraderEvolution } from "@/lib/analytics/traderEvolution";
 import { getDataConfidence } from "@/lib/analytics/dataConfidence";
 import { GlobalFilterBar } from "@/components/analytics/GlobalFilterBar";
 import { GlobalOverview } from "@/components/analytics/GlobalOverview";
-import { TraderDNASections } from "@/components/analytics/TraderDNASections";
+import { InstrumentBreakdownCard } from "@/components/analytics/InstrumentBreakdownCard";
+import { TraderDNAIntelligence } from "@/components/analytics/TraderDNAIntelligence";
 import { MissingAccountWarning } from "@/components/analytics/MissingAccountWarning";
 import { RadialGauge } from "@/components/analytics/visualizations/RadialGauge";
 import { CountUpNumber } from "@/components/analytics/visualizations/CountUpNumber";
@@ -327,17 +328,12 @@ export default function GlobalAnalyticsPage() {
         />
       </motion.div>
 
+      {/* Trading intelligence now lives within the selected account. */}
       <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.05 }}>
-        <TraderDNASections
-          identity={identity}
-          habits={habits}
-          edge={edge}
-          blindSpots={blindSpots}
-          discipline={discipline}
-          evolution={evolution}
-          directionWinRates={directionWinRates}
-          tradesByInstrument={dnaStats.tradesByInstrument}
-        />
+        <div className="rounded-2xl border border-white/10 bg-[#101c30] p-5 sm:p-6 space-y-4">
+          <div><h2 className="text-white font-semibold">Your trading footprint</h2><p className="text-xs text-slate-400 mt-1">Observed activity only. No inferred sessions, holding times or unverified trading styles.</p></div>
+          <InstrumentBreakdownCard identity={identity} tradesByInstrument={dnaStats.tradesByInstrument} />
+        </div>
       </motion.div>
 
     </div>

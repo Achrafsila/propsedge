@@ -156,10 +156,10 @@ export function GlobalOverview({
       />
       <KpiCard
         icon={Clock}
-        label="Most Traded Session"
-        value={hasNoTrades ? "No trades yet" : (preferredSession.value as string)}
-        color="#10B981"
-        sub={hasNoTrades ? "" : `${progressivePrefix}${sessionTradeCount} of ${preferredSession.sampleSize} trades`}
+        label="Session Data"
+        value="Not verified"
+        color="#64748B"
+        sub="Trade imports may not include reliable opening timestamps."
       />
       <KpiCard
         icon={Layers}
