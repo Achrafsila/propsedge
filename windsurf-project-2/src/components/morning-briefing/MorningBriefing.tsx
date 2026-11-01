@@ -126,6 +126,13 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
   const goNext = () => setStepIndex((i) => Math.min(i + 1, STEP_ORDER.length - 1));
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0));
 
+  const handleSkip = () => {
+    if (committing) return;
+    // Dismiss for today only; skipping never persists a Trading Contract.
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${user.id}`, todayDateString());
+    onDismiss();
+  };
+
   const handleStart = () => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}${user.id}`, todayDateString());
     onDismiss();
@@ -172,6 +179,9 @@ function MorningBriefingContent({ user, onDismiss }: { user: User; onDismiss: ()
         style={{ background: "radial-gradient(80% 60% at 50% -10%, rgba(41,141,255,0.18) 0%, rgba(41,141,255,0) 60%)" }}
       />
       <div className="relative w-full max-w-2xl py-8">
+        <div className="mb-5 flex justify-end">
+          <button type="button" onClick={handleSkip} disabled={committing} className="rounded-full border border-white/15 bg-white/[.04] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-[#298DFF]/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label="Skip morning briefing for today">Skip for today →</button>
+        </div>
         <div className="flex items-center justify-center gap-1.5 mb-10">
           {STEP_ORDER.map((step, i) => (
             <div
